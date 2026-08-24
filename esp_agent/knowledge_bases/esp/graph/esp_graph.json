@@ -1,0 +1,162 @@
+{
+  "asset": "ESP-Well-001",
+  "subsystems": [
+    "Motor Section",
+    "Pump Section",
+    "Seal Section",
+    "Intake Section"
+  ],
+  "components": [
+    {
+      "name": "Stator Winding",
+      "subsystem": "Motor Section",
+      "metrics": ["primary_thermal_metric", "primary_electrical_load"]
+    },
+    {
+      "name": "Motor Bearing",
+      "subsystem": "Motor Section",
+      "metrics": ["vibration_metric", "axial_vibration_metric"]
+    },
+    {
+      "name": "Impeller",
+      "subsystem": "Pump Section",
+      "metrics": ["flow_metric", "efficiency_metric"]
+    },
+    {
+      "name": "Shaft",
+      "subsystem": "Pump Section",
+      "metrics": ["vibration_metric"]
+    },
+    {
+      "name": "Mechanical Seal",
+      "subsystem": "Seal Section",
+      "metrics": ["primary_intake_pressure"]
+    }
+  ],
+  "sensors": [
+    "Motor Temperature Sensor",
+    "PIP Sensor",
+    "PDP Sensor",
+    "Vibration Sensor"
+  ],
+  "failure_modes": [
+    "Bearing Wear",
+    "Motor Overheating",
+    "Gas Lock",
+    "Pump Wear",
+    "Scale Deposition",
+    "Abrasive Wear",
+    "Voltage Imbalance"
+  ],
+  "symptoms": [
+    "Excessive Vibration",
+    "High Motor Temperature",
+    "Low Intake Pressure",
+    "Flow Rate Decrease",
+    "Current Imbalance",
+    "Pump Efficiency Decrease"
+  ],
+  "relationships": [
+    {
+      "source": "ESP-Well-001",
+      "type": "has_subsystem",
+      "target": "Motor Section"
+    },
+    {
+      "source": "ESP-Well-001",
+      "type": "has_subsystem",
+      "target": "Pump Section"
+    },
+    {
+      "source": "ESP-Well-001",
+      "type": "has_subsystem",
+      "target": "Seal Section"
+    },
+    {
+      "source": "ESP-Well-001",
+      "type": "has_subsystem",
+      "target": "Intake Section"
+    },
+    {
+      "source": "Motor Section",
+      "type": "has_component",
+      "target": "Motor Bearing"
+    },
+    {
+      "source": "Motor Section",
+      "type": "has_component",
+      "target": "Stator Winding"
+    },
+    {
+      "source": "Pump Section",
+      "type": "has_component",
+      "target": "Impeller"
+    },
+    {
+      "source": "Motor Bearing",
+      "type": "can_fail_with",
+      "target": "Bearing Wear"
+    },
+    {
+      "source": "Stator Winding",
+      "type": "can_fail_with",
+      "target": "Motor Overheating"
+    },
+    {
+      "source": "Intake Section",
+      "type": "can_fail_with",
+      "target": "Gas Lock"
+    },
+    {
+      "source": "Bearing Wear",
+      "type": "has_symptom",
+      "target": "Excessive Vibration"
+    },
+    {
+      "source": "Motor Overheating",
+      "type": "has_symptom",
+      "target": "High Motor Temperature"
+    },
+    {
+      "source": "Gas Lock",
+      "type": "has_symptom",
+      "target": "Low Intake Pressure"
+    },
+    {
+      "source": "HIGH_FREE_GAS",
+      "type": "causes",
+      "target": "GAS_INTERFERENCE",
+      "mechanism": "Higher free-gas content reduces effective centrifugal pump liquid handling."
+    },
+    {
+      "source": "GAS_INTERFERENCE",
+      "type": "causes",
+      "target": "GAS_LOCK",
+      "mechanism": "Severe gas accumulation prevents effective liquid pumping."
+    },
+    {
+      "source": "PUMP_WEAR",
+      "type": "causes",
+      "target": "PUMP_EFFICIENCY_DECREASE",
+      "mechanism": "Internal losses and damaged clearances reduce hydraulic efficiency."
+    },
+    {
+      "source": "SCALING",
+      "type": "causes",
+      "target": "FLOW_RESTRICTION",
+      "mechanism": "Scale deposits reduce effective flow area."
+    },
+    {
+      "source": "BEARING_DEGRADATION",
+      "type": "causes",
+      "target": "VIBRATION_INCREASE",
+      "mechanism": "Degraded rotating support increases mechanical vibration."
+    },
+    {
+      "source": "VOLTAGE_IMBALANCE",
+      "type": "causes",
+      "target": "CURRENT_IMBALANCE",
+      "mechanism": "Unbalanced phase voltage results in unbalanced motor currents and unequal heating."
+    }
+  ]
+}

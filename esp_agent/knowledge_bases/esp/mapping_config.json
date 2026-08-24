@@ -1,0 +1,77 @@
+{
+  "domain_id": "ESP_PUMPS",
+  "field_mappings": [
+    {
+      "source_field": "motor_temperature",
+      "canonical_field": "primary_thermal_metric",
+      "data_type": "float",
+      "unit": "°C",
+      "conversion_rule": "none",
+      "valid_range": [80.0, 130.0],
+      "is_required": true
+    },
+    {
+      "source_field": "intake_pressure",
+      "canonical_field": "primary_intake_pressure",
+      "data_type": "float",
+      "unit": "psi",
+      "conversion_rule": "none",
+      "valid_range": [150.0, 500.0],
+      "is_required": true
+    },
+    {
+      "source_field": "discharge_pressure",
+      "canonical_field": "primary_discharge_pressure",
+      "data_type": "float",
+      "unit": "psi",
+      "conversion_rule": "none",
+      "valid_range": [500.0, 1500.0],
+      "is_required": false
+    },
+    {
+      "source_field": "motor_current",
+      "canonical_field": "primary_electrical_load",
+      "data_type": "float",
+      "unit": "amps",
+      "conversion_rule": "none",
+      "valid_range": [40.0, 80.0],
+      "is_required": true
+    },
+    {
+      "source_field": "radial_vibration",
+      "canonical_field": "vibration_metric",
+      "data_type": "float",
+      "unit": "g",
+      "conversion_rule": "none",
+      "valid_range": [0.5, 3.0],
+      "is_required": true
+    },
+    {
+      "source_field": "axial_vibration",
+      "canonical_field": "axial_vibration_metric",
+      "data_type": "float",
+      "unit": "g",
+      "conversion_rule": "none",
+      "valid_range": [0.1, 1.5],
+      "is_required": false
+    },
+    {
+      "source_field": "flow_rate",
+      "canonical_field": "flow_metric",
+      "data_type": "float",
+      "unit": "bpd",
+      "conversion_rule": "none",
+      "valid_range": [1000.0, 5000.0],
+      "is_required": false
+    },
+    {
+      "source_field": "efficiency",
+      "canonical_field": "efficiency_metric",
+      "data_type": "float",
+      "unit": "%",
+      "conversion_rule": "none",
+      "valid_range": [60.0, 95.0],
+      "is_required": false
+    }
+  ]
+}
