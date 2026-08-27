@@ -243,7 +243,15 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             "run_id": run_id
         }) + "\n"
 
-    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive"
+        }
+    )
 
 
 
