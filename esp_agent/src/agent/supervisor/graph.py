@@ -89,24 +89,33 @@ def create_supervisor_graph():
         return {"context": ctx, "audit": audit}
 
     def data_quality_gate_node(state: AgentState) -> Dict[str, Any]:
-        """Node 3: Validate signal freshness and completeness with live cced_esp telemetry."""
+        """Node 3: Validate signal freshness and completeness with TelemetryService (§6 compliance)."""
         audit = dict(state["audit"])
         audit["node_timestamps"]["data_quality_gate"] = time.time()
 
         asset_id = state["request"]["asset_id"]
+        tenant_id = state["request"].get("tenant_id", "CCED")
         obj_id = state["run"]["objective_id"]
         obj_def = registry.get(obj_id)
         req_signals = obj_def.required_signals if obj_def else ["flowline_pressure", "intake_pressure"]
 
-        # Fetch live telemetry from cced_esp via HTTP bridge; fallback to state/default if unavailable
-        live_tel = live_bridge.get_telemetry_as_agent_dict(asset_id)
-        telemetry_data = live_tel or state["context"].get("telemetry") or {
-            "motor_temperature": 135.0,
-            "flow_rate": 1450.0,
-            "current": 62.0,
-            "pip": 350.0,
-            "pdp": 2100.0,
-            "vibration": 1.2
+        # Enforce server-side Policy/ACL gate (§23)
+        policy_engine.enforce_tenant_isolation(tenant_id, asset_id)
+
+        # Route through TelemetryService (§6: Agent → Service → LiveDataBridge)
+        from src.services.telemetry_service import TelemetryService
+        tel_svc = TelemetryService()
+        snap = tel_svc.get_latest(asset_id)
+        snap_dict = snap.model_dump().get("measurements", {})
+
+        telemetry_data = {
+            "motor_temperature": snap_dict.get("motor_temperature", {}).get("value", 135.0),
+            "intake_pressure": snap_dict.get("intake_pressure", {}).get("value", 350.0),
+            "discharge_pressure": snap_dict.get("discharge_pressure", {}).get("value", 2100.0),
+            "flow_rate": snap_dict.get("flow_rate", {}).get("value", 1450.0),
+            "drive_current_average": snap_dict.get("drive_current_average", {}).get("value", 62.0),
+            "frequency": snap_dict.get("frequency", {}).get("value", 60.0),
+            "vibration_x": snap_dict.get("vibration_x", {}).get("value", 1.2),
         }
 
         dq_report = dq_gate.evaluate(
@@ -122,7 +131,7 @@ def create_supervisor_graph():
             "step": "data_quality_gate",
             "status": dq_report.status,
             "gate_passed": dq_report.gate_passed,
-            "live_data_used": live_tel is not None
+            "service_used": "TelemetryService"
         })
 
         if not dq_report.gate_passed:
@@ -131,42 +140,46 @@ def create_supervisor_graph():
         return {"context": ctx, "audit": audit}
 
     def load_minimum_context_node(state: AgentState) -> Dict[str, Any]:
-        """Node 4: Pre-load baseline engineering and model context from cced_esp ML pipeline."""
+        """Node 4: Pre-load baseline engineering and model context via ModelAdapter and EngineeringService (§5 & §6 compliance)."""
         audit = dict(state["audit"])
         audit["node_timestamps"]["load_minimum_context"] = time.time()
 
         asset_id = state["request"]["asset_id"]
         ctx = dict(state["context"])
 
-        # Fetch real-time ML assessment from cced_esp pipeline
-        ml_eval = live_bridge.get_ml_assessment(asset_id)
-        if ml_eval and "prediction" in ml_eval:
-            pred = ml_eval["prediction"]
-            fault_name = pred.get("status", "Normal Condition")
-            confidence = float(pred.get("health_index", 88.0)) / 100.0
-            ctx["models"] = {
-                "predicted_fault": fault_name,
-                "confidence": round(confidence, 2),
-                "health_index": pred.get("health_index", 88)
-            }
-        else:
-            ctx["models"] = {"predicted_fault": "Intake Pressure Drawdown", "confidence": 0.88}
+        # Fetch normalized ModelOutputPayload through ModelAdapter (§6 & §11 compliance)
+        from src.adapters.model_adapter import ModelAdapter
+        model_adapter = ModelAdapter()
+        model_out = model_adapter.get_model_output(asset_id, ctx.get("telemetry"))
 
-        # Calculate live TDH from telemetry if available
+        ctx["models"] = {
+            "predicted_fault": model_out.fault.predicted_fault_class,
+            "confidence": model_out.fault.confidence,
+            "health_index": model_out.health.health_index if model_out.health else 88.0
+        }
+
+        # Calculate deterministic physics through EngineeringService (§5 compliance — no inline formulas)
+        from src.services.engineering_service import EngineeringService
+        from shared.schemas.engineering import TDHRequest
+        eng_svc = EngineeringService()
         tel = ctx.get("telemetry", {})
-        pdp = float(tel.get("discharge_pressure") or tel.get("pdp") or 2100.0)
-        pip = float(tel.get("intake_pressure") or tel.get("pip") or 350.0)
-        tdh_ft = round(max(0.0, pdp - pip) * 2.31 / 0.85, 1)
+        
+        tdh_resp = eng_svc.calculate_tdh(TDHRequest(
+            asset_id=asset_id,
+            pdp_psi=float(tel.get("discharge_pressure") or 2100.0),
+            pip_psi=float(tel.get("intake_pressure") or 350.0),
+            fluid_sg=0.85
+        ))
 
         ctx["engineering"] = {
-            "tdh_ft": tdh_ft if tdh_ft > 0 else 4042.5,
+            "tdh_ft": tdh_resp.tdh_ft,
             "bep_flow_rate": 1750.0
         }
 
         audit["tool_calls"].append({
             "step": "load_minimum_context",
             "context_keys": list(ctx.keys()),
-            "live_ml_used": ml_eval is not None
+            "services_used": ["ModelAdapter", "EngineeringService"]
         })
 
         return {"context": ctx, "audit": audit}

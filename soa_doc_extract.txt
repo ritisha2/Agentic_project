@@ -1,0 +1,321 @@
+﻿ESP APM ΓÇö SERVICE-ORIENTED ARCHITECTURE
+LOGICAL SERVICES vs DEPLOYMENT PROCESSES ΓÇö IMPLEMENTATION STANDARD
+Defines the production-grade approach for separating responsibilities without creating a microservice-per-component architecture. Companion to the Phase-5 REST + MCP service design.
+1. Architecture Decision
+Use logical service boundaries across the ESP APM platform. A logical service does not automatically become a separate process or container. A service becomes a separate deployable only when independent scaling, ownership, security, failure isolation, release cadence, or compute characteristics justify it.
+This preserves the guideline's separation of Asset Context, Data Services, Engineering Services, Knowledge Services, ML Services, Digital Twin and Governance while avoiding unnecessary fragmentation. [Guidelines.pdf ┬º4.1ΓÇô┬º4.2]
+2. Core Principle
+LOGICAL SERVICE
+    |
+    +-- API / schema boundary
+    +-- ownership boundary
+    +-- policy boundary
+    +-- test boundary
+    |
+    +-- MAY become deployment boundary
+        only when justified
+
+Therefore:
+Service Γëá Process
+Service Γëá Container
+Service Γëá Database
+
+3. Why Logical Service Boundaries
+4. Target Logical Service Map
+AGENT PLATFORM
+              LangGraph Supervisor / Specialists
+                           |
+                       Tool Registry
+                           |
+                       Policy / ACL
+                           |
+                 +---------+---------+
+                 |                   |
+                REST                MCP
+              default            selective
+                 |                   |
+                 +---------+---------+
+                           |
+                    LOGICAL SERVICES
+                           |
+      +----------+----------+-----------+----------+
+      |          |          |           |          |
+    Asset     Telemetry  Engineering    KB         ML
+   Context    /Historian            /Cases      Adapter
+      |          |          |           |          |
+      +----------+----------+-----------+----------+
+                           |
+                 +---------+---------+
+                 |         |         |
+               Event     Twin      Audit
+
+5. Logical Service Responsibilities
+6. Agent Access Boundary
+Agent
+  |
+Tool
+  |
+Policy / ACL
+  |
+REST or MCP
+  |
+Application Service
+  |
+Repository / Adapter
+  |
+External System / Store
+
+Agents and specialists do not access PostgreSQL, Redis, filesystem seeds, Advait APIs, MQTT brokers, or model internals directly.
+7. Recommended Deployment Units
+Start with a small number of deployables while retaining logical service boundaries inside them.
+8. When to Split a Service
+9. When NOT to Split
+Because a Python module is called a service.
+Because it has a REST endpoint.
+Because it owns a database table.
+Because microservices are fashionable.
+Before scale, reliability, security, ownership or release requirements justify the split.
+10. Initial Process Layout
+A ΓÇö Agent Platform
+  FastAPI Agent Gateway
+  Objective Registry
+  Tool Registry
+  Policy integration
+  LangGraph Supervisor
+  Specialist subgraphs
+
+B ΓÇö Domain Service Platform
+  Asset Context
+  Telemetry
+  Engineering
+  Knowledge
+  Case / Outcome
+  Audit
+
+C ΓÇö ML Runtime
+  Model Adapter
+  Model servers
+
+D ΓÇö Event Platform
+  Redis
+  Event Processor
+  Event Consumers
+
+E ΓÇö Realtime Gateway
+  WebSocket / SSE
+
+F ΓÇö Frontend
+  React / TypeScript
+
+11. Source-System Adapter Pattern
+Application Service
+      |
+Adapter Interface
+      |
++-----+-----------+----------------+
+|                 |                |
+Advait Adapter   SCADA Adapter   Model Adapter
+|                 |                |
+Advait API       Historian       Model runtime
+
+Adapters isolate external system formats from canonical domain contracts.
+12. Asset Context Example
+get_asset_context("FS-031")
+       |
+Asset Context Service
+       |
+Advait Adapter
+       |
+Advait API / local projection
+
+An Advait API change should be isolated inside its adapter; the Agent-facing tool contract remains stable.
+13. Telemetry Example
+get_history_window("FS-031", "24h")
+       |
+Telemetry Service
+       |
+Historian / Simulator / SCADA adapter
+
+Upstream formats are normalized before reaching the Agent.
+14. Engineering Example
+calculate_operating_point(...)
+       |
+Engineering Service
+       |
+Deterministic calculation
+       |
+result + units + assumptions + version
+
+The Agent selects and interprets the calculation; it does not recreate engineering mathematics.
+15. ML Example
+Specialist
+   |
+get_failure_risk()
+   |
+Model Adapter
+   |
+Model runtime / API
+   |
+Structured ModelOutput
+
+GPU-heavy model inference can be a separate deployment while the Model Adapter remains the stable service boundary.
+16. Knowledge Example
+Knowledge Tool
+    |
+Knowledge Service
+    |
+BM25 + pgvector + reranker
+    |
+Evidence + source + authority
+
+17. REST + MCP Boundary
+REST is the default interface for ordinary domain/application integration. MCP is selective for Agent-facing tools/resources.
+SAME APPLICATION SERVICE
+                  /                          REST           MCP
+                |              |
+         app/service clients  AI clients
+
+Never duplicate business logic between REST and MCP.
+18. Frontend Boundary
+Browser
+  |
+BFF / UI API
+  |
++-----+-----+-----+-----+
+|     |     |     |     |
+Agent Asset Telemetry Evidence
+
+The browser is a consumer, not a service orchestrator or security authority.
+19. Event Boundary
+Domain Service
+    |
+EventPublisher interface
+    |
+Redis Streams Adapter
+    |
+Redis Streams
+    |
+Event Processor / Consumers
+    |
+Event ΓåÆ Objective ΓåÆ Agent
+
+Services depend on the publisher abstraction, not Redis-specific implementation.
+20. Data Access Rules
+No direct database access from Agent code.
+21. Shared Contracts
+22. Ownership Boundary
+Use the project's existing RACI for named role assignments; this table only freezes technical ownership boundaries.
+23. Security Boundary
+Frontend
+  |
+BFF
+  |
+Authentication
+  |
+Tenant / Asset Authorization
+  |
+PolicyEngine
+  |
+Tool
+  |
+Service
+  |
+External System
+
+UI visibility is not authorization. Service-side authorization remains mandatory.
+24. Observability Contract
+25. Reliability Contract
+26. Scaling / Deployment Evolution
+EARLY STAGE
+Logical services
+     |
+Small number of deployables
+     |
+Low operational overhead
+
+WHEN NEEDED
+Logical service
+     |
+Independent deployable
+     |
+Independent scaling/security/release
+
+27. Examples of Likely Future Splits
+28. Phase Mapping
+29. MUST Rules
+One business implementation per capability.
+One canonical schema per domain contract.
+Agent access only through tools/services.
+REST is the default service interface.
+MCP is selective and backed by the same application services.
+External systems are isolated behind adapters.
+Source of truth is explicit.
+Security is enforced server-side.
+Provenance/version/QoD is retained where applicable.
+Logical service boundaries remain stable while deployment topology evolves.
+30. MUST NOT Rules
+One container per Python module.
+Different business logic in REST and MCP.
+Direct database access from Agents.
+Direct Redis access from Agents.
+Engineering formulas hidden in prompts as source of truth.
+Frontend orchestration of every service call.
+Services created merely to mirror tables.
+Microservice deployment used as an objective.
+31. Phase 5 / Implementation Handoff
+PHASE 5
+  |
+  +-- Logical service contracts
+  +-- Shared schemas
+  +-- REST interfaces
+  +-- Selected MCP interfaces
+  +-- Policy/ACL
+  +-- Adapter pattern
+  +-- Observability/reliability
+  |
+  v
+PHASE 6
+  Event Platform / Redis Streams
+  |
+PHASE 7
+  LangGraph
+  |
+PHASE 8
+  Evidence / Context
+  |
+PHASE 9
+  FE + BE Product Integration
+
+32. Acceptance Criteria
+33. Final Frozen Architecture
+AGENT
+                           |
+                       TOOL LAYER
+                           |
+                       POLICY / ACL
+                           |
+                   +-------+-------+
+                   |               |
+                 REST             MCP
+               default         selective
+                   |               |
+                   +-------+-------+
+                           |
+                   LOGICAL SERVICE LAYER
+                           |
+    +----------+-----------+----------+-----------+
+    |          |           |          |           |
+  Asset    Telemetry   Engineering   KB          ML
+ Context   /Historian              /Cases      Adapter
+    |          |           |          |           |
+    +----------+-----------+----------+-----------+
+                           |
+                    Event / Twin / Audit
+                           |
+                    Adapters / Repos
+                           |
+            Advait / SCADA / Models / Stores
+
+Logical service boundaries are frozen independently of deployment boundaries. Start small, then split services only when measurable operational requirements justify it.
+34. Source Basis
+FastAPI, Docker, Redis, PostgreSQL, OpenTelemetry and the MCP SDK are implementation recommendations, not mandatory products specified by the guideline.

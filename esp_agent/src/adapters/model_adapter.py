@@ -56,6 +56,15 @@ class ModelAdapter:
         """
         Fetch normalized ModelOutputPayload containing rule, anomaly, failure, fault, and health scores.
         """
+        # Try LiveDataBridge (:8000) normalized payload first
+        try:
+            from src.adapters.live_data_bridge import live_bridge
+            live_payload = live_bridge.get_model_output_payload(asset_id)
+            if live_payload:
+                return live_payload
+        except Exception as ex:
+            logger.debug(f"[ModelAdapter] LiveDataBridge model fetch bypassed: {ex}")
+
         v2_pred = self.fetch_v2_prediction(asset_id)
 
         if self.api_url and not v2_pred:

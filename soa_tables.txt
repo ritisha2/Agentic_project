@@ -1,0 +1,144 @@
+﻿=== TABLE 1 ===
+Reason | Benefit
+Separation of concerns | Agent does not depend on source internals
+Replaceability | Advait/SCADA/model implementations can change behind contracts
+Independent testing | Contract/integration tests per capability
+Security | Access can be scoped by tool/service
+Ownership | Clear team accountability
+Observability | Calls traced by service
+Future scaling | Selected services can be split later without Agent redesign
+
+=== TABLE 2 ===
+Service | Owns | Does not own
+Asset Context | Identity, hierarchy, equipment, tags, configuration, approved limits | Telemetry history or Agent reasoning
+Telemetry/Historian | Live/history, QoD, freshness, windows | Diagnosis or asset truth
+Engineering | Deterministic calculations + versions | LLM-generated mathematics
+Knowledge | Hybrid retrieval, faults, procedures, cases | Raw telemetry
+ML/Model Adapter | Normalized model outputs/version/confidence | Agent orchestration
+Event | Event abstractions and processing | Diagnosis
+Case/Outcome | Cases, actions, verification, outcomes | Live state
+Digital Twin | What-if/optimization execution | UI rendering
+Audit | Trace/advisory/outcome records | Decision reasoning
+
+=== TABLE 3 ===
+Deployable | Possible contents
+Agent Platform | Agent API, LangGraph, Objective Registry, Tool Registry, specialist subgraphs
+Service Platform | Asset Context, Telemetry read APIs, Engineering, Knowledge, Case/Outcome, Audit
+ML Runtime | Model Adapter + GPU/model servers
+Event Platform | Redis Streams + event processor/consumers
+Realtime Gateway | WebSocket/SSE
+Frontend | React/TypeScript
+Data Infrastructure | PostgreSQL/pgvector, Redis, object storage
+
+=== TABLE 4 ===
+Trigger | ESP APM example
+GPU/CPU isolation | ML inference
+Independent scaling | Telemetry/event consumers
+Different failure profile | Digital Twin workloads
+Security boundary | OT-facing connector
+Independent ownership | Advait integration
+Different release cadence | External model adapter
+Long-running jobs | Optimization/simulation
+Resource contention | Heavy retrieval/model workloads
+
+=== TABLE 5 ===
+Store | Access rule
+PostgreSQL | Only through owning/application services
+pgvector | Through Knowledge Service
+Redis | Through infrastructure/event/checkpoint adapters
+Object store | Through relevant service
+SQLite prototype store | Through adapter/service only
+
+=== TABLE 6 ===
+Contract | Primary consumers
+AssetContextPayload | Asset/Agent/Tool/UI
+TelemetryPayload | Telemetry/Agent/Evidence/UI
+EngineeringResult | Engineering/Agent/Evidence
+ModelOutputPayload | Model/Agent/Evidence
+KnowledgeResult | KB/Agent/Evidence/UI
+ESPEvent | Event/Objective/Agent
+EvidencePack | Evidence/Agent/UI/Audit
+Advisory | Agent/UI/Audit
+
+=== TABLE 7 ===
+Domain | Architectural owner
+Agent orchestration | Agentic platform
+Asset integration | Advait/data integration
+Telemetry/OT | Data/OT
+Engineering calculations | Engineering
+KB | Knowledge/engineering
+ESP models | AI/ML model team
+Digital Twin | Twin/engineering
+UI/BFF | Product/frontend
+Infrastructure | Platform/DevOps
+
+=== TABLE 8 ===
+Field | Required
+service_name / service_version | Yes
+contract_version | Yes
+request_id / correlation_id | Yes
+asset_id / tenant_id | When scoped
+tool_id / objective_id | Agent runs
+source_system / source_version | Evidence
+model_version | ML
+engineering_version | Engineering
+kb_version | Knowledge
+
+=== TABLE 9 ===
+Mechanism | Where
+Timeout | Every remote call
+Retry | Safe/idempotent operations
+Circuit breaker | External dependencies
+Fallback | Approved Asset Context fallback
+Bulkhead | ML/Twin/Event workers
+Cache | Slow-changing asset context
+Backpressure | Telemetry/events
+DLQ/replay | Event processing
+
+=== TABLE 10 ===
+Capability | Reason
+ML inference | GPU and concurrency
+Telemetry ingestion | Throughput and OT isolation
+Event processor | High event volume / reliability
+Digital Twin | CPU-heavy long-running jobs
+Knowledge retrieval | Independent scaling/index workloads
+Advait adapter | External dependency/failure isolation
+
+=== TABLE 11 ===
+Phase | Implication
+Phase 1 | Define logical boundaries
+Phase 2 | Asset/Telemetry contracts
+Phase 3 | Knowledge Service
+Phase 4 | Objective ΓåÆ required tools/services
+Phase 5 | REST/MCP + service contract platform
+Phase 6 | Event transport/processors
+Phase 7 | LangGraph orchestrates services
+Phase 8 | Evidence consumes service outputs
+Phase 9 | BFF/realtime/UI integrates platform
+Phase 10+ | Feedback loop and selective deployment scaling
+
+=== TABLE 12 ===
+Gate | Pass condition
+Logical boundaries | Each capability has clear responsibility/source
+Contracts | Versioned REST/MCP schemas
+No duplication | REST/MCP share same implementation
+Access | Agent reaches systems only via tools/services
+Adapters | External formats isolated
+Security | Tenant/asset/tool authorization
+Observability | Calls traceable
+Reliability | Timeout/retry/fallback policies
+Deployment | No unjustified service/process explosion
+Evolution | Service can be separated later without Agent contract redesign
+
+=== TABLE 13 ===
+Guidelines.pdf | Use
+┬º4.1 | Separate Agent, Asset Context, Data, Engineering, Knowledge, ML, Digital Twin and Governance
+┬º4.2 | Expose ESP business logic through APIs or MCP-compatible services
+┬º7 | Data/QoD service behavior
+┬º8 | Deterministic engineering calculations
+┬º10 | Knowledge services and hybrid retrieval
+┬º11 | Independent versioned ML services
+┬º13.2 | Least privilege/tool authorization
+┬º14 | Proactive/event-driven architecture
+┬º17 | Security, observability and audit
+

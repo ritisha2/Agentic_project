@@ -116,6 +116,64 @@ class LiveDataBridge:
         """
         return self._get(f"/api/esp/assets/{asset_id}/health-index")
 
+    def get_model_output_payload(self, asset_id: str) -> Optional[Any]:
+        """
+        Fetch ML assessment and wrap into normalized ModelOutputPayload domain contract (§11).
+        """
+        raw = self.get_ml_assessment(asset_id)
+        if not raw or "prediction" not in raw:
+            return None
+        
+        try:
+            from datetime import datetime
+            from src.schemas.contracts import (
+                ModelOutputPayload, AnomalyResultPayload, FailurePredictionPayload,
+                FaultDiagnosisPayload, HealthIndexPayload
+            )
+
+            p = raw["prediction"]
+            now = datetime.utcnow().isoformat() + "Z"
+            hi = float(p.get("health_index", 95.0))
+            fault_class = p.get("status", "NORMAL_OPERATION")
+            conf = round(hi / 100.0, 2)
+
+            return ModelOutputPayload(
+                asset_id=asset_id,
+                timestamp=now,
+                rules=None,
+                anomaly=AnomalyResultPayload(
+                    asset_id=asset_id,
+                    timestamp=now,
+                    anomaly_score=round(1.0 - conf, 2),
+                    status="ANOMALOUS" if conf < 0.8 else "NORMAL",
+                    contributing_signals=["intake_pressure", "motor_temperature"]
+                ),
+                failure=FailurePredictionPayload(
+                    asset_id=asset_id,
+                    timestamp=now,
+                    failure_risk_score=round(1.0 - conf, 2),
+                    predicted_rul_days=int(p.get("rul_days", 45)),
+                    risk_category="HIGH" if conf < 0.6 else ("MEDIUM" if conf < 0.8 else "LOW")
+                ),
+                fault=FaultDiagnosisPayload(
+                    asset_id=asset_id,
+                    timestamp=now,
+                    predicted_fault_class=fault_class,
+                    confidence=conf,
+                    top_root_causes=[fault_class],
+                    remediation_action=f"Inspect asset {asset_id} for {fault_class}"
+                ),
+                health=HealthIndexPayload(
+                    asset_id=asset_id,
+                    timestamp=now,
+                    health_index=hi,
+                    status="HEALTHY" if hi > 85 else ("WARNING" if hi > 60 else "CRITICAL")
+                )
+            )
+        except Exception as ex:
+            logger.warning(f"[LiveDataBridge] Error mapping ModelOutputPayload for '{asset_id}': {ex}")
+            return None
+
     def get_engineering_context(self, asset_id: str) -> Optional[Dict[str, Any]]:
         """
         Fetch real-time TDH and operating envelope from cced_esp.
