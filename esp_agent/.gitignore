@@ -1,4 +1,4 @@
-﻿# Python
+# Python build / cache
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,22 +22,7 @@ esp_agent.egg-info/
 venv/
 env/
 
-# uv
-uv.lock
-
-# Environment
-.env
-.env.local
-!.env.example
-
-# SQLite
-*.db
-*.sqlite3
-
-# LangGraph
-.langgraph_api/
-
-# Node
+# Node build artifacts
 node_modules/
 .next/
 out/
