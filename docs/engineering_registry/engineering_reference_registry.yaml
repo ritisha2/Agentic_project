@@ -1,0 +1,190 @@
+# engineering_reference_registry.yaml
+# Source: ESP_Engineering_Research_Package.md, Section 1
+# NOTE: verified_2026 = true means status was checked via search on 2026-08-27 against
+# third-party standards distributors (api.org itself was not directly reachable in this pass).
+# Re-verify directly against api.org / iso.org / ansi.org before compliance-critical use.
+
+references:
+  - id: API_RP_11S
+    org: API
+    title: "Operation, Maintenance and Troubleshooting of Electric Submersible Pump Installations"
+    edition: "3rd Edition (exact current reaffirmation date not independently confirmed)"
+    status: "REQUIRES_ENGINEERING_VALIDATION: confirm current status directly with API"
+    scope: "ESP system components, operation, maintenance, troubleshooting; tubing-deployed installations. Not intended for equipment selection/application."
+    applies_to_calcs: []
+    applies_to_domain: "troubleshooting, operating-limits guidance"
+    verified_2026: true
+    verification_source: "third-party standards catalogs (GlobalSpec, Accuristech, onlinestandart.com)"
+
+  - id: API_RP_11S1
+    org: API
+    title: "Electrical Submersible Pump Teardown Report"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "current per catalog listing; not independently confirmed against api.org"
+    scope: "Recommended teardown report form and generic equipment schematics"
+    applies_to_calcs: ["G1_FAILURE_CLASSIFICATION", "G2_RUN_LIFE_MTBF"]
+    verified_2026: true
+    verification_source: "GlobalSpec"
+
+  - id: API_RP_11S2
+    org: API
+    title: "Electric Submersible Pump Testing"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "current per catalog listing; referenced by ISO 15551-1 series"
+    scope: "Guidelines/procedures for ESP performance testing, intended to establish product consistency"
+    applies_to_calcs: ["A3_BRAKE_HORSEPOWER", "B1_PUMP_CURVE_LOOKUP"]
+    verified_2026: true
+    verification_source: "GlobalSpec"
+
+  - id: API_RP_11S3
+    org: API
+    title: "Electrical Submersible Pump Installations"
+    edition: "2nd Edition, March 1999, reaffirmed October 2013"
+    status: "current per catalog (reaffirmation date confirmed to catalog, not to api.org directly)"
+    scope: "Installation/replacement of ESP components on tubing"
+    applies_to_calcs: []
+    applies_to_domain: "installation-condition validity checks"
+    verified_2026: true
+    verification_source: "production-technology.org catalog listing"
+
+  - id: API_RP_11S4
+    org: API
+    title: "Sizing and Selection of Electric Submersible Pump Installations"
+    edition: "3rd Edition, July 2002, reaffirmed October 2013"
+    status: "WITHDRAWN"
+    scope: "Component sizing/selection methodology, PVT correlations, multiphase flow correlations, IPR use"
+    applies_to_calcs: []
+    note: "CANNOT BE CITED AS CURRENT AUTHORITY. Any legacy formulas sourced from this RP must be re-sourced from ISO 15551:2023 informative annexes, OEM manuals, or explicitly-cited peer-reviewed literature."
+    verified_2026: true
+    verification_source: "store.accuristech.com (explicit [Withdrawn] tag)"
+
+  - id: API_RP_11S6
+    org: API
+    title: "Testing of Electric Submersible Pump Cable Systems"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "current per catalog listing"
+    scope: "3-conductor ESP power cable system testing"
+    applies_to_calcs: ["B3_CABLE_VOLTAGE_DROP"]
+    verified_2026: true
+    verification_source: "GlobalSpec"
+
+  - id: API_RP_11S8
+    org: API
+    title: "Electric Submersible System Vibrations"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "current per catalog listing"
+    scope: "Vibration limits, testing, and analysis of ESP systems/subsystems"
+    applies_to_calcs: ["E2_VIBRATION_LIMIT_CHECK"]
+    note: "Numeric limit values and units NOT independently retrieved (paywalled). Do not hard-code limit values without direct access to the standard text."
+    verified_2026: true
+    verification_source: "GlobalSpec"
+
+  - id: API_RP_11R
+    org: API
+    title: "Electric Submersible Pump Installations (2nd Edition)"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "REQUIRES_ENGINEERING_VALIDATION - possibly legacy/superseded"
+    scope: "unknown - title only confirmed"
+    applies_to_calcs: []
+    verified_2026: false
+
+  - id: ISO_15551_2023
+    org: ISO
+    title: "Petroleum and natural gas industries — Drilling and production equipment — Electric submersible pump systems for artificial lift"
+    edition: "Edition 1, 2023-09"
+    status: "CURRENT - supersedes ISO 15551-1:2015"
+    scope: "Design, design verification/validation, manufacturing, performance ratings, functional evaluations, handling/storage of tubing-deployed ESP systems"
+    applies_to_calcs: ["E1_RECOMMENDED_OPERATING_RANGE_CHECK", "B2_MOTOR_PERFORMANCE_LOOKUP"]
+    note: >
+      Contains informative annexes covering: Recommended Operating Range (ROR) methodology,
+      functional-evaluation guidelines, VSD considerations, post-run analysis, downhole monitoring,
+      permanent-magnet motor info. EXACT NUMERIC ROR METHODOLOGY NOT RETRIEVED (paywalled) -
+      existence and location confirmed only.
+    verified_2026: true
+    verification_source: "iso.org standard page 79589"
+
+  - id: ISO_15551-1_2015
+    org: ISO
+    title: "Petroleum and natural gas industries — Drilling and production equipment — Part 1: Electric submersible pump systems for artificial lift"
+    edition: "2015"
+    status: "SUPERSEDED by ISO 15551:2023"
+    scope: "Same general scope as ISO 15551:2023, prior edition"
+    applies_to_calcs: []
+    note: "Retained for legacy client document cross-reference only. Do not use as current authority."
+    verified_2026: true
+    verification_source: "iso.org standard page 55442"
+
+  - id: ANSI_HI_9_6_7_2021
+    org: "ANSI/Hydraulic Institute"
+    title: "Rotodynamic Pumps — Guideline for Effects of Liquid Viscosity on Performance"
+    edition: "2021 (supersedes 2015, 2010)"
+    status: "CURRENT"
+    scope: "Empirical correction method (CQ, CH, C-eta) for converting water-test pump curves to viscous-fluid performance, Newtonian liquids"
+    applies_to_calcs: ["D1_VISCOSITY_CORRECTION"]
+    note: >
+      2015 edition scope text stated applicability to radial-flow OH/BB/VS pumps, ~1-4000 cSt.
+      NOT CONFIRMED that this range is unchanged in 2021 edition, and NOT CONFIRMED that multistage
+      ESP geometry is explicitly within the standard's stated scope (industry commonly treats it as
+      in-scope, but this is not verified as standard-text fact in this pass).
+    verified_2026: true
+    verification_source: "webstore.ansi.org, pumps.org"
+
+  - id: ANSI_HI_9_6_6
+    org: "ANSI/Hydraulic Institute"
+    title: "Rotodynamic Pumps for Pump Piping"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "current per HI catalog"
+    scope: "Inlet/outlet piping effects on pump performance"
+    applies_to_calcs: []
+    note: "Likely out of scope for downhole ESP calc service (surface/near-wellhead piping only)"
+    verified_2026: false
+
+  - id: ANSI_HI_1_3_SERIES
+    org: "ANSI/Hydraulic Institute"
+    title: "Rotodynamic Centrifugal Pumps — Design and Application (general series)"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "referenced in HI catalog; not independently verified"
+    scope: "General nomenclature and affinity-law conventions"
+    applies_to_calcs: ["A4_AFFINITY_LAWS_SPEED_CORRECTION"]
+    note: "Cited as convenience cross-reference only; affinity laws are fundamental fluid mechanics, not unique IP of this document."
+    verified_2026: false
+
+  - id: IEEE_1019
+    org: IEEE
+    title: "Recommended Practice for Specifying Electric Submersible Pump Cable"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "REQUIRES_ENGINEERING_VALIDATION - only cross-referenced in other documents' search results"
+    scope: "ESP cable insulation/construction specification"
+    applies_to_calcs: ["B3_CABLE_VOLTAGE_DROP"]
+    verified_2026: false
+
+  - id: NEMA_MG1
+    org: NEMA
+    title: "Motors and Generators"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "NOT SEARCHED IN THIS PASS"
+    scope: "unverified"
+    applies_to_calcs: ["B2_MOTOR_PERFORMANCE_LOOKUP", "E3_MOTOR_TEMPERATURE_LIMIT_CHECK"]
+    verified_2026: false
+
+  - id: API_STD_610_ISO_13709
+    org: "API / ISO"
+    title: "Centrifugal Pumps for Petroleum, Petrochemical, and Natural Gas Industries"
+    edition: "REQUIRES_ENGINEERING_VALIDATION"
+    status: "REQUIRES_ENGINEERING_VALIDATION - applicability to downhole ESP doubtful, likely surface-pump scope"
+    scope: "unverified"
+    applies_to_calcs: []
+    note: "Do not apply to ESP calculations without explicit engineering confirmation of applicability."
+    verified_2026: false
+
+pvt_correlations_not_standards:
+  note: >
+    These are peer-reviewed literature correlations, not standards. Priority tier 6/7 per the
+    source-priority policy. Selection is a client/engineering decision and must be explicitly
+    configured per field/reservoir, not defaulted by the service.
+  candidates_requiring_client_selection:
+    - "Standing correlation (solution GOR / Bo)"
+    - "Vasquez-Beggs correlation"
+    - "Beggs-Brill multiphase flow correlation"
+    - "Turpin-type gas-handling correlation"
+  status: "NONE PRE-SELECTED - REQUIRES ENGINEERING VALIDATION / CLIENT SPECIFICATION before use"

@@ -21,6 +21,39 @@ class TelemetryAdapter:
         config = MappingConfig(**data)
         return cls(mapping_config=config, telemetry_csv_path=telemetry_csv_path)
 
+    def fetch_from_api(self, asset_id: str, api_url: str = "http://localhost:8081") -> List[TelemetryMetric]:
+        """
+        Fetch latest canonical telemetry record from ESP Telemetry Mock API (:8081).
+        Grounded in ESP_APM_Telemetry_Service_Consumption_Architecture.docx §3, §5.
+        """
+        import urllib.request
+        import urllib.error
+        url = f"{api_url.rstrip('/')}/api/v1/assets/{asset_id}/telemetry/current"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    metrics = []
+                    ts = data.get("timestamp", "")
+                    for sig, val_obj in data.get("measurements", {}).items():
+                        val = val_obj.get("value", 0.0) if isinstance(val_obj, dict) else float(val_obj)
+                        unit = val_obj.get("unit", "") if isinstance(val_obj, dict) else ""
+                        metrics.append(TelemetryMetric(
+                            parameter_name=sig,
+                            current_value=val,
+                            unit=unit,
+                            sensor_tag=f"raw_{sig}",
+                            metric_type=self._determine_metric_type(sig, sig),
+                            timestamp=ts
+                        ))
+                    return metrics
+        except Exception:
+            pass
+
+        # Fall back to CSV load if API unavailable
+        return self.load_latest_telemetry(asset_id)
+
     def load_latest_telemetry(self, asset_id: str, csv_path: Optional[str] = None) -> List[TelemetryMetric]:
         """Loads the most recent telemetry record for the specified asset_id and maps to canonical TelemetryMetric."""
         target_path = csv_path or self.telemetry_csv_path

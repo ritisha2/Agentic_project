@@ -1,0 +1,20 @@
+{
+  "objective_id": "OP01_CURRENT_STATUS",
+  "version": "1.0",
+  "title": "Asset Current Operational Status",
+  "description": "Assess and report live operational metrics, running state, and immediate telemetry snapshot.",
+  "strategic_objectives": ["O1", "O4"],
+  "intent_classes": ["status", "running", "stopped", "how is", "current status", "operational state"],
+  "required_asset_context": ["asset_id", "status", "pump_model", "operating_envelope"],
+  "required_signals": ["frequency", "motor_temperature", "intake_pressure", "discharge_pressure", "drive_current_average"],
+  "required_evidence": ["current_snapshot"],
+  "required_tools": ["get_asset_context", "get_live_snapshot"],
+  "allowed_specialists": ["well_performance"],
+  "safety": {
+    "advisory_only": true,
+    "forbidden_actions": ["autonomous_control"]
+  },
+  "output_format": "advisory_v1",
+  "success_criteria": ["live status reported", "telemetry snapshot summarized", "operating envelope status checked"],
+  "verification_steps": ["Verify SCADA communication timestamp", "Confirm VSD running indicator"]
+}

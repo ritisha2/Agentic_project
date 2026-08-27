@@ -1,0 +1,33 @@
+# MCP Capability Registry
+# Grounded in ESP_APM_PHASE_5_FINAL_Service_Tool_MCP_Implementation_Design.docx §16
+
+mcp_servers:
+  engineering_mcp:
+    mcp_server_id: "engineering_mcp_server"
+    name: "Engineering Physics MCP Server"
+    description: "Exposes deterministic TDH and BEP physics tools via MCP protocol"
+    tools:
+      calculate_tdh:
+        tool_name: "calculate_tdh"
+        description: "Calculate Total Dynamic Head (TDH) in feet"
+        service_backing: "EngineeringService.calculate_tdh"
+        read_only: true
+        allowed_objectives: ["OP02_PRODUCTION_DECLINE_RCA", "OP01_CURRENT_STATUS"]
+      calculate_bep:
+        tool_name: "calculate_bep"
+        description: "Calculate Best Efficiency Point deviation percentage"
+        service_backing: "EngineeringService.calculate_bep"
+        read_only: true
+        allowed_objectives: ["OP02_PRODUCTION_DECLINE_RCA"]
+
+  twin_mcp:
+    mcp_server_id: "twin_mcp_server"
+    name: "Digital Twin MCP Server"
+    description: "Exposes frequency and water cut simulation tools via MCP protocol"
+    tools:
+      simulate_frequency_change:
+        tool_name: "simulate_frequency_change"
+        description: "Simulate flow rate and motor temperature under VSD frequency change"
+        service_backing: "DigitalTwinService.simulate_frequency_change"
+        read_only: true
+        allowed_objectives: ["OP02_PRODUCTION_DECLINE_RCA"]

@@ -86,8 +86,75 @@ def run_diagnosis(req: DiagnoseRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+from src.agent.objective_router import ObjectiveRouter
+from src.schemas.advisory import StandardAdvisoryPayload
+
+@app.post("/advisory", response_model=StandardAdvisoryPayload)
+def generate_advisory(req: DiagnoseRequest):
+    """
+    Generate Standard Advisory Response complying with Guidelines.pdf Appendix C.
+    Executes 9-Step Question-Handling Method via ObjectiveRouter.
+    """
+    try:
+        router = ObjectiveRouter()
+        advisory: StandardAdvisoryPayload = router.route_and_execute(
+            user_query=req.user_query,
+            asset_id=req.asset_id
+        )
+        return advisory
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/diagnose/{run_id}")
 def get_diagnosis_result(run_id: str):
     if run_id not in DIAGNOSTIC_RUNS:
         raise HTTPException(status_code=404, detail=f"Run ID '{run_id}' not found.")
     return DIAGNOSTIC_RUNS[run_id]
+
+
+# ── Phase 3 Knowledge Service Routes ──────────────────────────────────────────
+
+from src.services.retrieval_service import RetrievalService
+_retrieval = RetrievalService()
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str = Field(..., description="Natural language or keyword query")
+    top_k: int = Field(5, ge=1, le=20)
+    authority_filter: Optional[str] = Field(None, description="Max authority level to include: A B C D E F")
+
+
+@app.post("/knowledge/search")
+def knowledge_search(req: KnowledgeSearchRequest):
+    """Hybrid KB search: BM25 + pgvector + authority sort (Sprint 3.9)"""
+    result = _retrieval.hybrid_retrieve(req.query, top_k=req.top_k, authority_filter=req.authority_filter)
+    return result
+
+
+@app.post("/knowledge/search-faults")
+def knowledge_search_faults(req: KnowledgeSearchRequest):
+    """Structured fault object lookup (Sprint 3.6)"""
+    faults = _retrieval.search_fault_taxonomy(req.query)
+    return {"query": req.query, "fault_matches": faults, "count": len(faults)}
+
+
+class CaseSearchRequest(BaseModel):
+    symptom_query: str
+    top_k: int = Field(3, ge=1, le=10)
+
+
+@app.post("/cases/search-similar")
+def cases_search_similar(req: CaseSearchRequest):
+    """Historical case similarity search (Sprint 3.7)"""
+    cases = _retrieval.search_similar_cases(req.symptom_query, top_k=req.top_k)
+    return {"symptom_query": req.symptom_query, "similar_cases": cases, "count": len(cases)}
+
+
+@app.get("/knowledge/pump-curve/{pump_model:path}")
+def knowledge_get_pump_curve(pump_model: str):
+    """Exact pump curve lookup by model name (Sprint 3.8)"""
+    curve = _retrieval.get_pump_curve(pump_model)
+    if not curve:
+        raise HTTPException(status_code=404, detail=f"No pump curve found for model: {pump_model}")
+    return curve

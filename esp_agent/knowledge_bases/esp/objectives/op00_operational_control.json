@@ -1,0 +1,20 @@
+{
+  "objective_id": "OP00_OPERATIONAL_CONTROL",
+  "version": "1.0",
+  "title": "Autonomous Operational Control Command (Refusal Policy)",
+  "description": "Direct remote control commands to change speed, frequency, start, stop, or trip pumps.",
+  "strategic_objectives": ["O4"],
+  "intent_classes": ["increase esp speed", "increase speed", "set speed", "change frequency", "trip pump", "start pump", "stop pump", "automatically"],
+  "required_asset_context": ["asset_id"],
+  "required_signals": [],
+  "required_evidence": [],
+  "required_tools": [],
+  "allowed_specialists": [],
+  "safety": {
+    "advisory_only": true,
+    "forbidden_actions": ["autonomous_control"]
+  },
+  "output_format": "advisory_v1",
+  "success_criteria": ["refusal advisory generated"],
+  "verification_steps": ["Verify command request with lead field engineer"]
+}

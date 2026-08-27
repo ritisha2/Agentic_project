@@ -1,0 +1,398 @@
+# engineering_calculation_registry.yaml
+# Source: ESP_Engineering_Research_Package.md, Section 2
+# The LLM/service must treat this file as authoritative configuration, not regenerate formulas at runtime.
+# Any calculation with status: requires_validation must NOT execute until the flagged item is resolved
+# by a qualified engineer and this file is updated accordingly.
+
+calculations:
+
+  # ===== SECTION A: standard-derived (physics-based) =====
+  - id: A1_HEAD_PRESSURE_CONVERSION
+    name: "Pressure-Head Conversion"
+    section: A
+    domain: fluid_statics
+    formula: "H_ft = (dP_psi * 2.31) / SG ; dP_psi = (H_ft * SG) / 2.31"
+    constant_derivation: "2.31 = 144 in2/ft2 / 62.4 lb/ft3 (fresh water specific weight) - dimensional constant, not fitted"
+    required_inputs: [delta_p_psi, fluid_sg]
+    optional_inputs: []
+    units: {delta_p_psi: psi, head_ft: ft, fluid_sg: dimensionless}
+    validity_conditions: ["fluid_sg > 0", "single measurement window, same asset"]
+    operating_range: "single-phase liquid only; two-phase requires D2/D4 gas-adjusted SG"
+    output: [head_ft, pressure_psi]
+    reference: "fundamental fluid statics - no proprietary standard"
+    oem_dependency: none
+    asset_dependency: "fluid_sg must be actual flowing-condition value"
+    failure_condition: "missing fluid_sg -> fail_closed, no default substitution"
+    status: ready
+
+  - id: A2_HYDRAULIC_POWER
+    name: "Hydraulic (Water) Horsepower"
+    section: A
+    domain: pump_hydraulics
+    formula: "WHP = (Q_bpd * H_ft * SG) / 135000"
+    constant_derivation: "135000 = oilfield unit-conversion product (5.615 ft3/bbl, 62.4 lb/ft3, 1440 min/day, 33000 ft-lb/min/hp)"
+    required_inputs: [q_bpd, head_ft, fluid_sg]
+    optional_inputs: []
+    units: {q_bpd: bpd, head_ft: ft, whp_hp: hp}
+    validity_conditions: ["q_bpd >= 0", "head_ft >= 0", "fluid_sg > 0"]
+    operating_range: "single-phase liquid assumption unless Q/SG already gas-adjusted (D2/D4)"
+    output: [whp_hp]
+    reference: "fundamental fluid mechanics / standard oilfield conversion"
+    oem_dependency: none
+    asset_dependency: "Q, H, SG all asset-specific"
+    failure_condition: "missing any of Q/H/SG -> fail_closed"
+    status: ready
+
+  - id: A3_BRAKE_HORSEPOWER
+    name: "Pump Brake Horsepower"
+    section: A
+    domain: pump_hydraulics
+    formula: "BHP = WHP / eta_pump"
+    required_inputs: [whp_hp, eta_pump_at_operating_point]
+    optional_inputs: []
+    units: {bhp: hp, eta_pump: dimensionless_0_to_1}
+    validity_conditions: ["0 < eta_pump <= 1"]
+    operating_range: "eta_pump must be read from valid OEM curve at actual operating Q (see B1)"
+    output: [bhp_per_stage, bhp_total]
+    reference: "fundamental pump hydraulics; eta_pump curve sourced per API_RP_11S2 (exact section unverified)"
+    oem_dependency: high
+    asset_dependency: "actual flow rate, stage count"
+    failure_condition: "no valid eta_pump at operating Q, or Q outside published curve -> fail_closed, flag requires_engineering_validation"
+    status: ready
+
+  - id: A4_AFFINITY_LAWS_SPEED_CORRECTION
+    name: "Affinity-Law Frequency/Speed Correction"
+    section: A
+    domain: pump_hydraulics_similarity
+    formula: "Q2 = Q1*(N2/N1) ; H2 = H1*(N2/N1)^2 ; BHP2 = BHP1*(N2/N1)^3"
+    required_inputs: [q1, h1, bhp1, n1_base_speed_or_freq, n2_target_speed_or_freq]
+    optional_inputs: [motor_slip_correction]
+    units: {q: bpd, h: ft, bhp: hp, n: "Hz or RPM (consistent)"}
+    validity_conditions: ["N2/N1 within OEM/standard-validated ratio range", "same N units for N1 and N2"]
+    operating_range: "assumes geometrically similar operation on same system-curve region; efficiency assumed constant (approximation)"
+    output: [q2_bpd, h2_ft, bhp2_hp]
+    reference: "standard centrifugal pump similarity laws (fundamental); conventionally cross-referenced ANSI_HI_1_3_SERIES (section not confirmed)"
+    oem_dependency: "base curve (Q1,H1,BHP1) at N1"
+    asset_dependency: "N2 = actual VSD frequency"
+    failure_condition: "missing N1 (base frequency) -> fail_closed, do not assume 60Hz silently"
+    status: ready
+
+  - id: A5_BEP_PERCENT_OF_RATE
+    name: "Percent of Best Efficiency Point"
+    section: A
+    domain: pump_hydraulics
+    formula: "pct_bep = (Q_actual / Q_BEP) * 100"
+    required_inputs: [q_actual, q_bep_at_matched_frequency]
+    optional_inputs: []
+    units: {q: bpd, pct_bep: percent}
+    validity_conditions: ["Q_BEP frequency-matched to Q_actual's operating frequency via A4"]
+    output: [pct_bep]
+    reference: "standard pump-engineering metric; acceptable band is client/OEM-specific, see E-section"
+    oem_dependency: "Q_BEP location"
+    asset_dependency: "Q_actual"
+    failure_condition: "no OEM Q_BEP at correct frequency -> fail_closed"
+    status: ready
+
+  # ===== SECTION B: OEM-data-dependent =====
+  - id: B1_PUMP_CURVE_LOOKUP
+    name: "Pump Performance Curve Interpolation"
+    section: B
+    domain: oem_pump_hydraulics
+    formula: "interpolation over OEM digitized (Q,H,eta,BHP) curve dataset; no universal formula"
+    required_inputs: [pump_model_id, stage_count, base_test_frequency, curve_dataset, target_q]
+    optional_inputs: [curve_revision_date, impeller_trim]
+    units: {q: bpd, h: "ft per stage or total", eta: percent, bhp: "hp per stage or total"}
+    validity_conditions: ["target_q within OEM-published curve range - no extrapolation without confirmation"]
+    output: [h_ft, eta_pct, bhp_per_stage]
+    reference: "OEM published curve, generated per API_RP_11S2 methodology (not guaranteed for all vendors/eras)"
+    oem_dependency: complete
+    asset_dependency: "which model/stage count is physically installed"
+    failure_condition: "no matching OEM curve for installed model -> fail_closed, requires_oem_data. Never substitute a similar pump's curve without logged engineering override."
+    status: requires_oem_data_per_asset
+
+  - id: B2_MOTOR_PERFORMANCE_LOOKUP
+    name: "Motor Performance Curve / Nameplate Lookup"
+    section: B
+    domain: oem_electrical
+    formula: "OEM lookup - no universal formula"
+    required_inputs: [motor_model, nameplate_voltage, nameplate_current, nameplate_hp, nameplate_frequency]
+    optional_inputs: [ambient_derating_curve]
+    units: {voltage: V, current: A, hp: hp, frequency: Hz, temp: "F or C"}
+    validity_conditions: ["nameplate data matches physically installed serial/model"]
+    output: [rated_amps, rated_hp, power_factor, service_factor, insulation_class]
+    reference: "OEM nameplate/datasheet; ISO_15551_2023 covers motors as ESP system component generally"
+    oem_dependency: complete
+    asset_dependency: "actual installed motor serial/model, voltage config"
+    failure_condition: "no matching OEM data -> fail_closed"
+    status: requires_oem_data_per_asset
+
+  - id: B3_CABLE_VOLTAGE_DROP
+    name: "Downhole Power Cable Voltage Drop"
+    section: B
+    domain: oem_standard_electrical
+    formula: "Vdrop = I * Z_cable * L"
+    required_inputs: [cable_gauge_type, cable_length_ft, downhole_temp, operating_current, cable_impedance_table]
+    optional_inputs: [power_factor_angle]
+    units: {voltage: V, current: A, impedance: "ohm/1000ft", length: ft}
+    validity_conditions: ["impedance table sourced from manufacturer data or verified IEEE_1019 tables (unverified in this pass)"]
+    output: [voltage_drop_v, motor_terminal_voltage_v]
+    reference: "IEEE_1019 and/or API_RP_11S6 and/or OEM cable datasheets - content not independently verified"
+    oem_dependency: complete
+    asset_dependency: "actual cable run length/gauge as installed"
+    failure_condition: "missing cable spec -> fail_closed"
+    status: requires_engineering_validation
+
+  # ===== SECTION C: asset-data-dependent =====
+  - id: C1_SYSTEM_OPERATING_POINT
+    name: "ESP System Operating Point"
+    section: C
+    domain: nodal_analysis
+    formula: "iterative solution where P_IPR(Q) = P_VLP(Q); IPR model choice is a config, not fixed"
+    required_inputs: [reservoir_pressure, ipr_model_and_params, wellbore_geometry, pvt_properties, pump_curve, operating_frequency]
+    optional_inputs: [skin_factor, multiphase_flow_correlation_selection]
+    units: {pressure: psi, q: bpd, depth: ft}
+    validity_conditions: ["IPR model explicitly selected and validated by engineer per well/reservoir type"]
+    output: [q_operating_bpd, pip_psi]
+    reference: "standard nodal-analysis methodology (textbook); no single API/ISO standard prescribes IPR correlation"
+    oem_dependency: "pump curve (B1)"
+    asset_dependency: complete
+    failure_condition: "missing IPR params or non-convergent solution -> fail_closed, flag for engineering review"
+    status: requires_client_configuration
+
+  - id: C2_MOTOR_LOAD_PERCENT
+    name: "Motor Load Percentage"
+    section: C
+    domain: asset_oem_electrical
+    formula: "pct_load = (I_measured / I_rated) * 100"
+    required_inputs: [motor_measured_current, motor_rated_current]
+    optional_inputs: [operating_frequency]
+    units: {current: A, pct_load: percent}
+    validity_conditions: ["I_measured and I_rated on same phase-reference basis"]
+    output: [motor_load_pct]
+    reference: "standard ratio calculation"
+    oem_dependency: "rated current (B2)"
+    asset_dependency: "measured current"
+    failure_condition: "missing either input -> fail_closed"
+    status: ready
+
+  # ===== SECTION D: fluid/PVT-dependent =====
+  - id: D1_VISCOSITY_CORRECTION
+    name: "Viscous Liquid Performance Correction"
+    section: D
+    domain: pvt_pump_hydraulics
+    formula: "Q_visc = CQ*Q_water ; H_visc = CH*H_water ; eta_visc = C_eta*eta_water (CQ,CH,C_eta from ANSI/HI 9.6.7 charts)"
+    required_inputs: [water_curve_at_bep, kinematic_viscosity_flowing_cst]
+    optional_inputs: [non_newtonian_flag]
+    units: {viscosity: cSt, q: bpd, h: ft, eta: percent}
+    validity_conditions: ["viscosity within ANSI_HI_9_6_7_2021 valid range (approx 1-4000 cSt per 2015-edition scope text, UNCONFIRMED for 2021 edition)", "Newtonian fluid only"]
+    output: [q_visc_bpd, h_visc_ft, eta_visc_pct]
+    reference: "ANSI_HI_9_6_7_2021"
+    oem_dependency: "base water curve (B1)"
+    asset_dependency: "flowing-condition viscosity"
+    failure_condition: "viscosity/curve missing or out of range -> fail_closed"
+    status: requires_engineering_validation
+    validation_note: "confirm multistage ESP geometry is within the standard's explicit scope before enabling"
+
+  - id: D2_FREE_GAS_FRACTION
+    name: "Free Gas Fraction at Pump Intake"
+    section: D
+    domain: pvt
+    formula: "depends on selected PVT correlation set (Standing/Vasquez-Beggs/lab data) - no single universal formula"
+    required_inputs: [pvt_properties, intake_pressure, intake_temperature]
+    optional_inputs: [water_cut]
+    units: {pressure: psi, temp: F, gor: scf_per_bbl, fraction: dimensionless}
+    validity_conditions: ["asset-specific PVT lab data preferred over generic correlation"]
+    output: [free_gas_fraction_intake]
+    reference: "peer-reviewed PVT correlations or lab PVT data - no API/ISO mandatory correlation"
+    oem_dependency: none
+    asset_dependency: complete
+    failure_condition: "no PVT data/correlation selected -> fail_closed, no silent default"
+    status: requires_client_configuration
+
+  - id: D3_GAS_HANDLING_DERATING
+    name: "Pump Performance Derating for Free Gas"
+    section: D
+    domain: pvt_oem
+    formula: "REQUIRES_ENGINEERING_VALIDATION - no universal formula verified"
+    required_inputs: [free_gas_fraction, oem_gas_handling_curve_or_separator_spec]
+    optional_inputs: []
+    units: {}
+    output: [head_derating_pct]
+    reference: "no current API/ISO standard identified; must be OEM curve or named peer-reviewed correlation with stated validity range"
+    oem_dependency: complete_if_oem_route
+    asset_dependency: "free gas fraction, equipment config"
+    failure_condition: "no OEM curve and no approved literature correlation on file -> DO NOT RUN, output requires_engineering_validation"
+    status: requires_engineering_validation
+
+  - id: D4_FLUID_MIXTURE_SG
+    name: "Flowing Fluid Mixture Specific Gravity"
+    section: D
+    domain: pvt
+    formula: "SG_mix = WC*SG_water + (1-WC)*SG_oil (liquid-only, no free gas); SG = 141.5/(131.5+API)"
+    required_inputs: [water_cut, oil_sg_or_api, water_sg]
+    optional_inputs: [gas_fraction]
+    units: {sg: dimensionless, wc: fraction}
+    validity_conditions: ["0 <= WC <= 1", "SG values > 0", "single-phase liquid only (no free gas)"]
+    output: [sg_mix]
+    reference: "fundamental fluid-property mixture rule; API gravity is API-convention-defined"
+    oem_dependency: none
+    asset_dependency: "WC, oil SG, water SG all asset-specific"
+    failure_condition: "missing WC or component SGs -> fail_closed"
+    status: ready
+
+  # ===== SECTION E: client-approved-limit calculations =====
+  - id: E1_RECOMMENDED_OPERATING_RANGE_CHECK
+    name: "Operating Point vs ROR"
+    section: E
+    domain: client_limits_standard_framework
+    formula: "Q_min_ROR <= Q_actual <= Q_max_ROR"
+    required_inputs: [q_actual, q_min_ror, q_max_ror]
+    optional_inputs: []
+    units: {q: bpd}
+    validity_conditions: ["ROR bounds sourced from OEM > ISO 15551:2023 annex (engineer-applied) > client-approved envelope, in that priority order"]
+    output: [in_ror_bool, pct_of_ror_range]
+    reference: "ISO_15551_2023 (annex concept confirmed, numeric method unverified); OEM ROR spec; client policy"
+    oem_dependency: high_if_oem_source
+    asset_dependency: high_if_client_source
+    failure_condition: "no ROR bounds on file -> do not run, flag requires_engineering_validation"
+    status: requires_client_configuration
+
+  - id: E2_VIBRATION_LIMIT_CHECK
+    name: "ESP Vibration vs Limit"
+    section: E
+    domain: client_limits_standard_framework
+    formula: "Vib_measured <= Vib_limit"
+    required_inputs: [vibration_measured, vibration_limit]
+    optional_inputs: [fft_breakdown]
+    units: {vibration: "in/s or g (units unconfirmed from API RP 11S8 text)"}
+    validity_conditions: ["limit sourced from API_RP_11S8 or OEM/client spec - numeric values NOT retrieved in this research pass"]
+    output: [vib_ok_bool]
+    reference: "API_RP_11S8"
+    oem_dependency: "possible tighter OEM limit"
+    asset_dependency: "client-approved limit if different"
+    failure_condition: "no limit configured -> fail_closed"
+    status: requires_engineering_validation
+
+  - id: E3_MOTOR_TEMPERATURE_LIMIT_CHECK
+    name: "Motor Temperature vs Limit"
+    section: E
+    domain: client_limits_oem
+    formula: "T_measured <= T_limit"
+    required_inputs: [motor_temperature_measured, temperature_limit]
+    optional_inputs: []
+    units: {temp: "F or C"}
+    validity_conditions: ["T_limit from OEM insulation class (B2) + client-approved margin"]
+    output: [temp_ok_bool]
+    reference: "OEM nameplate/insulation class; client thermal derating policy"
+    oem_dependency: high
+    asset_dependency: "client policy margin"
+    failure_condition: "no limit on file -> fail_closed"
+    status: requires_client_configuration
+
+  # ===== SECTION F: diagnostic feature calculations =====
+  - id: F1_AMPS_TREND_SLOPE
+    name: "Motor Current Trend Slope"
+    section: F
+    domain: diagnostic_statistical
+    formula: "linear regression slope of current vs time over rolling window"
+    required_inputs: [current_time_series, window_length]
+    optional_inputs: [outlier_rejection_method]
+    units: {slope: "A/day"}
+    validity_conditions: ["minimum sample density is a config choice, not standard-defined - REQUIRES_ENGINEERING_VALIDATION for default"]
+    output: [amps_trend_slope]
+    reference: "standard statistical method; usage consistent with API_RP_11S troubleshooting scope but not a prescribed formula in it"
+    oem_dependency: "interpretation thresholds only"
+    asset_dependency: "the trend itself"
+    failure_condition: "insufficient data density -> output null with insufficient_data flag, not a misleading slope"
+    status: requires_client_configuration
+
+  - id: F2_CYCLIC_RUN_PATTERN_DETECTION
+    name: "Pump-Off / Cyclic Operation Detection"
+    section: F
+    domain: diagnostic_statistical
+    formula: "run/stop transition counting vs threshold - no universal formula"
+    required_inputs: [run_status_time_series]
+    optional_inputs: [amperage_profile_per_cycle]
+    units: {cycles_per_day: count}
+    validity_conditions: ["excessive-cycle threshold REQUIRES_ENGINEERING_VALIDATION - operational policy, not a standard"]
+    output: [cycles_per_day, cyclic_flag_bool]
+    reference: "no standard identified; general alignment with API_RP_11S troubleshooting scope, not a cited formula"
+    oem_dependency: none
+    asset_dependency: complete
+    failure_condition: "missing run-status data -> fail_closed"
+    status: requires_client_configuration
+
+  - id: F3_LOAD_FLAG
+    name: "Underload/Overload Flag"
+    section: F
+    domain: diagnostic
+    formula: "IF motor_load_pct < underload_threshold THEN flag underload; IF > overload_threshold THEN flag overload"
+    required_inputs: [motor_load_pct, underload_threshold_pct, overload_threshold_pct]
+    optional_inputs: []
+    units: {pct: percent}
+    validity_conditions: ["thresholds must be on file per asset/fleet policy - no defaults asserted"]
+    output: [load_flag]
+    reference: "client-approved operating philosophy; no public standard prescribes universal thresholds"
+    oem_dependency: "possible starting-point recommendation"
+    asset_dependency: complete
+    failure_condition: "no thresholds configured -> do not run, flag for configuration"
+    status: requires_client_configuration
+
+  # ===== SECTION G: reliability/maintenance calculations =====
+  - id: G1_FAILURE_CLASSIFICATION
+    name: "ESP Failure Classification"
+    section: G
+    domain: reliability
+    formula: "categorical classification against API RP 11S1 taxonomy - not numeric"
+    required_inputs: [teardown_report_data_per_11s1_form, failure_observation_codes]
+    optional_inputs: [photos, component_level_findings]
+    units: {}
+    validity_conditions: ["teardown report follows API_RP_11S1 form structure"]
+    output: [failure_category]
+    reference: "API_RP_11S1"
+    oem_dependency: "often performed at OEM service center - track data provenance"
+    asset_dependency: complete
+    failure_condition: "no teardown report -> classify as undetermined, do not infer from indirect data"
+    status: requires_engineering_validation
+    validation_note: "exact failure-category taxonomy from RP 11S1 form not independently retrieved"
+
+  - id: G2_RUN_LIFE_MTBF
+    name: "Run Life / Mean Time Between Failures"
+    section: G
+    domain: reliability_statistics
+    formula: "run_life_days = pull_date - install_date; MTBF = sum(run_life_days) / number_of_failures over defined population"
+    required_inputs: [install_date, pull_date, failure_classification_from_g1]
+    optional_inputs: [censoring_treatment_for_running_units]
+    units: {days: days}
+    validity_conditions: ["only failure pulls count toward failure-driven MTBF; exclude/track workover pulls separately", "population/time-window explicitly bounded"]
+    output: [mtbf_days, run_life_days]
+    reference: "standard reliability-engineering definition (fundamental)"
+    oem_dependency: none
+    asset_dependency: complete
+    failure_condition: "missing install or pull date -> exclude unit, do not impute"
+    status: ready
+
+  - id: G3_MTTR
+    name: "Mean Time To Repair/Replace"
+    section: G
+    domain: reliability_maintenance_statistics
+    formula: "MTTR = sum(pull_date_to_restart_date) / number_of_events over defined population"
+    required_inputs: [pull_date, restart_date]
+    optional_inputs: [downtime_cause_breakdown]
+    units: {days: days}
+    validity_conditions: ["population/time-window explicitly bounded"]
+    output: [mttr_days]
+    reference: "standard maintenance-engineering definition (fundamental)"
+    oem_dependency: none
+    asset_dependency: complete
+    failure_condition: "missing dates -> exclude event, do not impute"
+    status: ready
+
+not_standardizable_without_oem_data:
+  - B1_PUMP_CURVE_LOOKUP
+  - B2_MOTOR_PERFORMANCE_LOOKUP
+  - B3_CABLE_VOLTAGE_DROP
+  - D3_GAS_HANDLING_DERATING
+  - E1_RECOMMENDED_OPERATING_RANGE_CHECK
+  - E2_VIBRATION_LIMIT_CHECK
+  - E3_MOTOR_TEMPERATURE_LIMIT_CHECK

@@ -1,0 +1,14 @@
+tag_name,semantic_name,description,engineering_unit,operating_min,operating_max,source,mapping_version,active,telemetry_binding_confirmed
+R_PIT_001,wellhead_pressure,well head pressure,Barg,50,120,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_PIT_002,casing_pressure,annulus pressure / casing,Barg,30,100,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_PIT_003,flowline_pressure,flow line pressure,Barg,30,100,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_INTAKE_PRESS,intake_pressure,Intake Pressure,psi,800,2000,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_INTAKE_TEMP,intake_temperature,Intake Temperature,degC,50,90,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_DISCH_PRESS,discharge_pressure,Discharge Pressure,psi,1500,3000,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_MOTOR_TEMP,motor_temperature,Motor Temperature,degC,60,100,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_FREQUENCY,frequency,Frequency,Hz,40,60,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_VIBRATION_X,vibration_x,Vibration X,g,0.05,0.3,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_TOOL_CURRENT,tool_current,Leakage current / Tool Current,mA,0,20,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_DRV_CURR_AVG,drive_current_average,Drive Current Average,A,30,90,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_DHG_CURR_AVG,downhole_gauge_average_current,Downhole Gauge Average Current,A,30,90,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE
+R_BUS_IN_VTG_AVG,bus_voltage,Bus Volt,V,400,500,SUPPLIED_TAG_PROPERTY_TABLE,SIM_V1,TRUE,FALSE

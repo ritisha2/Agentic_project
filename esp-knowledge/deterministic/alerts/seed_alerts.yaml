@@ -1,0 +1,127 @@
+# ESP-PMM Alert Playbooks (Seed Data)
+# Converted from diagnostic_rules.json threshold rules
+# Version: 1.0.0
+
+alerts:
+  - alert_id: MOTOR_TEMP_MARGIN_LOW
+    rule_mapping: RULE_TEMP_WARN
+    name: Motor Temperature Margin Low
+    severity: WARNING
+    trigger:
+      canonical_metric: primary_thermal_metric
+      operator: ">"
+      threshold: 130.0
+      unit: "°C"
+    evidence_required:
+      - primary_thermal_metric
+      - primary_intake_pressure
+      - flow_metric
+    interpretation:
+      - "Elevated motor temperature indicates thermal risk or reduced cooling flow."
+    allowed_next_steps:
+      - "inspect_temperature_trend"
+      - "review_cooling_flow_conditions"
+      - "review_pip_trend"
+      - "notify_production_engineer"
+    forbidden_actions:
+      - "automatic_speed_increase"
+      - "alarm_suppression"
+    approval_required: true
+    escalation_role: "production_engineer"
+    resolution_condition: "primary_thermal_metric < 120.0 °C sustained for 30 minutes"
+    source: "diagnostic_rules.json v1.0"
+    policy:
+      explain: true
+      recommend: "investigation"
+      autonomous_control: false
+
+  - alert_id: MOTOR_TEMP_CRITICAL
+    rule_mapping: RULE_TEMP_CRIT
+    name: Motor Temperature Critical
+    severity: CRITICAL
+    trigger:
+      canonical_metric: primary_thermal_metric
+      operator: ">"
+      threshold: 150.0
+      unit: "°C"
+    evidence_required:
+      - primary_thermal_metric
+      - primary_intake_pressure
+      - primary_electrical_load
+    interpretation:
+      - "Severe thermal stress risking motor stator insulation burnout."
+    allowed_next_steps:
+      - "immediate_engineering_review"
+      - "evaluate_controlled_shutdown"
+      - "inspect_scale_or_cooling_restriction"
+    forbidden_actions:
+      - "ignore_alarm"
+      - "increase_load"
+    approval_required: true
+    escalation_role: "lead_operations_engineer"
+    resolution_condition: "primary_thermal_metric < 130.0 °C sustained for 60 minutes"
+    source: "diagnostic_rules.json v1.0"
+    policy:
+      explain: true
+      recommend: "immediate_action"
+      autonomous_control: false
+
+  - alert_id: PIP_LOW_WARNING
+    rule_mapping: RULE_PIP_WARN
+    name: Intake Pressure Low (Gas Lock Risk)
+    severity: WARNING
+    trigger:
+      canonical_metric: primary_intake_pressure
+      operator: "<"
+      threshold: 150.0
+      unit: "psi"
+    evidence_required:
+      - primary_intake_pressure
+      - flow_metric
+      - primary_electrical_load
+    interpretation:
+      - "Drawdown approaching bubble point pressure; risk of free gas locking the intake."
+    allowed_next_steps:
+      - "reduce_vsd_frequency"
+      - "activate_gas_agitation_cycle"
+      - "check_gas_separator_efficiency"
+    forbidden_actions:
+      - "increase_vsd_frequency"
+    approval_required: true
+    escalation_role: "production_engineer"
+    resolution_condition: "primary_intake_pressure > 180.0 psi sustained for 30 minutes"
+    source: "diagnostic_rules.json v1.0"
+    policy:
+      explain: true
+      recommend: "flow_adjustment"
+      autonomous_control: false
+
+  - alert_id: RADIAL_VIBRATION_WARNING
+    rule_mapping: RULE_VIB_WARN
+    name: Radial Vibration Warning
+    severity: WARNING
+    trigger:
+      canonical_metric: vibration_metric
+      operator: ">"
+      threshold: 3.0
+      unit: "g"
+    evidence_required:
+      - vibration_metric
+      - axial_vibration_metric
+      - primary_electrical_load
+    interpretation:
+      - "Elevated mechanical vibration indicating initial bearing or shaft wear."
+    allowed_next_steps:
+      - "inspect_vibration_spectrum"
+      - "check_rotor_alignment"
+      - "schedule_bearing_inspection"
+    forbidden_actions:
+      - "operate_at_critical_speed"
+    approval_required: true
+    escalation_role: "reliability_engineer"
+    resolution_condition: "vibration_metric < 2.5 g sustained for 30 minutes"
+    source: "diagnostic_rules.json v1.0"
+    policy:
+      explain: true
+      recommend: "inspection"
+      autonomous_control: false

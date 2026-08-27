@@ -1,0 +1,151 @@
+# engineering_test_cases.yaml
+#
+# IMPORTANT: Two categories of test cases below.
+#
+# 1. "synthetic_arithmetic_checks" - for calculations that are pure, closed-form physics/math
+#    (Section A and D4). These numbers were computed by me from the stated formulas using
+#    invented-but-plausible input values purely to unit-test the ARITHMETIC of the deterministic
+#    engine. They are NOT real field/asset data and must not be mistaken for validated engineering
+#    reference cases.
+#
+# 2. "requires_real_data_placeholder" - for every calculation that depends on an OEM curve, PVT
+#    lab report, or client-approved limit (Sections B, C, D1-D3, E, F, G). I have not invented
+#    numbers for these, per the governing rule against inventing formulas/constants/limits.
+#    These entries define the exact shape of test data needed; real values must come from an
+#    actual OEM curve file, lab PVT report, or client policy document before these tests can be
+#    populated and run.
+
+synthetic_arithmetic_checks:
+
+  - calc_id: A1_HEAD_PRESSURE_CONVERSION
+    description: "Arithmetic check only - synthetic inputs"
+    input: {delta_p_psi: 500, fluid_sg: 0.85}
+    expected_output: {head_ft: 1358.8235}
+    tolerance: 0.001
+    note: "H = 500*2.31/0.85"
+
+  - calc_id: A1_HEAD_PRESSURE_CONVERSION
+    description: "Inverse direction check"
+    input: {head_ft: 1358.8235, fluid_sg: 0.85}
+    expected_output: {pressure_psi: 500.0000}
+    tolerance: 0.01
+
+  - calc_id: A2_HYDRAULIC_POWER
+    description: "Arithmetic check only - synthetic inputs, chained from A1 output above"
+    input: {q_bpd: 1000, head_ft: 1358.8235, fluid_sg: 0.85}
+    expected_output: {whp_hp: 8.5556}
+    tolerance: 0.001
+    note: "WHP = 1000*1358.8235*0.85/135000"
+
+  - calc_id: D4_FLUID_MIXTURE_SG
+    description: "Mixture SG arithmetic check - synthetic water cut/oil gravity"
+    input: {water_cut: 0.3, oil_gravity_api: 35, produced_water_sg: 1.02}
+    intermediate: {sg_oil_from_api: 0.84985, note: "SG = 141.5/(131.5+35)"}
+    expected_output: {sg_mix: 0.90090}
+    tolerance: 0.001
+    note: "SG_mix = 0.3*1.02 + 0.7*0.84985"
+
+  - calc_id: G2_RUN_LIFE_MTBF
+    description: "Run-life day-count arithmetic check (2024 is a leap year - tests calendar handling)"
+    input: {install_date: "2024-01-01", pull_date: "2024-07-01"}
+    expected_output: {run_life_days: 182}
+    tolerance: 0
+    note: "MTBF (population-level) intentionally not tested here - requires a defined fleet population, see placeholder below"
+
+failure_mode_checks:
+  # These verify the fail-closed behavior mandated by the governing rule, not numeric accuracy.
+
+  - calc_id: A1_HEAD_PRESSURE_CONVERSION
+    description: "Missing SG must fail closed, not default to 1.0"
+    input: {delta_p_psi: 500, fluid_sg: null}
+    expected_behavior: "reject / requires_engineering_validation: missing fluid SG"
+
+  - calc_id: A4_AFFINITY_LAWS_SPEED_CORRECTION
+    description: "Missing base frequency N1 must fail closed, not assume 60 Hz"
+    input: {q1: 1000, h1: 1000, bhp1: 20, n1_base_speed_or_freq: null, n2_target_speed_or_freq: 55}
+    expected_behavior: "reject / requires_engineering_validation: missing base frequency, no default assumed"
+
+  - calc_id: D1_VISCOSITY_CORRECTION
+    description: "Viscosity outside stated standard range must fail closed"
+    input: {kinematic_viscosity_cst: 8000, water_curve_at_bep: "{{placeholder}}"}
+    expected_behavior: "reject / requires_engineering_validation: viscosity outside ANSI/HI 9.6.7 valid range"
+
+  - calc_id: E1_RECOMMENDED_OPERATING_RANGE_CHECK
+    description: "No ROR bounds on file must fail closed, not silently pass"
+    input: {q_actual: 1200, q_min_ror: null, q_max_ror: null}
+    expected_behavior: "reject / requires_engineering_validation: no ROR configured for this asset"
+
+  - calc_id: D3_GAS_HANDLING_DERATING
+    description: "No OEM curve or approved correlation on file must not run at all"
+    input: {free_gas_fraction: 0.15, oem_gas_handling_curve_or_separator_spec: null}
+    expected_behavior: "do not execute; output requires_engineering_validation: no approved gas-handling model configured"
+
+requires_real_data_placeholder:
+
+  - calc_id: A3_BRAKE_HORSEPOWER
+    needed_data: "eta_pump at a specific Q from a real OEM curve"
+    status: pending_oem_data
+
+  - calc_id: A5_BEP_PERCENT_OF_RATE
+    needed_data: "Q_BEP from a real OEM curve at matched frequency"
+    status: pending_oem_data
+
+  - calc_id: B1_PUMP_CURVE_LOOKUP
+    needed_data: "digitized (Q,H,eta,BHP) curve for a named, real pump model/stage count"
+    status: pending_oem_data
+
+  - calc_id: B2_MOTOR_PERFORMANCE_LOOKUP
+    needed_data: "real motor nameplate for a named model"
+    status: pending_oem_data
+
+  - calc_id: B3_CABLE_VOLTAGE_DROP
+    needed_data: "verified cable impedance table (manufacturer or confirmed IEEE 1019 data)"
+    status: pending_oem_data_and_standard_verification
+
+  - calc_id: C1_SYSTEM_OPERATING_POINT
+    needed_data: "real reservoir pressure + an explicitly client-selected IPR model and parameters"
+    status: pending_client_configuration
+
+  - calc_id: D1_VISCOSITY_CORRECTION
+    needed_data: "real OEM base curve + confirmed ANSI/HI 9.6.7-2021 correction-factor charts (source from purchased standard, not memory)"
+    status: pending_standard_text_access
+
+  - calc_id: D2_FREE_GAS_FRACTION
+    needed_data: "client-approved PVT correlation selection + either lab PVT report or correlation parameters"
+    status: pending_client_configuration
+
+  - calc_id: D3_GAS_HANDLING_DERATING
+    needed_data: "OEM gas-handling curve for installed separator/pump, or a named peer-reviewed correlation with client sign-off"
+    status: pending_oem_data_or_client_configuration
+
+  - calc_id: E1_RECOMMENDED_OPERATING_RANGE_CHECK
+    needed_data: "OEM ROR bounds, or engineer-applied ISO 15551:2023 annex methodology, or client-approved envelope"
+    status: pending_standard_text_access_or_client_configuration
+
+  - calc_id: E2_VIBRATION_LIMIT_CHECK
+    needed_data: "numeric vibration limit and units from API RP 11S8 (paywalled, not retrieved) or OEM/client spec"
+    status: pending_standard_text_access
+
+  - calc_id: E3_MOTOR_TEMPERATURE_LIMIT_CHECK
+    needed_data: "OEM insulation class rating + client-approved safety margin for named motor model"
+    status: pending_oem_data_and_client_configuration
+
+  - calc_id: F1_AMPS_TREND_SLOPE
+    needed_data: "client-approved minimum sample density / window length policy"
+    status: pending_client_configuration
+
+  - calc_id: F2_CYCLIC_RUN_PATTERN_DETECTION
+    needed_data: "client-approved excessive-cycle threshold"
+    status: pending_client_configuration
+
+  - calc_id: F3_LOAD_FLAG
+    needed_data: "client-approved underload/overload thresholds"
+    status: pending_client_configuration
+
+  - calc_id: G1_FAILURE_CLASSIFICATION
+    needed_data: "real teardown report per API RP 11S1 form + exact taxonomy enum (not independently retrieved)"
+    status: pending_standard_text_access
+
+  - calc_id: G3_MTTR
+    needed_data: "real pull/restart date pairs for a defined fleet population"
+    status: pending_asset_data

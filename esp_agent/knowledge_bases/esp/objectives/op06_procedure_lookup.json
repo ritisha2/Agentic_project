@@ -1,0 +1,19 @@
+{
+  "objective_id": "OP06_PROCEDURE_LOOKUP",
+  "version": "1.0",
+  "title": "Standard Operating Procedure & Manual Lookup",
+  "description": "Retrieve governing API RP guidelines, OEM manuals, or standard operating procedures.",
+  "strategic_objectives": ["O6"],
+  "intent_classes": ["procedure", "manual", "sop", "standard", "api rp", "how to fix", "troubleshooting"],
+  "required_asset_context": ["pump_model"],
+  "required_signals": [],
+  "required_evidence": ["knowledge_citations"],
+  "required_tools": ["retrieval_service.hybrid_retrieve"],
+  "allowed_specialists": ["knowledge"],
+  "safety": {
+    "advisory_only": true
+  },
+  "output_format": "advisory_v1",
+  "success_criteria": ["citations with document_id and page numbers"],
+  "verification_steps": ["Cross-reference cited section with local document repository"]
+}

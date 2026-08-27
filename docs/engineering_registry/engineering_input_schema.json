@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ESP Engineering Calculation Service - Input Schema",
+  "description": "Derived from ESP_Engineering_Research_Package.md Sections 4-8. Fields marked authority: 'REQUIRES ENGINEERING VALIDATION' must be resolved by a qualified engineer before the dependent calculation may run.",
+  "type": "object",
+  "properties": {
+
+    "asset_identity": {
+      "type": "object",
+      "required": ["asset_id", "well_name"],
+      "properties": {
+        "asset_id": {"type": "string"},
+        "well_name": {"type": "string"},
+        "field": {"type": "string"}
+      }
+    },
+
+    "real_time_or_periodic_data": {
+      "type": "object",
+      "properties": {
+        "flowing_pressure_diff_psi": {"type": "number", "minimum": 0, "authority": "asset SCADA/gauge", "used_by": ["A1"]},
+        "flow_rate_q_bpd": {"type": "number", "minimum": 0, "authority": "test/allocation/estimate", "used_by": ["A2","A5","C1","E1"]},
+        "operating_frequency_hz": {"type": "number", "minimum": 0, "authority": "asset SCADA/VSD", "used_by": ["A4","B1","B2"]},
+        "motor_measured_current_a": {"type": "number", "minimum": 0, "authority": "asset SCADA/VSD", "used_by": ["C2","F1","F3"]},
+        "vibration_measured": {"type": "number", "authority": "asset sensor, units per API RP 11S8 (unconfirmed)", "used_by": ["E2"]},
+        "motor_temperature_measured": {"type": "number", "authority": "asset sensor", "used_by": ["E3"]},
+        "fluid_level_ft": {"type": ["number", "null"], "authority": "asset measurement, optional cross-check", "used_by": ["C1_validation"]}
+      }
+    },
+
+    "fluid_data": {
+      "type": "object",
+      "required": ["water_cut", "oil_gravity_api", "produced_water_sg"],
+      "properties": {
+        "water_cut": {"type": "number", "minimum": 0, "maximum": 1, "authority": "test separator", "used_by": ["D4"]},
+        "oil_gravity_api": {"type": "number", "authority": "lab/PVT report", "used_by": ["D4"]},
+        "produced_water_sg": {"type": "number", "exclusiveMinimum": 0, "authority": "lab (must be measured, NOT defaulted to 1.0)", "used_by": ["D4"]},
+        "kinematic_viscosity_cst": {"type": ["number", "null"], "authority": "lab/PVT correlation; required only if D1 used", "used_by": ["D1"]},
+        "pvt_source_type": {"type": "string", "enum": ["lab_report", "correlation_standing", "correlation_vasquez_beggs", "REQUIRES_ENGINEERING_VALIDATION"], "used_by": ["D1","D2"]}
+      }
+    },
+
+    "well_reservoir_data": {
+      "type": "object",
+      "properties": {
+        "reservoir_pressure_psi": {"type": "number", "authority": "well test/buildup", "used_by": ["C1"]},
+        "ipr_model_selection": {"type": "string", "enum": ["vogel", "straight_line", "composite", "REQUIRES_ENGINEERING_VALIDATION"], "authority": "client/engineering decision - no default permitted", "used_by": ["C1"]},
+        "ipr_model_params": {"type": "object", "authority": "engineering decision", "used_by": ["C1"]},
+        "tubing_id_in": {"type": "number", "used_by": ["C1"]},
+        "wellbore_deviation_survey_ref": {"type": ["string", "null"], "used_by": ["C1"]},
+        "test_flow_rate_history": {"type": "array", "items": {"type": "object"}, "used_by": ["C1_validation"]}
+      }
+    },
+
+    "esp_equipment_data": {
+      "type": "object",
+      "required": ["pump_model_id", "stage_count", "motor_model_id"],
+      "properties": {
+        "pump_model_id": {"type": "string", "authority": "asset equipment record, matched to OEM catalog", "used_by": ["B1","A3","A5","E1"]},
+        "stage_count": {"type": "integer", "minimum": 1, "authority": "equipment record (static per install)", "used_by": ["B1","A3"]},
+        "motor_model_id": {"type": "string", "authority": "asset equipment record, matched to OEM catalog", "used_by": ["B2","C2","E3"]},
+        "motor_voltage_configuration": {"type": "string", "used_by": ["B2"]},
+        "cable_gauge_type": {"type": "string", "used_by": ["B3"]},
+        "cable_length_ft": {"type": "number", "minimum": 0, "used_by": ["B3"]},
+        "gas_separator_model": {"type": ["string", "null"], "used_by": ["D3"]},
+        "setting_depth_ft": {"type": "number", "used_by": ["A1","C1"]},
+        "sensor_package": {"type": "object", "used_by": ["C1","E2","E3"]},
+        "install_date": {"type": "string", "format": "date", "used_by": ["G2"]},
+        "pull_date": {"type": ["string", "null"], "format": "date", "used_by": ["G2","G3"]}
+      }
+    },
+
+    "oem_reference_data": {
+      "description": "Not asset-input; joined from the OEM master catalog keyed by pump_model_id/motor_model_id. See engineering_reference_registry.yaml for standards governing how these should have been generated.",
+      "type": "object",
+      "properties": {
+        "pump_curve_dataset": {"type": "array", "items": {"type": "object", "properties": {"q_bpd": {"type": "number"}, "h_ft": {"type": "number"}, "eta_pct": {"type": "number"}, "bhp_hp": {"type": "number"}}}, "used_by": ["B1"]},
+        "pump_curve_base_frequency_hz": {"type": "number", "authority": "OEM datasheet - must be confirmed, never assumed 60Hz", "used_by": ["A4","B1"]},
+        "pump_ror_bounds": {"type": ["object", "null"], "properties": {"q_min_bpd": {"type": "number"}, "q_max_bpd": {"type": "number"}}, "authority": "OEM or ISO 15551:2023 annex (engineer-applied) or client policy", "used_by": ["E1"]},
+        "motor_nameplate": {"type": "object", "properties": {"rated_voltage_v": {"type": "number"}, "rated_current_a": {"type": "number"}, "rated_hp": {"type": "number"}, "power_factor": {"type": "number"}, "service_factor": {"type": "number"}, "insulation_class": {"type": "string"}}, "used_by": ["B2","C2","E3"]},
+        "cable_impedance_table": {"type": ["array", "null"], "authority": "manufacturer data or verified IEEE 1019 tables (unverified in research pass)", "used_by": ["B3"]},
+        "gas_handling_curve": {"type": ["array", "null"], "authority": "OEM only - no universal formula exists", "used_by": ["D3"]},
+        "vibration_limit_oem": {"type": ["number", "null"], "used_by": ["E2"]}
+      }
+    },
+
+    "client_approved_limits": {
+      "description": "Must be explicitly configured per asset/fleet - no service-side defaults permitted per governing rule.",
+      "type": "object",
+      "properties": {
+        "vibration_limit": {"type": ["number", "null"], "authority": "API RP 11S8 (numeric values unretrieved) or OEM or client policy", "used_by": ["E2"]},
+        "motor_temperature_limit": {"type": ["number", "null"], "authority": "OEM insulation class + client margin", "used_by": ["E3"]},
+        "underload_threshold_pct": {"type": ["number", "null"], "authority": "client policy - no public standard", "used_by": ["F3"]},
+        "overload_threshold_pct": {"type": ["number", "null"], "authority": "client policy - no public standard", "used_by": ["F3"]},
+        "cyclic_count_threshold": {"type": ["number", "null"], "authority": "client policy - no public standard", "used_by": ["F2"]},
+        "gas_handling_correlation_approved": {"type": ["string", "null"], "authority": "client/engineering selection", "used_by": ["D3"]}
+      }
+    },
+
+    "reliability_data": {
+      "type": "object",
+      "properties": {
+        "teardown_reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "form_version": {"type": "string", "description": "should reference API RP 11S1 form structure"},
+              "failure_category": {"type": "string", "description": "taxonomy per API RP 11S1 - exact enum REQUIRES ENGINEERING VALIDATION"},
+              "observation_codes": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "used_by": ["G1"]
+        }
+      }
+    }
+  },
+
+  "required": ["asset_identity", "esp_equipment_data"],
+
+  "x_governing_rule": "No field in this schema may be silently defaulted by the calculation service. Missing required fields must produce a fail-closed result per the failure_condition specified for each dependent calculation in engineering_calculation_registry.yaml, not a substituted generic value."
+}

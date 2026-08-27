@@ -1,0 +1,27 @@
+asset_id,well_id,asset_type,asset_status,tenant_id,customer_id,customer_name,block_id,block,unit_id,unit_name,station_id,station,cluster_id,cluster,well_name,well_type,latitude,longitude,tvd_m,md_m,completion_type,pump_setting_depth_m,pump_manufacturer,pump_model,pump_serial_number,pump_stage_count,pump_curve_id,pump_curve_revision,motor_manufacturer,motor_model,motor_serial_number,motor_rated_power_hp,motor_rated_power_kw,motor_rated_voltage_v,motor_rated_current_a,protector_manufacturer,protector_model,intake_manufacturer,intake_model,cable_manufacturer,cable_model,cable_length_m,vsd_manufacturer,vsd_model,vsd_serial_number,plant_id,plant,plant_section,source_system,source_version,configuration_version,record_status
+FSWS-001-A,FSWS-001-A,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FSWS-003,FSWS-003,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FSWS-005,FSWS-005,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FSWS-008,FSWS-008,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FSWS-011,FSWS-011,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FSWS-012,FSWS-012,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-010,FS-010,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-011,FS-011,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-013,FS-013,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,Cluster 3,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-014,FS-014,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-016,FS-016,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-017,FS-017,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-018,FS-018,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-020,FS-020,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-021,FS-021,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-023,FS-023,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-024,FS-024,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-028,FS-028,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-030,FS-030,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-031,FS-031,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-038,FS-038,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-042,FS-042,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-043,FS-043,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-045,FS-045,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-047,FS-047,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
+FS-046,FS-046,ESP_WELL,,,,CCED,,BLOCK 3,,FARHA,,FARHA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,FARHA,,SIMULATOR,INITIAL_SEED_V2,1,DRAFT
