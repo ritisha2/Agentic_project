@@ -35,7 +35,25 @@ class TelemetryService:
         measurements: Dict[str, TelemetryMeasurement] = {}
         now_str = datetime.utcnow().isoformat() + "Z"
 
-        if self.adapter:
+        # Try live cced_esp REST API via LiveDataBridge first
+        try:
+            from src.adapters.live_data_bridge import live_bridge
+            live_row = live_bridge.get_latest_telemetry(asset_id)
+            if live_row:
+                ts = str(live_row.get("timestamp") or now_str)
+                measurements = {
+                    "motor_temperature": TelemetryMeasurement(tag="motor_temperature", value=float(live_row.get("temperature_c") or 0.0), unit="°C", timestamp=ts, quality="GOOD"),
+                    "intake_pressure": TelemetryMeasurement(tag="intake_pressure", value=float(live_row.get("intake_pressure_psi") or 0.0), unit="psi", timestamp=ts, quality="GOOD"),
+                    "discharge_pressure": TelemetryMeasurement(tag="discharge_pressure", value=float(live_row.get("pressure_psi") or live_row.get("discharge_pressure_psi") or 0.0), unit="psi", timestamp=ts, quality="GOOD"),
+                    "flow_rate": TelemetryMeasurement(tag="flow_rate", value=float(live_row.get("flow_rate_bpd") or 0.0), unit="bpd", timestamp=ts, quality="GOOD"),
+                    "drive_current_average": TelemetryMeasurement(tag="drive_current_average", value=float(live_row.get("motor_current_a") or 0.0), unit="A", timestamp=ts, quality="GOOD"),
+                    "frequency": TelemetryMeasurement(tag="frequency", value=float(live_row.get("frequency_hz") or 0.0), unit="Hz", timestamp=ts, quality="GOOD"),
+                    "vibration_x": TelemetryMeasurement(tag="vibration_x", value=float(live_row.get("vibration_g") or 0.0), unit="g", timestamp=ts, quality="GOOD"),
+                }
+        except Exception as ex:
+            logger.debug(f"[TelemetryService] LiveDataBridge query bypassed: {ex}")
+
+        if not measurements and self.adapter:
             try:
                 metrics = self.adapter.load_latest_telemetry(asset_id)
                 for m in metrics:

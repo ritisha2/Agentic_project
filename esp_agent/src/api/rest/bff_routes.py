@@ -19,6 +19,7 @@ from src.services.audit_service import AuditService
 from src.adapters.evidence_repository import EvidenceRepository
 from src.services.xai_service import XAIEngine
 from src.agent.supervisor.user_entry import UserEntryAdapter
+from src.adapters.live_data_bridge import live_bridge
 
 router = APIRouter(prefix="/api/ui", tags=["bff"])
 
@@ -49,8 +50,20 @@ def get_asset_workspace(asset_id: str):
         telemetry = telemetry_service.get_latest(asset_id)
         
         # Calculate baseline TDH if telemetry available
-        tdh_result = 4042.5
+        tel_dict = telemetry.model_dump().get("measurements", {})
+        pdp = tel_dict.get("discharge_pressure", {}).get("value", 2100.0)
+        pip = tel_dict.get("intake_pressure", {}).get("value", 350.0)
+        tdh_result = round(max(0.0, pdp - pip) * 2.31 / 0.85, 1) or 4042.5
         bep_deviation = -17.1
+
+        # Query live ML assessment from cced_esp
+        ml_eval = live_bridge.get_ml_assessment(asset_id)
+        identified_fault = "Normal Condition"
+        confidence = 0.95
+        if ml_eval and "prediction" in ml_eval:
+            p = ml_eval["prediction"]
+            identified_fault = p.get("status", "Normal Condition")
+            confidence = round(float(p.get("health_index", 95.0)) / 100.0, 2)
 
         # Fetch active evidence packs for asset
         packs = evidence_repo.list_packs_for_asset(asset_id)
@@ -66,8 +79,8 @@ def get_asset_workspace(asset_id: str):
                 "bep_deviation_pct": bep_deviation
             },
             "predictive_models": {
-                "fault_classifier": {"identified_fault": "Intake Gas Interference", "confidence": 0.88},
-                "risk_24h": {"risk_level": "MEDIUM", "score": 0.65}
+                "fault_classifier": {"identified_fault": identified_fault, "confidence": confidence},
+                "risk_24h": {"risk_level": "LOW" if confidence > 0.8 else "MEDIUM", "score": round(1.0 - confidence, 2)}
             },
             "recent_pack_id": recent_pack_id
         }
@@ -198,31 +211,34 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
                 "delta": chunk
             }) + "\n"
 
-        # Event 5: Generative UI Block (Plotly Engineering Chart)
+        # Event 5: Generative UI Block (Plotly Engineering Chart with live timeseries)
+        live_traces = live_bridge.build_plotly_trace(req.asset_id)
+        default_data = [
+            {
+                "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
+                "y": [1750, 1720, 1680, 1550, 1490, 1420, 1380],
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": "Production Rate (BPD)",
+                "line": {"color": "#ef4444", "width": 2.5}
+            },
+            {
+                "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
+                "y": [4100, 4080, 4050, 3950, 3900, 3850, 3800],
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": "Total Dynamic Head (ft)",
+                "yaxis": "y2",
+                "line": {"color": "#0284c7", "width": 2, "dash": "dot"}
+            }
+        ]
+
         chart_payload = {
             "type": "generative_ui",
             "kind": "plotly_chart",
             "chart_id": f"chart-{run_id}",
             "title": f"Telemetry Trend & Pump Curve — Asset {req.asset_id}",
-            "data": [
-                {
-                    "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
-                    "y": [1750, 1720, 1680, 1550, 1490, 1420, 1380],
-                    "type": "scatter",
-                    "mode": "lines+markers",
-                    "name": "Production Rate (BPD)",
-                    "line": {"color": "#ef4444", "width": 2.5}
-                },
-                {
-                    "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
-                    "y": [4100, 4080, 4050, 3950, 3900, 3850, 3800],
-                    "type": "scatter",
-                    "mode": "lines+markers",
-                    "name": "Total Dynamic Head (ft)",
-                    "yaxis": "y2",
-                    "line": {"color": "#0284c7", "width": 2, "dash": "dot"}
-                }
-            ],
+            "data": live_traces if live_traces else default_data,
             "layout": {
                 "autosize": True,
                 "margin": {"l": 40, "r": 40, "t": 30, "b": 30},
@@ -230,8 +246,8 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
                 "plot_bgcolor": "rgba(240,242,245,0.5)",
                 "font": {"family": "Inter, sans-serif", "size": 11, "color": "#191c1d"},
                 "xaxis": {"gridcolor": "#e2e8f0"},
-                "yaxis": {"title": "BPD", "gridcolor": "#e2e8f0"},
-                "yaxis2": {"title": "Head (ft)", "overlaying": "y", "side": "right"},
+                "yaxis": {"title": "Value", "gridcolor": "#e2e8f0"},
+                "yaxis2": {"title": "Pressure / Temp", "overlaying": "y", "side": "right"},
                 "legend": {"orientation": "h", "y": -0.2}
             }
         }

@@ -19,6 +19,7 @@ from src.adapters.asset_service import AssetService
 from src.schemas.advisory import StandardAdvisoryPayload, AdvisoryEvidenceItem
 from src.policy.policy_engine import PolicyEngine
 from src.llm import LLMAdapter, CompactContextBuilder
+from src.adapters.live_data_bridge import live_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -88,15 +89,18 @@ def create_supervisor_graph():
         return {"context": ctx, "audit": audit}
 
     def data_quality_gate_node(state: AgentState) -> Dict[str, Any]:
-        """Node 3: Validate signal freshness and completeness."""
+        """Node 3: Validate signal freshness and completeness with live cced_esp telemetry."""
         audit = dict(state["audit"])
         audit["node_timestamps"]["data_quality_gate"] = time.time()
 
+        asset_id = state["request"]["asset_id"]
         obj_id = state["run"]["objective_id"]
         obj_def = registry.get(obj_id)
         req_signals = obj_def.required_signals if obj_def else ["flowline_pressure", "intake_pressure"]
 
-        telemetry_data = state["context"].get("telemetry") or {
+        # Fetch live telemetry from cced_esp via HTTP bridge; fallback to state/default if unavailable
+        live_tel = live_bridge.get_telemetry_as_agent_dict(asset_id)
+        telemetry_data = live_tel or state["context"].get("telemetry") or {
             "motor_temperature": 135.0,
             "flow_rate": 1450.0,
             "current": 62.0,
@@ -117,26 +121,52 @@ def create_supervisor_graph():
         audit["tool_calls"].append({
             "step": "data_quality_gate",
             "status": dq_report.status,
-            "gate_passed": dq_report.gate_passed
+            "gate_passed": dq_report.gate_passed,
+            "live_data_used": live_tel is not None
         })
 
         if not dq_report.gate_passed:
-            logger.warning(f"Supervisor data_quality_gate: DQ gate failed for asset {state['request']['asset_id']}.")
+            logger.warning(f"Supervisor data_quality_gate: DQ gate failed for asset {asset_id}.")
 
         return {"context": ctx, "audit": audit}
 
     def load_minimum_context_node(state: AgentState) -> Dict[str, Any]:
-        """Node 4: Pre-load baseline engineering and model context."""
+        """Node 4: Pre-load baseline engineering and model context from cced_esp ML pipeline."""
         audit = dict(state["audit"])
         audit["node_timestamps"]["load_minimum_context"] = time.time()
 
+        asset_id = state["request"]["asset_id"]
         ctx = dict(state["context"])
-        ctx["engineering"] = {"tdh_ft": 4042.5, "bep_flow_rate": 1750.0}
-        ctx["models"] = {"predicted_fault": "Intake Pressure Drawdown", "confidence": 0.88}
+
+        # Fetch real-time ML assessment from cced_esp pipeline
+        ml_eval = live_bridge.get_ml_assessment(asset_id)
+        if ml_eval and "prediction" in ml_eval:
+            pred = ml_eval["prediction"]
+            fault_name = pred.get("status", "Normal Condition")
+            confidence = float(pred.get("health_index", 88.0)) / 100.0
+            ctx["models"] = {
+                "predicted_fault": fault_name,
+                "confidence": round(confidence, 2),
+                "health_index": pred.get("health_index", 88)
+            }
+        else:
+            ctx["models"] = {"predicted_fault": "Intake Pressure Drawdown", "confidence": 0.88}
+
+        # Calculate live TDH from telemetry if available
+        tel = ctx.get("telemetry", {})
+        pdp = float(tel.get("discharge_pressure") or tel.get("pdp") or 2100.0)
+        pip = float(tel.get("intake_pressure") or tel.get("pip") or 350.0)
+        tdh_ft = round(max(0.0, pdp - pip) * 2.31 / 0.85, 1)
+
+        ctx["engineering"] = {
+            "tdh_ft": tdh_ft if tdh_ft > 0 else 4042.5,
+            "bep_flow_rate": 1750.0
+        }
 
         audit["tool_calls"].append({
             "step": "load_minimum_context",
-            "context_keys": list(ctx.keys())
+            "context_keys": list(ctx.keys()),
+            "live_ml_used": ml_eval is not None
         })
 
         return {"context": ctx, "audit": audit}
