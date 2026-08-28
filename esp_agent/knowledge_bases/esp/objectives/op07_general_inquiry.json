@@ -1,0 +1,20 @@
+{
+  "objective_id": "OP07_GENERAL_INQUIRY",
+  "version": "1.0",
+  "title": "General Inquiry & Conversational Assistance",
+  "description": "Handle greetings, identity/capability questions, and general non-diagnostic conversational queries. No telemetry, specialists, or evidence required; responds directly via advisory synthesis.",
+  "strategic_objectives": [],
+  "intent_classes": ["hi", "hello", "hey", "who are you", "what can you do", "help", "role", "identity", "greeting"],
+  "required_asset_context": [],
+  "required_signals": [],
+  "required_evidence": [],
+  "required_tools": [],
+  "allowed_specialists": [],
+  "safety": {
+    "advisory_only": true,
+    "forbidden_actions": ["autonomous_control"]
+  },
+  "output_format": "advisory_v1",
+  "success_criteria": ["conversational response provided"],
+  "verification_steps": []
+}

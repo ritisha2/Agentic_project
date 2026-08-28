@@ -37,6 +37,7 @@ from shared.schemas.audit import AdvisoryAuditPayload, ToolCallAuditPayload
 
 from src.api.rest.evidence_routes import router as evidence_router
 from src.api.rest.bff_routes import router as bff_router
+from src.mcp.rest_facade import router as mcp_router
 
 app = FastAPI(
     title="ESP APM Application Services Gateway",
@@ -46,6 +47,19 @@ app = FastAPI(
 
 app.include_router(evidence_router)
 app.include_router(bff_router)
+app.include_router(mcp_router)
+
+# Mount the native MCP server (streamable-HTTP) when the optional `mcp` package is present.
+# The REST facade at /api/mcp always works; this adds an MCP-protocol endpoint at /mcp for
+# MCP-native clients (Claude Desktop, Kiro, etc.). Gracefully skipped if `mcp` is unavailable.
+try:
+    from src.mcp.mcp_server import build_streamable_http_app
+    _mcp_app = build_streamable_http_app()
+    if _mcp_app is not None:
+        app.mount("/mcp", _mcp_app)
+except Exception as _mcp_exc:  # pragma: no cover - defensive, never block gateway startup
+    import logging as _logging
+    _logging.getLogger(__name__).warning("MCP native server not mounted: %s", _mcp_exc)
 
 app.add_middleware(
     CORSMiddleware,

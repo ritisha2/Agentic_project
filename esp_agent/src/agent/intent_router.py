@@ -9,6 +9,7 @@ Routing Paths:
 """
 
 import logging
+import re
 from typing import Tuple, Optional, Dict, Any
 
 from src.agent.objective_registry import ObjectiveRegistry
@@ -44,11 +45,20 @@ class IntentRouter:
 
         q_lower = user_query.lower().strip()
 
+        # Conversational greeting & identity check
+        if q_lower in ["hi", "hello", "hey", "who are you", "what can you do", "help", "role", "identity"] or any(q_lower.startswith(g) for g in ["hi ", "hello ", "hey "]):
+            logger.info("IntentRouter Path A (Greeting): Small talk / greeting detected.")
+            return "OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting"
+
         # Path A: Deterministic Keyword Matching
+        # Word-boundary matching to avoid false positives from short keywords appearing
+        # as substrings inside unrelated words (e.g. "hi" inside "this"/"which").
         objectives = self.registry.list_all()
         for obj in objectives:
             for kw in obj.intent_classes:
-                if kw.lower() in q_lower:
+                kw_lower = kw.lower()
+                pattern = r"\b" + re.escape(kw_lower) + r"\b"
+                if re.search(pattern, q_lower):
                     logger.info(f"IntentRouter Path A (Deterministic): Keyword '{kw}' -> {obj.objective_id}")
                     return obj.objective_id, 0.95, "Path_A_Deterministic"
 

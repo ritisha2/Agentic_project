@@ -113,7 +113,7 @@ class MLContractV2Payload(BaseModel):
 class ModelOutputPayload(BaseModel):
     asset_id: str
     timestamp: str
-    rules: RuleStatusPayload
+    rules: Optional[RuleStatusPayload] = Field(default=None, description="Rule engine status; may be absent when sourced from LiveDataBridge health-index endpoint")
     anomaly: AnomalyResultPayload
     failure: FailurePredictionPayload
     fault: FaultDiagnosisPayload

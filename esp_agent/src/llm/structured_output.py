@@ -22,13 +22,19 @@ import logging
 import re
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
+try:
+    from json_repair import loads as _json_repair_loads
+    _HAS_JSON_REPAIR = True
+except ImportError:  # pragma: no cover — fallback if library not installed
+    _HAS_JSON_REPAIR = False
+
 from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-LLM_REPAIR_RETRIES: int = 2
+LLM_REPAIR_RETRIES: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +43,8 @@ LLM_REPAIR_RETRIES: int = 2
 class HypothesisSchema(BaseModel):
     cause: str
     confidence: float
-    reasoning: str
+    # Optional: small local models frequently omit this; don't fail validation over it.
+    reasoning: str = ""
     supporting_evidence: List[str] = []
     contradicting_evidence: List[str] = []
 
@@ -48,9 +55,12 @@ class AdvisoryOutputSchema(BaseModel):
     The LLM MUST return JSON strictly conforming to this schema.
     """
     assessment: str
-    hypotheses: List[HypothesisSchema]
+    hypotheses: List[HypothesisSchema] = []
     uncertainties: List[str] = []
-    recommendation: str
+    # Optional with a safe default: conversational/general-inquiry queries (e.g. OP07) often
+    # have nothing actionable to recommend, and small local models omit the field rather
+    # than write a placeholder. Don't fail validation over it.
+    recommendation: str = "No specific action required at this time."
     verification: Union[str, List[str]] = Field(default="1. Verify sensor alignment.")
 
 
@@ -96,6 +106,36 @@ def extract_json_block(text: str) -> str:
     return cleaned
 
 
+def loads_lenient(json_str: str) -> Any:
+    """
+    Parse JSON using json-repair (battle-tested LLM output parser) when available,
+    falling back to stdlib json + conservative hand-rolled repair if not installed.
+
+    json-repair handles all common small-LLM output defects: missing commas,
+    trailing commas, unclosed braces/brackets, markdown fences, unquoted keys,
+    and truncation — far more robustly than hand-written regex.
+    """
+    if _HAS_JSON_REPAIR:
+        # json_repair.loads() always returns a Python object — it never raises on
+        # recoverable malformed JSON. Pass ensure_ascii=False to preserve evidence IDs.
+        result = _json_repair_loads(json_str)
+        return result
+
+    # Fallback: stdlib strict parse, then one round of conservative regex repair.
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        # Minimal regex repair: trailing commas + missing commas between lines.
+        repaired = re.sub(r",(\s*[}\]])", r"\1", json_str)
+        repaired = re.sub(
+            r'((?:true|false|null|\"|[}\]0-9]))[ \t\r]*\n([ \t]*["{\[])',
+            r"\1,\n\2",
+            repaired,
+        )
+        repaired = re.sub(r",\s*,", ",", repaired)
+        return json.loads(repaired)
+
+
 # ---------------------------------------------------------------------------
 # Structured Output Error
 # ---------------------------------------------------------------------------
@@ -124,7 +164,7 @@ class StructuredOutputValidator(Generic[T]):
         """
         json_str = extract_json_block(raw_text)
         try:
-            data = json.loads(json_str)
+            data = loads_lenient(json_str)
             return self.schema.model_validate(data)
         except (json.JSONDecodeError, ValidationError) as exc:
             raise StructuredOutputError(
@@ -148,7 +188,7 @@ class StructuredOutputValidator(Generic[T]):
         while True:
             json_str = extract_json_block(current_text)
             try:
-                data = json.loads(json_str)
+                data = loads_lenient(json_str)
                 result = self.schema.model_validate(data)
                 if attempt > 0:
                     logger.info(

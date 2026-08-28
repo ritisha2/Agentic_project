@@ -265,7 +265,8 @@ class ObjectiveRouter:
             f"with Health Index {model_output.health.health_index}/100. "
             f"Data Quality: {dq_report.status}. {dq_report.disclosure_message}"
         )
-        diagnosis = f"Dominant diagnosis: {fault_name}. Supporting signals include motor temperature ({thermal_val}°C) and active rule violations ({', '.join(model_output.rules.violations) or 'None'})."
+        rule_violations = model_output.rules.violations if model_output.rules else []
+        diagnosis = f"Dominant diagnosis: {fault_name}. Supporting signals include motor temperature ({thermal_val}°C) and active rule violations ({', '.join(rule_violations) or 'None'})."
         risk = f"24h Failure Risk: {model_output.failure.risk_24h * 100:.0f}%. RUL Estimated: {model_output.failure.rul_hours or 'N/A'} hours."
         recommendation = "Inspect motor cooling jacket airflow, verify VSD current limits, and schedule thermal imaging check. Do NOT increase operating frequency."
         expected_impact = "Prevent thermal insulation degradation and extend motor winding run-life."

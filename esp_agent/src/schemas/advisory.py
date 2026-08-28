@@ -31,3 +31,17 @@ class StandardAdvisoryPayload(BaseModel):
     verification: List[str] = Field(default_factory=list, description="Step-by-step human operator verification checks")
     
     provenance: List[str] = Field(default_factory=list, description="Authoritative sources & versions used")
+
+    # UI Schema Compatibility Fields (Frontend AgentDialog & React UI)
+    recommended_action: Optional[Dict[str, Any]] = Field(default=None)
+    confidence_score: Optional[float] = Field(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.confidence_score is None:
+            self.confidence_score = self.confidence
+        if self.recommended_action is None:
+            self.recommended_action = {
+                "action_title": self.recommendation,
+                "urgency": "HIGH" if self.confidence > 0.8 else "MEDIUM",
+                "recommended_parameters": {}
+            }

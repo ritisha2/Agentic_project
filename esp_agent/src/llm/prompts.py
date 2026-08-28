@@ -73,6 +73,14 @@ Task Requirements:
 1. Estimate remaining useful life and failure mode progression.
 2. Recommend preventive workover window or VSD speed adjustment.
 """,
+    "OP07_GENERAL_INQUIRY": """OBJECTIVE: General Conversational Inquiry (greeting, identity, or capability question).
+Task Requirements:
+1. Respond conversationally and briefly introduce yourself as Agent Jane and your role.
+2. This is NOT a diagnostic request — do not fabricate fault hypotheses or evidence.
+3. Leave "hypotheses" as an empty list [] since there is no diagnostic question to evaluate.
+4. Set "recommendation" to a brief, friendly prompt inviting the user to ask a diagnostic
+   or operational question (e.g. "Ask me to diagnose an asset or check its current status.").
+""",
 }
 
 DEFAULT_OBJECTIVE_PROMPT = """OBJECTIVE: ESP Operational Performance Diagnostic.
@@ -94,6 +102,7 @@ You MUST respond with a single, strictly formatted JSON object matching this sch
     {
       "cause": "<primary hypothesis cause name>",
       "confidence": <float between 0.0 and 1.0>,
+      "reasoning": "<one sentence justifying this hypothesis from the evidence>",
       "supporting_evidence": ["<EV-ID1>", "<EV-ID2>"],
       "contradicting_evidence": []
     }

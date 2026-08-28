@@ -24,10 +24,15 @@ class PolicyEngine:
     def enforce_tenant_isolation(self, tenant_id: Optional[str], asset_id: str):
         """Verify tenant authorization for asset query scope."""
         if not tenant_id:
-            logger.warning("No X-Tenant-ID header provided. Defaulting to default tenant.")
+            logger.info(f"No X-Tenant-ID header provided. Authorizing asset '{asset_id}' under default multi-tenant context.")
             return
 
-        # Check tenant prefix or permission
+        # Check tenant authorization rules
+        allowed_tenants = ["default", "cced", "tenant-alpha", "tenant-beta", "cced_operator"]
+        if tenant_id.lower() not in allowed_tenants and not tenant_id.lower().startswith("tenant"):
+            logger.warning(f"Tenant isolation breach: '{tenant_id}' denied access to asset '{asset_id}'")
+            raise PermissionError(f"Tenant '{tenant_id}' unauthorized to access asset '{asset_id}'")
+
         logger.info(f"PolicyEngine verified tenant '{tenant_id}' access to asset '{asset_id}'")
 
     def enforce_tool_acl(self, objective_id: str, tool_name: str):

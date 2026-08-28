@@ -55,7 +55,14 @@ def create_well_performance_graph():
         flow_rate = telemetry.get("flow_rate", 1450.0)
         bep_target = 1750.0
 
-        tdh = (pdp - pip) * 2.31
+        from shared.schemas.engineering import TDHRequest
+        tdh_resp = engineering_service.calculate_tdh(TDHRequest(
+            asset_id=state["input"].get("asset_id", "FS-010"),
+            pdp_psi=float(pdp),
+            pip_psi=float(pip),
+            fluid_sg=0.85
+        ))
+        tdh = tdh_resp.tdh_ft
         bep_dev = ((flow_rate - bep_target) / bep_target) * 100.0
 
         evidence = list(state["evidence_refs"])

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from src.agent.runtime import DiagnosticAgentRuntime
 from src.schemas.canonical import DiagnosticResult
+from src.api.rest.bff_routes import router as bff_router
 
 app = FastAPI(
     title="Knowledge-Base-Agnostic Diagnostic Agent API",
@@ -21,6 +22,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount BFF UI router for agent dock, workspace, and evidence stream
+app.include_router(bff_router, prefix="/api/ui")
 
 # In-memory store for registered knowledge bases and execution runs
 REGISTERED_KNOWLEDGE_BASES: Dict[str, str] = {

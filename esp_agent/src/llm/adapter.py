@@ -142,10 +142,10 @@ class LLMAdapter:
             repair_messages = list(messages) + [
                 {"role": "user", "content": repair_prompt}
             ]
-            resp = self.gateway.chat(repair_messages, temperature=0.0)
+            resp = self.gateway.chat(repair_messages, temperature=0.0, json_mode=True)
             return resp.content
 
-        gw_resp = self.gateway.chat(messages, temperature=0.0)
+        gw_resp = self.gateway.chat(messages, temperature=0.0, json_mode=True)
 
         try:
             parsed = validator.parse_with_repair(
@@ -157,7 +157,10 @@ class LLMAdapter:
         except StructuredOutputError as exc:
             validation_passed = False
             error_str = str(exc)
-            logger.error(f"LLMAdapter: structured_generate failed after retries: {exc}")
+            logger.error(
+                f"LLMAdapter: structured_generate failed after retries: {exc}\n"
+                f"RAW MODEL OUTPUT (truncated 800 chars): {gw_resp.content[:800]!r}"
+            )
             raise
 
         finally:
@@ -196,7 +199,7 @@ class LLMAdapter:
             user_query=user_query,
         )
 
-        gw_resp = self.gateway.chat(messages, temperature=0.0)
+        gw_resp = self.gateway.chat(messages, temperature=0.0, json_mode=True)
         validator = StructuredOutputValidator(AdvisoryOutputSchema)
 
         repair_attempts = [0]
@@ -206,7 +209,7 @@ class LLMAdapter:
             repair_messages = list(messages) + [
                 {"role": "user", "content": repair_prompt}
             ]
-            resp = self.gateway.chat(repair_messages, temperature=0.0)
+            resp = self.gateway.chat(repair_messages, temperature=0.0, json_mode=True)
             return resp.content
 
         try:
@@ -219,7 +222,10 @@ class LLMAdapter:
         except StructuredOutputError as exc:
             validation_passed = False
             error_str = str(exc)
-            logger.error(f"LLMAdapter: advisory generation failed: {exc}")
+            logger.error(
+                f"LLMAdapter: advisory generation failed: {exc}\n"
+                f"RAW MODEL OUTPUT (truncated 800 chars): {gw_resp.content[:800]!r}"
+            )
             raise
 
         finally:

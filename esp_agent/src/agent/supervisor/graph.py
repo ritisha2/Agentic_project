@@ -20,6 +20,7 @@ from src.schemas.advisory import StandardAdvisoryPayload, AdvisoryEvidenceItem
 from src.policy.policy_engine import PolicyEngine
 from src.llm import LLMAdapter, CompactContextBuilder
 from src.adapters.live_data_bridge import live_bridge
+from src.mcp import MCPToolClient
 
 logger = logging.getLogger(__name__)
 
@@ -147,39 +148,49 @@ def create_supervisor_graph():
         asset_id = state["request"]["asset_id"]
         ctx = dict(state["context"])
 
-        # Fetch normalized ModelOutputPayload through ModelAdapter (§6 & §11 compliance)
-        from src.adapters.model_adapter import ModelAdapter
-        model_adapter = ModelAdapter()
-        model_out = model_adapter.get_model_output(asset_id, ctx.get("telemetry"))
-
-        ctx["models"] = {
-            "predicted_fault": model_out.fault.predicted_fault_class,
-            "confidence": model_out.fault.confidence,
-            "health_index": model_out.health.health_index if model_out.health else 88.0
-        }
-
-        # Calculate deterministic physics through EngineeringService (§5 compliance — no inline formulas)
-        from src.services.engineering_service import EngineeringService
-        from shared.schemas.engineering import TDHRequest
-        eng_svc = EngineeringService()
+        obj_id = state["run"]["objective_id"]
         tel = ctx.get("telemetry", {})
-        
-        tdh_resp = eng_svc.calculate_tdh(TDHRequest(
-            asset_id=asset_id,
-            pdp_psi=float(tel.get("discharge_pressure") or 2100.0),
-            pip_psi=float(tel.get("intake_pressure") or 350.0),
-            fluid_sg=0.85
-        ))
+
+        # Consume tools through the governed MCP tool layer (Option A) with per-objective RBAC.
+        mcp = MCPToolClient()
+
+        # ---- Normalized ML model output (LiveDataBridge -> ML API -> mock) ----
+        model_res = mcp.invoke("get_model_output", {"asset_id": asset_id, "telemetry": tel}, objective_id=obj_id)
+        if model_res.ok and model_res.result:
+            model_out = model_res.result
+            fault = model_out.get("fault") or {}
+            health = model_out.get("health") or {}
+            ctx["models"] = {
+                "predicted_fault": fault.get("predicted_fault_class", "NORMAL_OPERATION"),
+                "confidence": fault.get("confidence", 0.9),
+                "health_index": health.get("health_index", 88.0),
+            }
+        else:
+            ctx["models"] = {"predicted_fault": "NORMAL_OPERATION", "confidence": 0.9, "health_index": 88.0}
+
+        # ---- Deterministic TDH physics via the engineering tool ----
+        tdh_res = mcp.invoke("calculate_tdh", {
+            "pdp_psi": float(tel.get("discharge_pressure") or 2100.0),
+            "pip_psi": float(tel.get("intake_pressure") or 350.0),
+            "fluid_sg": 0.85,
+        }, objective_id=obj_id)
+        tdh_ft = tdh_res.result.get("tdh_ft") if (tdh_res.ok and tdh_res.result) else 4042.5
+
+        # Supplementary live engineering envelope (direct — not part of the tool contract).
+        from src.adapters.live_data_bridge import LiveDataBridge
+        eng_ctx = LiveDataBridge().get_engineering_context(asset_id)
 
         ctx["engineering"] = {
-            "tdh_ft": tdh_resp.tdh_ft,
-            "bep_flow_rate": 1750.0
+            "tdh_ft": tdh_ft,
+            "bep_flow_rate": eng_ctx.get("bep_bpd", 1750.0) if eng_ctx else 1750.0,
+            "envelope": eng_ctx,
         }
 
         audit["tool_calls"].append({
             "step": "load_minimum_context",
             "context_keys": list(ctx.keys()),
-            "services_used": ["ModelAdapter", "EngineeringService"]
+            "tools_used": ["get_model_output", "calculate_tdh"],
+            "tool_transport": [model_res.transport, tdh_res.transport],
         })
 
         return {"context": ctx, "audit": audit}
@@ -192,7 +203,12 @@ def create_supervisor_graph():
         obj_id = state["run"]["objective_id"]
         obj_def = registry.get(obj_id)
 
-        allowed = obj_def.allowed_specialists if (obj_def and obj_def.allowed_specialists) else ["well_performance", "reliability", "knowledge"]
+        # Respect an explicit empty allowed_specialists list (e.g. OP07 general inquiry -> no specialists).
+        # Only fall back to the default trio when the objective itself is unknown.
+        if obj_def is not None:
+            allowed = obj_def.allowed_specialists
+        else:
+            allowed = ["well_performance", "reliability", "knowledge"]
         
         plan_update = {
             "steps": allowed,
@@ -240,7 +256,20 @@ def create_supervisor_graph():
 
         active_step_idx = state["plan"]["active_step"]
         steps = state["plan"]["steps"]
-        specialist_name = steps[active_step_idx] if active_step_idx < len(steps) else "unknown"
+
+        # No specialist planned at this index (e.g. empty plan for OP07 general inquiry).
+        # Advance past it without fabricating a placeholder finding, then route to evidence gate.
+        if active_step_idx >= len(steps):
+            plan_update = dict(state["plan"])
+            plan_update["active_step"] = active_step_idx + 1
+            audit["tool_calls"].append({
+                "step": "collect_results",
+                "specialist": None,
+                "note": "no_specialists_planned"
+            })
+            return {"plan": plan_update, "audit": audit}
+
+        specialist_name = steps[active_step_idx]
 
         spec_input = {
             "run_id": state["run"]["run_id"],
@@ -271,6 +300,11 @@ def create_supervisor_graph():
             from src.agent.specialists.maintenance import maintenance_graph
             res = maintenance_graph.invoke({"input": spec_input, "history": [], "findings": [], "evidence_refs": [], "output": None})
             output_dict = res.get("output")
+        elif specialist_name == "engineering":
+            from src.agent.specialists.engineering import EngineeringSpecialist
+            eng_spec = EngineeringSpecialist()
+            spec_res = eng_spec.analyze(spec_input)
+            output_dict = spec_res.model_dump()
 
         if not output_dict:
             output_dict = SpecialistOutput(
@@ -424,10 +458,29 @@ def create_supervisor_graph():
             all_findings = []
             for res in state["specialist_results"]:
                 all_findings.extend(res.get("findings", []))
-            diagnosis = "; ".join(all_findings) if all_findings else "Assessment complete. No active faults identified."
-            assessment = f"Supervisor assessment complete for asset {asset_id} under objective {obj_id}."
-            confidence = 0.88
-            recommendation = "Maintain current operating parameters and verify choke valve alignment."
+
+            # Derive the fallback from REAL live context (model + engineering) so that even
+            # when the LLM narrative is unavailable, the advisory reflects actual cced_esp data
+            # rather than a static canned sentence.
+            models_ctx = state["context"].get("models", {}) or {}
+            predicted_fault = models_ctx.get("predicted_fault") or "No active fault identified"
+            health_index = models_ctx.get("health_index")
+            confidence = float(models_ctx.get("confidence", 0.88))
+
+            if all_findings:
+                diagnosis = "; ".join(all_findings)
+            else:
+                diagnosis = f"Predicted condition: {predicted_fault}."
+
+            health_txt = f" Health index {health_index}/100." if health_index is not None else ""
+            assessment = (
+                f"Deterministic assessment for asset {asset_id} (objective {obj_id}).{health_txt} "
+                f"LLM narrative unavailable — advisory synthesized from live model and engineering context."
+            )
+            recommendation = (
+                f"Review indicators for '{predicted_fault}'. Maintain operating parameters within the approved envelope; "
+                f"do not increase operating frequency without engineering review."
+            )
             verification = ["1. Inspect physical wellhead gauge.", "2. Confirm SCADA telemetry alignment."]
 
         evidence_items = [

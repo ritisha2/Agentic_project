@@ -23,6 +23,8 @@ from src.agent.supervisor.user_entry import UserEntryAdapter
 from src.adapters.live_data_bridge import live_bridge
 from src.schemas.visualization import VisualizationSpec, ChartSpec, ExplanationSpec, ExplanationSection
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/ui", tags=["bff"])
 
 asset_service = AssetContextService()
@@ -74,11 +76,20 @@ def get_asset_workspace(asset_id: str):
         ctx = asset_service.get_context(asset_id)
         telemetry = telemetry_service.get_latest(asset_id)
         
-        # Calculate baseline TDH if telemetry available
+        # Calculate baseline TDH via EngineeringService authority
+        from src.services.engineering_service import EngineeringService
+        from shared.schemas.engineering import TDHRequest
+        eng_svc = EngineeringService()
         tel_dict = telemetry.model_dump().get("measurements", {})
         pdp = tel_dict.get("discharge_pressure", {}).get("value", 2100.0)
         pip = tel_dict.get("intake_pressure", {}).get("value", 350.0)
-        tdh_result = round(max(0.0, pdp - pip) * 2.31 / 0.85, 1) or 4042.5
+        tdh_resp = eng_svc.calculate_tdh(TDHRequest(
+            asset_id=asset_id,
+            pdp_psi=float(pdp),
+            pip_psi=float(pip),
+            fluid_sg=0.85
+        ))
+        tdh_result = tdh_resp.tdh_ft
         bep_deviation = -17.1
 
         # Query live ML assessment from cced_esp
@@ -356,11 +367,10 @@ def get_run_evidence(run_id: str):
     GET /api/ui/runs/{run_id}/evidence
     Returns frozen EvidencePack, ContextView, and XAI explanation payload for evidence drawer drill-down.
     """
-    packs = list(evidence_repo._packs_store.values())
-    if not packs:
-        raise HTTPException(status_code=404, detail="No evidence packs found.")
+    pack = evidence_repo.get_evidence_pack(run_id) or evidence_repo.get_evidence_pack(f"pack-{run_id}") or evidence_repo._packs_store.get(run_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail=f"No evidence pack found for run '{run_id}'.")
 
-    pack = packs[-1]
     advisory = {
         "diagnosis": "Intake Gas Interference probable",
         "confidence": 0.88

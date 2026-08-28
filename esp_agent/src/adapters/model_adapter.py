@@ -43,7 +43,7 @@ class ModelAdapter:
 
         try:
             req = urllib.request.Request(url, method="POST", headers={"Content-Type": "application/json"}, data=b"{}")
-            with urllib.request.urlopen(req, timeout=0.2) as resp:
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status == 200:
                     raw = json.loads(resp.read().decode("utf-8"))
                     return MLContractV2Payload.model_validate(raw)
@@ -186,7 +186,7 @@ class ModelAdapter:
 
     def _query_live_model_api(self, asset_id: str) -> ModelOutputPayload:
         import httpx
-        resp = httpx.get(f"{self.api_url}/assets/{asset_id}/model-output", timeout=0.2)
+        resp = httpx.get(f"{self.api_url}/assets/{asset_id}/model-output", timeout=1.5)
         resp.raise_for_status()
         return ModelOutputPayload.model_validate(resp.json())
 

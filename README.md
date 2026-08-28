@@ -269,9 +269,10 @@ Edit `.env` with your settings:
 # LLM Gateway (llama.cpp local server)
 LLM_GATEWAY_URL=http://localhost:8080/v1
 LLM_MODEL_NAME=qwen2.5-3b-instruct
-LLM_TIMEOUT_SEC=30
+LLM_TIMEOUT_SEC=60
 LLM_MAX_RETRIES=3
-LLM_OFFLINE=0        # Set to 1 for offline/mock mode (no LLM needed)
+# LLM_OFFLINE is disabled by project policy — the real local LLM server is always used.
+# Do not set this variable; it has no effect (see src/llm/gateway.py).
 
 # Vector DB
 QDRANT_URL=http://localhost:6333
@@ -325,15 +326,9 @@ Expected: `Uvicorn running on http://0.0.0.0:8083`
 
 #### Terminal 4 — FastAPI BFF Gateway (Port 8000)
 
-**Recommended: Offline Mode (no LLM required)**
-```powershell
-cd X:\TAS\Agentic_project\esp_agent
-.venv\Scripts\Activate.ps1
-$env:LLM_OFFLINE="1"
-python -m src.main
-```
+**The local LLM server (llama.cpp on port 8080) MUST be running before this step.**
+Offline/mock mode is disabled by project policy — the gateway always uses the real LLM.
 
-**Full Mode (with llama.cpp running on port 8080)**
 ```powershell
 cd X:\TAS\Agentic_project\esp_agent
 .venv\Scripts\Activate.ps1
@@ -364,8 +359,8 @@ cd esp_agent && source .venv/bin/activate && python -m src.api.ml_model_mock_ser
 # Terminal 3 — Engineering
 cd esp_agent && source .venv/bin/activate && python -m src.api.engineering_service_server
 
-# Terminal 4 — BFF Gateway (offline mode)
-cd esp_agent && source .venv/bin/activate && LLM_OFFLINE=1 python -m src.main
+# Terminal 4 — BFF Gateway (real local LLM must already be running on :8080)
+cd esp_agent && source .venv/bin/activate && python -m src.main
 
 # Terminal 5 — Frontend
 cd esp_agent/ui && npm run dev
@@ -466,26 +461,18 @@ python tests/run_ui_live_browser_test.py
 
 ---
 
-## Offline / LLM-Free Mode
+## Offline / LLM-Free Mode — DISABLED BY PROJECT POLICY
 
-The platform supports a full **offline mode** — all engineering calculations, ML mock inference, and NDJSON streaming continue to work without any external LLM.
+`LLM_OFFLINE` no longer has any effect. The gateway always calls the real local LLM
+server (llama.cpp on port 8080). Setting `LLM_OFFLINE=1` in the environment is ignored
+(a warning is logged) — see `src/llm/gateway.py`.
 
-```powershell
-# Windows PowerShell
-$env:LLM_OFFLINE="1"
-python -m src.main
-```
+If the LLM server is genuinely unreachable at request time, `LLMGateway.chat()` still
+falls back to a deterministic mock response automatically as a runtime *availability*
+safeguard — that is unrelated to this env var and cannot be toggled on intentionally.
 
-```bash
-# Linux / macOS
-LLM_OFFLINE=1 python -m src.main
-```
-
-In offline mode:
-- Engineering calculations (A1-G3) run fully deterministically
-- ML model inference returns structured mock responses
-- LLM is bypassed; structured advisory text is generated locally
-- Full NDJSON streaming pipeline works end-to-end
+Engineering calculations (A1-G3) and ML mock inference remain fully deterministic
+regardless of LLM availability, as before.
 
 ---
 
@@ -668,10 +655,10 @@ curl http://localhost:8000/health
 
 ### LLM Timeout Errors
 
-```powershell
-$env:LLM_OFFLINE="1"
-python -m src.main
-```
+`LLM_OFFLINE` is disabled by policy and will not help here. Instead:
+1. Confirm llama.cpp is running and healthy: `curl http://localhost:8080/health`
+2. Increase `LLM_TIMEOUT_SEC` / `LLM_MAX_RETRIES` in `.env` if the model is slow to respond
+   (CPU inference of a cold model can take 20-40s per call).
 
 ### Streaming Agent Request Failed
 
