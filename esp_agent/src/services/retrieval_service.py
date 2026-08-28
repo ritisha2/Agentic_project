@@ -34,6 +34,8 @@ class RetrievalService:
 
     def _get_embedding_model(self):
         if self._embedding_model is None:
+            if os.getenv("ENABLE_VECTOR_SEARCH", "0").lower() not in ("1", "true", "yes"):
+                return None
             try:
                 from sentence_transformers import SentenceTransformer
                 self._embedding_model = SentenceTransformer("all-mpnet-base-v2")

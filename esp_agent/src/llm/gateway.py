@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 # Defaults to llama.cpp HTTP server (llama-server) on CPU (http://localhost:8080/v1)
 LLM_GATEWAY_URL: str = os.getenv("LLM_GATEWAY_URL", "http://localhost:8080/v1")
 LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "qwen2.5-3b-instruct")
-LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "90.0"))
-LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
+LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "2.5"))
+LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
 LLM_OFFLINE: bool = os.getenv("LLM_OFFLINE", "0").strip() in ("1", "true", "yes")
 
 
