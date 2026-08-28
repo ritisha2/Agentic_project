@@ -43,19 +43,19 @@ def bff_health():
 @router.api_route("/warmup", methods=["GET", "POST"])
 async def warmup_endpoint():
     """
-    Pre-warm LLM Gateway & model cache on demand or frontend load to eliminate cold start.
+    Pre-warm LLM Gateway & model cache in background on demand or frontend load.
+    Returns 200 OK immediately so frontend fetches do not time out.
     """
     def _do_warmup():
         try:
             from src.llm.adapter import LLMAdapter
             adapter = LLMAdapter()
-            res = adapter.generate("warmup", run_id="WARMUP-FE")
-            return {"warmed": True, "is_mock": res.is_mock}
-        except Exception as ex:
-            return {"warmed": False, "error": str(ex)}
+            adapter.generate("warmup", run_id="WARMUP-FE")
+        except Exception:
+            pass
 
-    res = await asyncio.to_thread(_do_warmup)
-    return {"status": "ok", "warmup": res}
+    asyncio.create_task(asyncio.to_thread(_do_warmup))
+    return {"status": "ok", "message": "Background model warmup initiated."}
 
 
 class UIAdvisoryRunRequest(BaseModel):
