@@ -103,8 +103,8 @@ class LLMGateway:
         POST to /v1/chat/completions with exponential backoff retries.
         Falls back to deterministic mock response if offline_mode=True or server unreachable.
         """
-        if self.offline_mode:
-            logger.info("LLMGateway: offline_mode=True — returning mock response.")
+        if self.offline_mode or not self.is_available():
+            logger.info("LLMGateway: Server offline or unavailable — returning fast mock response.")
             return self._mock_response(messages)
 
         payload = json.dumps({

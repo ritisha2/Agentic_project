@@ -5,6 +5,7 @@ Grounded in ESP_APM_PHASE_9_FRONTEND_BACKEND_PRODUCT_INTEGRATION_ARCHITECTURE.do
 
 import time
 import uuid
+import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Request
@@ -32,6 +33,11 @@ case_service = CaseOutcomeService()
 audit_service = AuditService()
 evidence_repo = EvidenceRepository()
 user_adapter = UserEntryAdapter()
+
+
+@router.get("/health")
+def bff_health():
+    return {"status": "ok", "service": "bff_agent_gateway"}
 
 
 class UIAdvisoryRunRequest(BaseModel):
@@ -160,21 +166,31 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             "type": "status",
             "run_id": run_id,
             "stage": "INITIATING",
-            "message": f"Initializing Agent Jane analysis for asset {req.asset_id}..."
+            "message": "Evaluating asset operational status..."
         }) + "\n"
-        
-        # Event 2: Execute Supervisor
-        advisory = user_adapter.run(
-            user_query=req.user_query,
-            asset_id=req.asset_id,
-            request_id=run_id
-        )
+
+        try:
+            # Event 2: Execute Supervisor Graph off the asyncio event loop thread
+            advisory = await asyncio.to_thread(
+                user_adapter.run,
+                user_query=req.user_query,
+                asset_id=req.asset_id,
+                request_id=run_id
+            )
+        except Exception as ex:
+            logger.error(f"[BFF] Error executing Supervisor run {run_id}: {ex}", exc_info=True)
+            yield json.dumps({
+                "type": "text_delta",
+                "delta": f"⚠️ **Agent Execution Error**: Unable to complete analysis for asset `{req.asset_id}` ({str(ex)})."
+            }) + "\n"
+            yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+            return
 
         yield json.dumps({
             "type": "status",
             "run_id": run_id,
             "stage": "SPECIALISTS_RUNNING",
-            "message": f"Reliability & Electrical Specialists evaluated {len(advisory.evidence_summary)} evidence items."
+            "message": f"Specialists evaluated {len(advisory.evidence_summary)} evidence items."
         }) + "\n"
 
         # Event 3: Full Advisory Payload
