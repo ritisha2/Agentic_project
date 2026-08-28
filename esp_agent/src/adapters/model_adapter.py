@@ -29,7 +29,7 @@ class ModelAdapter:
     """
 
     def __init__(self, api_url: Optional[str] = None):
-        self.api_url = api_url or os.getenv("MODEL_API_URL", "http://localhost:8082")
+        self.api_url = api_url or os.getenv("MODEL_API_URL", None)
 
     def fetch_v2_prediction(self, asset_id: str, api_url: Optional[str] = None) -> Optional[MLContractV2Payload]:
         """
