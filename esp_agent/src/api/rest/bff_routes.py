@@ -20,6 +20,7 @@ from src.adapters.evidence_repository import EvidenceRepository
 from src.services.xai_service import XAIEngine
 from src.agent.supervisor.user_entry import UserEntryAdapter
 from src.adapters.live_data_bridge import live_bridge
+from src.schemas.visualization import VisualizationSpec, ChartSpec, ExplanationSpec, ExplanationSection
 
 router = APIRouter(prefix="/api/ui", tags=["bff"])
 
@@ -211,7 +212,7 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
                 "delta": chunk
             }) + "\n"
 
-        # Event 5: Generative UI Block (Plotly Engineering Chart with live timeseries)
+        # Event 5: Generative UI Block (Validated VisualizationSpec Pydantic Contract)
         live_traces = live_bridge.build_plotly_trace(req.asset_id)
         default_data = [
             {
@@ -233,23 +234,36 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             }
         ]
 
+        vis_spec = VisualizationSpec(
+            vis_id=f"vis-{run_id}",
+            type="plotly_chart",
+            title=f"Telemetry Trend & Pump Curve — Asset {req.asset_id}",
+            evidence_ids=[ev.source_id for ev in advisory.evidence_summary[:3]],
+            chart=ChartSpec(
+                chart_engine="plotly",
+                data=live_traces if live_traces else default_data,
+                layout={
+                    "autosize": True,
+                    "margin": {"l": 40, "r": 40, "t": 30, "b": 30},
+                    "paper_bgcolor": "transparent",
+                    "plot_bgcolor": "rgba(240,242,245,0.5)",
+                    "font": {"family": "Inter, sans-serif", "size": 11, "color": "#191c1d"},
+                    "xaxis": {"gridcolor": "#e2e8f0"},
+                    "yaxis": {"title": "Value", "gridcolor": "#e2e8f0"},
+                    "yaxis2": {"title": "Pressure / Temp", "overlaying": "y", "side": "right"},
+                    "legend": {"orientation": "h", "y": -0.2}
+                }
+            )
+        )
+
         chart_payload = {
             "type": "generative_ui",
             "kind": "plotly_chart",
             "chart_id": f"chart-{run_id}",
-            "title": f"Telemetry Trend & Pump Curve — Asset {req.asset_id}",
-            "data": live_traces if live_traces else default_data,
-            "layout": {
-                "autosize": True,
-                "margin": {"l": 40, "r": 40, "t": 30, "b": 30},
-                "paper_bgcolor": "transparent",
-                "plot_bgcolor": "rgba(240,242,245,0.5)",
-                "font": {"family": "Inter, sans-serif", "size": 11, "color": "#191c1d"},
-                "xaxis": {"gridcolor": "#e2e8f0"},
-                "yaxis": {"title": "Value", "gridcolor": "#e2e8f0"},
-                "yaxis2": {"title": "Pressure / Temp", "overlaying": "y", "side": "right"},
-                "legend": {"orientation": "h", "y": -0.2}
-            }
+            "title": vis_spec.title,
+            "data": vis_spec.chart.data,
+            "layout": vis_spec.chart.layout,
+            "visualization_spec": vis_spec.model_dump()
         }
         yield json.dumps(chart_payload) + "\n"
 
