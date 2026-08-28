@@ -20,7 +20,7 @@ class AssetService:
     """
 
     def __init__(self, api_url: Optional[str] = None):
-        self.api_url = api_url or os.getenv("ADVAIT_API_URL", "http://localhost:8090/api/v1")
+        self.api_url = api_url or os.getenv("ADVAIT_API_URL", None)
         self._local_assets = None
 
     def get_asset(self, asset_id: str) -> AssetContextPayload:

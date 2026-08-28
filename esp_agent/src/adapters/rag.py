@@ -3,25 +3,28 @@ import glob
 from typing import List, Dict, Any, Optional
 
 
+_GLOBAL_EMBEDDING_MODEL = None
+
+
 class RAGAdapter:
     """Universal Documentation Retrieval (RAG) Adapter supporting pgvector hybrid search and local file fallback."""
 
     def __init__(self, docs_dir: Optional[str] = None):
         self.docs_dir = docs_dir
         self.chunks: List[Dict[str, Any]] = []
-        self._embedding_model = None
         if docs_dir and os.path.exists(docs_dir):
             self.index_documents(docs_dir)
 
     def _get_embedding_model(self):
-        """Lazy load sentence-transformer embedding model"""
-        if self._embedding_model is None:
+        """Lazy load and cache global sentence-transformer embedding model"""
+        global _GLOBAL_EMBEDDING_MODEL
+        if _GLOBAL_EMBEDDING_MODEL is None:
             try:
                 from sentence_transformers import SentenceTransformer
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+                _GLOBAL_EMBEDDING_MODEL = SentenceTransformer("all-mpnet-base-v2")
             except Exception:
-                self._embedding_model = None
-        return self._embedding_model
+                _GLOBAL_EMBEDDING_MODEL = None
+        return _GLOBAL_EMBEDDING_MODEL
 
     def index_documents(self, docs_dir: str):
         """Reads text, markdown, and PDF files, splits them into logical chunks, and indexes them for retrieval."""

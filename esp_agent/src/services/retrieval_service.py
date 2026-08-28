@@ -33,15 +33,15 @@ class RetrievalService:
         self._embedding_model = None
 
     def _get_embedding_model(self):
-        if self._embedding_model is None:
-            if os.getenv("ENABLE_VECTOR_SEARCH", "0").lower() not in ("1", "true", "yes"):
-                return None
+        from src.adapters.rag import _GLOBAL_EMBEDDING_MODEL
+        if _GLOBAL_EMBEDDING_MODEL is None:
             try:
-                from sentence_transformers import SentenceTransformer
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+                from src.adapters.rag import RAGAdapter
+                adapter = RAGAdapter()
+                return adapter._get_embedding_model()
             except Exception:
-                self._embedding_model = None
-        return self._embedding_model
+                return None
+        return _GLOBAL_EMBEDDING_MODEL
 
     def search_glossary(self, term: str) -> Optional[Dict[str, Any]]:
         """Exact lookup for business & engineering terms in deterministic YAML & Postgres"""

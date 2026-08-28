@@ -151,9 +151,11 @@ class LiveDataBridge:
                 failure=FailurePredictionPayload(
                     asset_id=asset_id,
                     timestamp=now,
-                    failure_risk_score=round(1.0 - conf, 2),
-                    predicted_rul_days=int(p.get("rul_days", 45)),
-                    risk_category="HIGH" if conf < 0.6 else ("MEDIUM" if conf < 0.8 else "LOW")
+                    risk_24h=round(1.0 - conf, 2),
+                    risk_72h=round(min(1.0, (1.0 - conf) * 1.3), 2),
+                    risk_7d=round(min(1.0, (1.0 - conf) * 1.8), 2),
+                    rul_hours=float(int(p.get("rul_days", 45)) * 24),
+                    primary_failure_mode=fault_class
                 ),
                 fault=FaultDiagnosisPayload(
                     asset_id=asset_id,
