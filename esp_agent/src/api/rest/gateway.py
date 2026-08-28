@@ -55,6 +55,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def startup_llm_warmup():
+    """Pre-warm LLM Gateway & Supervisor graph in background on server startup."""
+    import asyncio
+    def _warmup_background():
+        try:
+            from src.llm.adapter import LLMAdapter
+            adapter = LLMAdapter()
+            adapter.generate(prompt="warmup", run_id="WARMUP-STARTUP")
+        except Exception:
+            pass
+    asyncio.create_task(asyncio.to_thread(_warmup_background))
+
 # Instantiate Application Services & Policy Engine
 asset_service = AssetContextService()
 telemetry_service = TelemetryService()

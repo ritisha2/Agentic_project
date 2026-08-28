@@ -40,6 +40,24 @@ def bff_health():
     return {"status": "ok", "service": "bff_agent_gateway"}
 
 
+@router.api_route("/warmup", methods=["GET", "POST"])
+async def warmup_endpoint():
+    """
+    Pre-warm LLM Gateway & model cache on demand or frontend load to eliminate cold start.
+    """
+    def _do_warmup():
+        try:
+            from src.llm.adapter import LLMAdapter
+            adapter = LLMAdapter()
+            res = adapter.generate("warmup", run_id="WARMUP-FE")
+            return {"warmed": True, "is_mock": res.is_mock}
+        except Exception as ex:
+            return {"warmed": False, "error": str(ex)}
+
+    res = await asyncio.to_thread(_do_warmup)
+    return {"status": "ok", "warmup": res}
+
+
 class UIAdvisoryRunRequest(BaseModel):
     user_query: str = Field(description="Natural language user question")
     asset_id: str = Field(description="Target ESP asset ID")
