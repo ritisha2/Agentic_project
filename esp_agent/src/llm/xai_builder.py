@@ -82,10 +82,13 @@ class XAIVisualStoryBuilder:
         # Build dynamic visualization specifications based on fault cause
         visualizations = self._determine_visualizations(cause, compact_context)
 
-        # Parse verification string into checklist items
-        verification_items = [
-            v.strip() for v in advisory.verification.split(".") if v.strip()
-        ] if advisory.verification else ["Verify SCADA readings against local wellhead gauge."]
+        # Parse verification string or list into checklist items
+        if isinstance(advisory.verification, list):
+            verification_items = [str(v).strip() for v in advisory.verification if str(v).strip()]
+        elif isinstance(advisory.verification, str):
+            verification_items = [v.strip() for v in advisory.verification.split(".") if v.strip()]
+        else:
+            verification_items = ["Verify SCADA readings against local wellhead gauge."]
 
         payload = XAIExplanationPayload(
             claim=claim,

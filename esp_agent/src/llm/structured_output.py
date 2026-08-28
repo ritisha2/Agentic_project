@@ -20,9 +20,9 @@ Flow:
 import json
 import logging
 import re
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ LLM_REPAIR_RETRIES: int = 2
 class HypothesisSchema(BaseModel):
     cause: str
     confidence: float
+    reasoning: str
     supporting_evidence: List[str] = []
     contradicting_evidence: List[str] = []
 
@@ -50,7 +51,7 @@ class AdvisoryOutputSchema(BaseModel):
     hypotheses: List[HypothesisSchema]
     uncertainties: List[str] = []
     recommendation: str
-    verification: str
+    verification: Union[str, List[str]] = Field(default="1. Verify sensor alignment.")
 
 
 class ToolCallSchema(BaseModel):
