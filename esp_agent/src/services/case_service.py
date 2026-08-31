@@ -24,6 +24,9 @@ class CaseOutcomeService:
 
     def search_cases(self, req: CaseSearchRequest) -> CaseSearchResponse:
         """Search similar historical RCA cases (`case.search_similar`)."""
+        # MOCK_SCAFFOLD: hardcoded seed RCA cases | reason: CaseOutcomeService returns fixed sample
+        # cases instead of querying a real case database | expiry: when a real case store is wired |
+        # ref: none
         # Seed teardown RCA cases
         cases = [
             RCACaseItem(

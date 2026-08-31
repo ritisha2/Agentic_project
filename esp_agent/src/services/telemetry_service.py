@@ -68,7 +68,9 @@ class TelemetryService:
             except Exception as ex:
                 logger.warning(f"TelemetryAdapter fetch error for '{asset_id}': {ex}")
 
-        # Fallback values if adapter unpopulated
+        # MOCK_SCAFFOLD: hardcoded telemetry fallback constants | reason: used when both cced_esp
+        # LiveDataBridge and the local CSV adapter yield no data | expiry: when live cced_esp MQTT
+        # ingestion is guaranteed | ref: src/verification/handoff.py:TELEMETRY_FALLBACK (kept in sync)
         if not measurements:
             measurements = {
                 "motor_temperature": TelemetryMeasurement(tag="motor_temperature", value=135.0, unit="°C", timestamp=now_str, quality="GOOD"),

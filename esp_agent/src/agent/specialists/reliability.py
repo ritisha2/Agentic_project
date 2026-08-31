@@ -10,6 +10,7 @@ from langgraph.graph import StateGraph, END, START
 from src.agent.supervisor.specialist_contracts import SpecialistInput, SpecialistOutput
 from src.adapters.model_adapter import ModelAdapter
 from src.adapters.rules import RuleAdapter
+from src.adapters.fault_registry_adapter import fault_registry_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +72,17 @@ def create_reliability_graph():
         conf = v2.get("confidence_score") or model_dict.get("fault", {}).get("confidence", 0.88)
         limits = v2.get("triggered_limits", [])
 
-        findings = [
-            f"ML Predictive Diagnostic (v2.0.0): Classified fault as '{fault_class}' with confidence {conf:.2f}.",
-        ]
+        matched_meta = fault_registry_adapter.get_candidate(str(fault_class).upper().replace(" ", "_"))
+        if matched_meta and matched_meta.operator_action:
+            findings = [
+                f"ML Predictive Diagnostic (v2.0.0): Classified fault as '{matched_meta.display_name}' ({matched_meta.fault_id}) with confidence {conf:.2f}.",
+                f"Registry Diagnostic Guidance: {matched_meta.explanation_template}",
+                f"Recommended Operator Action: {matched_meta.operator_action}"
+            ]
+        else:
+            findings = [
+                f"ML Predictive Diagnostic (v2.0.0): Classified fault as '{fault_class}' with confidence {conf:.2f}.",
+            ]
 
         if limits:
             limits_str = ", ".join(f"{l.get('tag')}={l.get('value')} (limit {l.get('limit')})" for l in limits)

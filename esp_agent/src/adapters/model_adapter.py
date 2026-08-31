@@ -84,6 +84,9 @@ class ModelAdapter:
         return out
 
     def get_mock_model_output(self, asset_id: str, telemetry_data: Optional[Dict[str, Any]] = None) -> ModelOutputPayload:
+        # MOCK_SCAFFOLD: deterministic ML mock | reason: last-resort output when LiveDataBridge
+        # (cced_esp) and the ML mock API (:8082) are both unreachable | expiry: when a live ML
+        # source is guaranteed | ref: src/verification/handoff.py:verify_model_output detects this signature
         """
         Simulate structured model outputs based on telemetry signals or asset status.
         """

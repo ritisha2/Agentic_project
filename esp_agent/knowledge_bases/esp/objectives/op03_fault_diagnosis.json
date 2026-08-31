@@ -3,6 +3,7 @@
   "version": "1.0",
   "title": "ESP Fault & Anomaly Diagnosis",
   "description": "Identify downhole equipment faults, electrical anomalies, thermal overload, or gas locking risks.",
+  "hypothesis_source": "fault_registry",
   "strategic_objectives": ["O2", "O5"],
   "intent_classes": ["diagnose", "fault", "issue", "problem", "overheating", "vibration", "low pressure", "abnormal", "trip reason"],
   "required_asset_context": ["asset_id", "pump_model", "motor_rating_hp", "nameplate_current_amps"],

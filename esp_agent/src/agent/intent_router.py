@@ -50,24 +50,51 @@ class IntentRouter:
             logger.info("IntentRouter Path A (Greeting): Small talk / greeting detected.")
             return "OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting"
 
-        # Path A: Deterministic Keyword Matching
-        # Word-boundary matching to avoid false positives from short keywords appearing
-        # as substrings inside unrelated words (e.g. "hi" inside "this"/"which").
         objectives = self.registry.list_all()
-        for obj in objectives:
-            for kw in obj.intent_classes:
-                kw_lower = kw.lower()
-                pattern = r"\b" + re.escape(kw_lower) + r"\b"
-                if re.search(pattern, q_lower):
-                    logger.info(f"IntentRouter Path A (Deterministic): Keyword '{kw}' -> {obj.objective_id}")
-                    return obj.objective_id, 0.95, "Path_A_Deterministic"
 
-        # Path B: Semantic Heuristic / Keyword Overlap Fallback
+        # Path A: Specificity-First Deterministic & Variant Keyword Matching
+        # All candidate keywords across objectives, safety rules, and variants are collected
+        # and sorted by phrase length (longest multi-word phrases match first to prevent shadowing).
+        rules = []
+        for obj in objectives:
+            is_safety = obj.objective_id in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
+            for kw in obj.intent_classes:
+                priority = 10 if is_safety else 1
+                rules.append((kw, obj.objective_id, 0.95, "Path_A_Deterministic", priority))
+
+            for var in obj.workflow_variants:
+                for kw in var.intent_classes:
+                    rules.append((kw, obj.objective_id, 0.96, f"Path_A_Variant_{var.variant_id}", 5))
+
+        # Sort globally by: word count (descending), priority (descending), character length (descending)
+        rules.sort(key=lambda r: (len(r[0].split()), r[4], len(r[0])), reverse=True)
+
+        for kw, obj_id, conf, path_lbl, _ in rules:
+            kw_lower = kw.lower()
+            pattern = r"\b" + re.escape(kw_lower) + r"\b"
+            if re.search(pattern, q_lower):
+                logger.info(f"IntentRouter {path_lbl}: Keyword '{kw}' -> {obj_id}")
+                return obj_id, conf, path_lbl
+
+        # Path B: Semantic Heuristic / Keyword Overlap Fallback with Scope Tie-Breaking
+        HARD_REFUSAL_OBJECTIVE_IDS = {"OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL"}
+        is_fleet_query = any(w in q_lower for w in ["fleet", "all wells", "all assets", "which wells", "rank", "across the field"])
+        has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
+
         best_score = 0.0
         best_obj_id = "OP03_FAULT_DIAGNOSIS"  # Default objective
 
         for obj in objectives:
+            if obj.objective_id in HARD_REFUSAL_OBJECTIVE_IDS:
+                continue
             score = 0.0
+
+            # Scope bonus/penalty to prevent single vs fleet collisions
+            if is_fleet_query and obj.scope == "fleet":
+                score += 0.35
+            elif has_specific_asset and obj.scope == "single":
+                score += 0.25
+
             # Check overlap with title & description
             words = q_lower.split()
             for w in words:

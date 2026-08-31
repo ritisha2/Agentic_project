@@ -134,6 +134,8 @@ def get_asset_timeline(asset_id: str):
     Aggregates operational events, alerts, and verification checks.
     """
     checks = case_service.get_verification_checks(asset_id)
+    # MOCK_SCAFFOLD: hardcoded timeline events | reason: placeholder asset timeline until a real
+    # event store is wired to this endpoint | expiry: when /timeline reads live events | ref: none
     events = [
         {
             "event_id": "EVT-101",
@@ -272,6 +274,9 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
 
         # Event 5: Generative UI Block (Validated VisualizationSpec Pydantic Contract)
         live_traces = live_bridge.build_plotly_trace(req.asset_id)
+        # MOCK_SCAFFOLD: hardcoded demo chart series | reason: used when cced_esp timeseries is
+        # empty/unreachable so the UI still renders a chart | expiry: when live timeseries is
+        # guaranteed | ref: src/verification/handoff.py:CHART_FALLBACK_PRODUCTION (kept in sync)
         default_data = [
             {
                 "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
@@ -371,6 +376,9 @@ def get_run_evidence(run_id: str):
     if not pack:
         raise HTTPException(status_code=404, detail=f"No evidence pack found for run '{run_id}'.")
 
+    # MOCK_SCAFFOLD: hardcoded evidence-endpoint advisory | reason: get_run_evidence uses a static
+    # advisory for the XAI explanation and ignores run_id | expiry: when evidence is looked up per
+    # run_id with the real advisory | ref: known gap flagged in session audit
     advisory = {
         "diagnosis": "Intake Gas Interference probable",
         "confidence": 0.88

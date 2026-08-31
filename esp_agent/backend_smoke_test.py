@@ -84,12 +84,16 @@ def run_query(base, asset, query, timeout=180.0):
 
 
 def check_routing_and_llm(base, asset):
-    hr("2 + 3. OBJECTIVE ROUTING + LLM vs MOCK")
+    hr("2 + 3. OBJECTIVE ROUTING + LLM vs MOCK (SINGLE-ASSET & FLEET)")
     cases = [
         ("hi", "OP07_GENERAL_INQUIRY"),
         ("who are you", "OP07_GENERAL_INQUIRY"),
-        ("diagnose motor overheating and high vibration", None),   # expect a diagnostic objective
-        ("why is production declining on this well", None),        # expect decline/diagnosis objective
+        ("diagnose motor overheating and high vibration on FS-010", "OP03_FAULT_DIAGNOSIS"),
+        ("why is production declining on this well", "OP02_PRODUCTION_DECLINE_RCA"),
+        ("what if I increase frequency by 2 Hz on FS-010", "OP02_PRODUCTION_DECLINE_RCA"),
+        ("list all assets in the fleet", "OP08_FLEET_INVENTORY"),
+        ("rank fleet production upside across all wells", "OP09_FLEET_PRODUCTION_OPTIMIZATION"),
+        ("rank fleet maintenance urgency", "OP11_FLEET_MAINTENANCE_PRIORITY"),
     ]
     seen_objectives = set()
     for query, expected in cases:
@@ -168,8 +172,8 @@ def check_streaming(base, asset, query="diagnose intake gas interference", timeo
     print(f"  chart event    : {PASS if chart_seen else FAIL}")
     print(f"  done event     : {PASS if 'done' in event_types else FAIL}")
     print(f"  streamed text  : {len(full_text)} chars")
-    print("  --- rendered markdown (first 600 chars) ---")
-    print("  " + full_text[:600].replace("\n", "\n  "))
+    safe_text = full_text[:600].encode('ascii', 'replace').decode('ascii')
+    print("  " + safe_text.replace("\n", "\n  "))
 
 
 def check_mcp(base, asset):

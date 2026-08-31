@@ -217,6 +217,9 @@ class LLMGateway:
         )
 
     def _mock_response(self, messages: List[Dict[str, str]]) -> LLMGatewayResponse:
+        # MOCK_SCAFFOLD: deterministic LLM mock | reason: automatic runtime fallback ONLY when the
+        # llama.cpp server is genuinely unreachable (is_available() == False) | expiry: N/A — this is
+        # an intentional availability safeguard, not scaffolding to remove | ref: gateway.chat()
         """
         Deterministic offline mock response. Returns structured JSON that the
         structured_output parser can validate. Used in CI and when LLM is offline.

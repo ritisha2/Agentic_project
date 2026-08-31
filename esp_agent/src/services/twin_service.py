@@ -76,7 +76,9 @@ class DigitalTwinService:
 
     def optimize_vsd_speed(self, req: OptimizationRequest) -> OptimizationResponse:
         """Constrained optimization to maximize BPD within operating envelope."""
-        # Optimal frequency search
+        # MOCK_SCAFFOLD: hardcoded optimization result | reason: DigitalTwinService returns a fixed
+        # optimum instead of running a real constrained search | expiry: when a real optimizer is
+        # implemented | ref: none
         opt_freq = 54.5
         max_bpd = 1720.0
 

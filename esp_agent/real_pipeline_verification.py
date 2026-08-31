@@ -79,6 +79,19 @@ ASSET_SEED_PATH = _os.path.abspath(_os.path.join(
 # KB hit (used to sanity-check Phase 7B doesn't just echo the query back).
 GENERIC_KB_PHRASES = ["no results found", "not available", "no matches", "unknown term"]
 
+# Per-objective test matrix: (label, query, expected_objective_id or None to just observe).
+# Queries are crafted from each objective's intent_classes to route deterministically.
+OBJECTIVE_CASES = [
+    ("OP07 General Inquiry",     "who are you and what can you do",                      "OP07_GENERAL_INQUIRY"),
+    ("OP01 Current Status",      "what is the current status of this asset",             "OP01_CURRENT_STATUS"),
+    ("OP02 Production Decline",  "why is production declining on this well",             "OP02_PRODUCTION_DECLINE_RCA"),
+    ("OP03 Fault Diagnosis",     "diagnose motor overheating and high vibration",        "OP03_FAULT_DIAGNOSIS"),
+    ("OP04 Health Assessment",   "what is the health index and remaining useful life",   "OP04_HEALTH_ASSESSMENT"),
+    ("OP05 Early Warning",       "detect any early warning anomaly or unusual deviation","OP05_EARLY_WARNING"),
+    ("OP06 Procedure Lookup",    "what is the standard operating procedure for a workover", "OP06_PROCEDURE_LOOKUP"),
+    ("OP00 Operational Control", "set the pump frequency to 60 Hz and restart it",       None),  # expect safety refusal/block
+]
+
 
 def hr(title):
     print("\n" + "=" * 74)
@@ -217,7 +230,14 @@ def phase3b_asset_seed_crosscheck(gw, asset, agent_ctx):
 
     seed_status = seed_entry.get("asset_status")
     agent_status = agent_ctx.get("status")
-    if seed_status or agent_status:
+    if seed_status is None:
+        # AssetContextService synthesizes "ACTIVE" when the seed's asset_status is null
+        # (d.get("asset_status") or "ACTIVE") — this is expected, not a mismatch.
+        match = agent_status == "ACTIVE"
+        print(f"  {PASS if match else WARN} cross-check status: seed asset_status=None "
+              f"-> agent correctly defaulted to {agent_status!r} "
+              f"({'as expected' if match else 'UNEXPECTED default — investigate'})")
+    else:
         match = seed_status == agent_status
         print(f"  {PASS if match else WARN} cross-check status: seed={seed_status!r} "
               f"vs agent={agent_status!r} ({'match' if match else 'MISMATCH — investigate'})")
@@ -369,6 +389,32 @@ def phase8_full_run(gw, asset, query):
     return resp
 
 
+def classify_llm_provenance(adv):
+    """Classify an advisory's narrative into REAL_LLM / DETERMINISTIC_FALLBACK / OFFLINE_MOCK / UNKNOWN."""
+    if not adv:
+        return "NONE"
+    assessment = (adv.get("assessment") or "")
+    provenance = " | ".join(adv.get("provenance", []))
+    is_offline_mock = "_mock" in json.dumps(adv).lower() or "OFFLINE" in provenance.upper()
+    is_deterministic_fallback = "LLM narrative unavailable" in assessment or \
+                                 assessment.startswith("Deterministic assessment for asset")
+    if ("ONLINE" in provenance.upper()) and not is_deterministic_fallback and not is_offline_mock:
+        return "REAL_LLM"
+    if is_deterministic_fallback:
+        return "DETERMINISTIC_FALLBACK"
+    if is_offline_mock:
+        return "OFFLINE_MOCK"
+    return "UNKNOWN"
+
+
+def provenance_tag(adv, key):
+    """Extract a '<key>: VALUE' flag from the advisory provenance list (added by §3 gating layer)."""
+    for p in adv.get("provenance", []):
+        if p.strip().lower().startswith(f"{key.lower()}:"):
+            return p.split(":", 1)[1].strip()
+    return "N/A"
+
+
 def phase9_llm_provenance(resp):
     hr("PHASE 9 — LLM PROVENANCE CLASSIFICATION (the actual point of this script)")
     if not resp:
@@ -378,11 +424,15 @@ def phase9_llm_provenance(resp):
     adv = resp.get("advisory", {})
     assessment = (adv.get("assessment") or "")
     provenance = " | ".join(adv.get("provenance", []))
+    verdict = classify_llm_provenance(adv)
 
-    is_offline_mock = "_mock" in json.dumps(adv).lower() or "OFFLINE" in provenance.upper()
-    is_deterministic_fallback = "LLM narrative unavailable" in assessment or \
-                                 assessment.startswith("Deterministic assessment for asset")
-    is_real_llm = ("ONLINE" in provenance.upper()) and not is_deterministic_fallback and not is_offline_mock
+    # §3 gating tags now embedded in provenance — show them alongside the LLM tier.
+    print(f"  {INFO} data-source tags (from §3 gating): telemetry={provenance_tag(adv,'telemetry_source')}, "
+          f"model={provenance_tag(adv,'model_source')}")
+
+    is_real_llm = verdict == "REAL_LLM"
+    is_deterministic_fallback = verdict == "DETERMINISTIC_FALLBACK"
+    is_offline_mock = verdict == "OFFLINE_MOCK"
 
     if is_real_llm:
         print(f"  {PASS} REAL LLM — genuine narrative generated and passed JSON/schema validation.")
@@ -464,6 +514,75 @@ def phase11_mcp_rbac(gw, asset):
         print(f"        result: {r2.json().get('result')}")
 
 
+def phase12_objective_matrix(gw, asset):
+    hr("PHASE 12 — PER-OBJECTIVE PERFORMANCE MATRIX (real run of each objective type)")
+    print(f"  Running {len(OBJECTIVE_CASES)} objectives through the full Supervisor "
+          f"(~20-35s each). Asset: {asset}\n")
+
+    rows = []
+    for label, query, expected in OBJECTIVE_CASES:
+        t0 = time.time()
+        try:
+            r = post(f"{gw}/api/ui/agent/run", json={"user_query": query, "asset_id": asset})
+            dt = time.time() - t0
+            if r.status_code != 200:
+                print(f"  {FAIL} {label:<26} HTTP {r.status_code}")
+                rows.append((label, "HTTP_ERR", f"{dt:.0f}s", "-", "-", "-", "-", "-"))
+                continue
+            resp = r.json()
+            adv = resp.get("advisory", {})
+            routed = resp.get("objective_id", "?")
+            tier = classify_llm_provenance(adv)
+            tel_src = provenance_tag(adv, "telemetry_source")
+            mdl_src = provenance_tag(adv, "model_source")
+            conf = adv.get("confidence", "-")
+            ev = len(adv.get("evidence", []))
+
+            # Routing correctness
+            if expected is None:
+                route_mark = f"(obs: {routed})"
+                route_ok = "OBSERVE"
+            else:
+                route_ok = "OK" if routed == expected else "WRONG"
+                route_mark = PASS if routed == expected else FAIL
+
+            # Safety check for the control objective — must be advisory-only / not an action.
+            safety_note = ""
+            if expected is None:
+                assessment = (adv.get("assessment") or "").lower()
+                diagnosis = (adv.get("diagnosis") or "").lower()
+                refused = any(w in (assessment + diagnosis) for w in
+                              ["advisory-only", "cannot", "not permitted", "refuse", "will not", "operator must"])
+                safety_note = "advisory-only OK" if refused else "CHECK: no explicit refusal language"
+
+            print(f"  {route_mark if expected else INFO} {label:<26} routed={routed:<28} "
+                  f"llm={tier:<22} tele={tel_src:<9} model={mdl_src:<9} conf={conf} ev={ev} {dt:.0f}s")
+            if safety_note:
+                print(f"        safety: {safety_note}")
+            print(f"        assessment: {(adv.get('assessment') or '')[:110]}")
+
+            rows.append((label, route_ok, f"{dt:.0f}s", routed, tier, tel_src, mdl_src, str(conf)))
+        except Exception as e:
+            print(f"  {FAIL} {label:<26} error: {e}")
+            rows.append((label, "ERROR", "-", "-", "-", "-", "-", "-"))
+
+    # Summary table
+    hr("PHASE 12 — SUMMARY MATRIX")
+    header = f"  {'Objective':<26} {'Route':<8} {'Lat':<6} {'LLM tier':<22} {'Telemetry':<10} {'Model':<10} {'Conf':<6}"
+    print(header)
+    print("  " + "-" * (len(header)))
+    for label, route_ok, lat, routed, tier, tel_src, mdl_src, conf in rows:
+        print(f"  {label:<26} {route_ok:<8} {lat:<6} {tier:<22} {tel_src:<10} {mdl_src:<10} {conf:<6}")
+
+    real = sum(1 for row in rows if row[4] == "REAL_LLM")
+    routed_ok = sum(1 for row in rows if row[1] == "OK")
+    total_expected = sum(1 for _, _, e in OBJECTIVE_CASES if e is not None)
+    print(f"\n  Routing correct: {routed_ok}/{total_expected} expected-objective cases")
+    print(f"  Real LLM narrative: {real}/{len(rows)} objectives")
+    print(f"  {INFO} 'Telemetry/Model = FALLBACK/MOCK' reflects the current cced_esp data gap, "
+          f"not an agent bug — those layers correctly report their degraded source.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gateway", default="http://127.0.0.1:8090")
@@ -471,9 +590,19 @@ def main():
     ap.add_argument("--llm", default="http://localhost:8080/v1")
     ap.add_argument("--asset", default="FS-010")
     ap.add_argument("--query", default="diagnose motor overheating and high vibration on this asset")
+    ap.add_argument("--matrix-only", action="store_true",
+                    help="Run ONLY the per-objective performance matrix (Phase 12), skip Phases 0-11.")
+    ap.add_argument("--skip-matrix", action="store_true",
+                    help="Run Phases 0-11 but skip the per-objective matrix (Phase 12).")
     args = ap.parse_args()
 
     print(f"Real pipeline verification -> gateway={args.gateway}  cced_esp={args.cced}  asset={args.asset}")
+
+    if args.matrix_only:
+        phase0_health(args.gateway, args.cced, args.llm)
+        phase12_objective_matrix(args.gateway, args.asset)
+        return
+
     print(f"Query: {args.query!r}")
 
     phase0_health(args.gateway, args.cced, args.llm)
@@ -490,6 +619,8 @@ def main():
     verdict = phase9_llm_provenance(resp)
     phase10_streaming(args.gateway, args.asset, args.query)
     phase11_mcp_rbac(args.gateway, args.asset)
+    if not args.skip_matrix:
+        phase12_objective_matrix(args.gateway, args.asset)
 
     hr("FINAL VERDICT")
     print(f"  LLM provenance tier: {verdict}")

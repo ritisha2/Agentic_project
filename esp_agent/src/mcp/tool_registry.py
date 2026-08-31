@@ -182,6 +182,58 @@ def _h_get_asset_context(args: Dict[str, Any]) -> Dict[str, Any]:
     return _asset_context().get_context(str(args["asset_id"])).model_dump()
 
 
+def _h_list_fleet_assets(args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fleet-wide asset inventory: real data (live cced_esp fleet -> local seed file).
+    Prefers live cced_esp fleet data (26-asset canonical list with live health index);
+    falls back to the standalone seed file (AssetContextService) if cced_esp is unreachable
+    or returns an empty fleet (e.g. its MQTT ingestion is down but the backend is up).
+    Never fabricates asset entries — an empty result is reported as empty, not padded.
+    """
+    from src.adapters.live_data_bridge import live_bridge
+    source = "cced_esp_live"
+    assets = live_bridge.get_fleet_assets()
+
+    if not assets:
+        # Fall back to the standalone seed file — independent of cced_esp's MQTT/DB availability.
+        source = "standalone_seed_file"
+        asset_ids = _asset_context().list_assets()
+        assets = []
+        for aid in asset_ids:
+            try:
+                ctx = _asset_context().get_context(aid)
+                assets.append({
+                    "asset_id": ctx.asset_id,
+                    "well_id": ctx.well_id,
+                    "asset_type": ctx.asset_type,
+                    "status": ctx.status,
+                    "pump_model": ctx.esp_configuration.pump_model if ctx.esp_configuration else None,
+                })
+            except Exception:
+                continue
+
+    # Aggregate counts by asset_type and by pump_model (the "types and counts" the user asked for).
+    # NOTE: the two sources use different field names for the same concept — the live cced_esp
+    # fleet uses "pump_family"/"operating_state", the standalone seed uses "asset_type"/"pump_model".
+    # Check both so aggregation works regardless of which source answered.
+    type_counts: Dict[str, int] = {}
+    pump_model_counts: Dict[str, int] = {}
+    for a in assets:
+        atype = str(a.get("asset_type") or a.get("operating_state") or "UNKNOWN")
+        type_counts[atype] = type_counts.get(atype, 0) + 1
+        pmodel = a.get("pump_model") or a.get("pump_family")
+        if pmodel:
+            pump_model_counts[str(pmodel)] = pump_model_counts.get(str(pmodel), 0) + 1
+
+    return {
+        "source": source,
+        "total_count": len(assets),
+        "type_counts": type_counts,
+        "pump_model_counts": pump_model_counts,
+        "assets": assets,
+    }
+
+
 def _h_simulate_frequency_change(args: Dict[str, Any]) -> Dict[str, Any]:
     from shared.schemas.twin import FrequencyWhatIfRequest
     req = FrequencyWhatIfRequest(
@@ -320,6 +372,18 @@ def _default_specs() -> List[ToolSpec]:
                 "required": ["asset_id"],
             },
             handler=_h_get_asset_context, read_only=True, domain="asset",
+        ),
+        # ---- Fleet inventory (cross-asset, scope=fleet) ----
+        ToolSpec(
+            name="list_fleet_assets",
+            description="List all fleet assets with type/pump-model counts (real data: live cced_esp "
+                        "fleet, falling back to the standalone seed file). No single asset_id required.",
+            input_schema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            handler=_h_list_fleet_assets, read_only=True, domain="fleet",
         ),
         # ---- Digital twin (scoped) ----
         ToolSpec(

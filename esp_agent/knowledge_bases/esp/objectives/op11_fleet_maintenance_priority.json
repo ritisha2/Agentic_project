@@ -1,0 +1,29 @@
+{
+  "objective_id": "OP11_FLEET_MAINTENANCE_PRIORITY",
+  "version": "1.0",
+  "title": "Fleet Maintenance Priority & RUL Urgency Ranking",
+  "description": "Rank fleet assets by composite health index and thermal degradation velocity to schedule preventative workovers.",
+  "scope": "fleet",
+  "strategic_objectives": ["O2", "O4"],
+  "intent_classes": [
+    "rank fleet maintenance urgency",
+    "fleet maintenance priority",
+    "rank maintenance urgency",
+    "which wells need workover",
+    "hottest wells in fleet",
+    "fleet health ranking",
+    "priority workovers",
+    "rul ranking"
+  ],
+  "required_asset_context": [],
+  "required_signals": [],
+  "required_evidence": ["fleet_asset_list", "fleet_health_ranking"],
+  "required_tools": ["list_fleet_assets", "get_model_output"],
+  "allowed_specialists": [],
+  "safety": {
+    "advisory_only": true
+  },
+  "output_format": "advisory_v1",
+  "success_criteria": ["assets ranked by composite risk score", "critical fault candidates highlighted"],
+  "verification_steps": ["Cross-check electrical insulation history before scheduling rig mobilization"]
+}

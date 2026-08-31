@@ -77,7 +77,7 @@ class FaultDiagnosisPayload(BaseModel):
 class HealthIndexPayload(BaseModel):
     asset_id: str
     timestamp: str
-    health_index: int = Field(description="Fused ESP health score 0 - 100")
+    health_index: float = Field(description="Fused ESP health score 0 - 100")
     status: str = Field(description="HEALTHY, CAUTION, CRITICAL")
     contributors: List[str] = Field(default_factory=list)
 
