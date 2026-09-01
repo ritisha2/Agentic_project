@@ -35,6 +35,14 @@ class AssetService:
 
         return self.get_cached_asset_projection(asset_id)
 
+    # Public alias: several call-sites (pipeline runners, BFF routes) request the
+    # asset context under the name `get_asset_context`. Provide it so a wrong-method
+    # name never silently falls through a bare `except` and feeds the LLM generic
+    # default specs instead of the real registry record.
+    def get_asset_context(self, asset_id: str) -> AssetContextPayload:
+        """Alias for get_asset(). Returns the normalized AssetContextPayload."""
+        return self.get_asset(asset_id)
+
     def get_cached_asset_projection(self, asset_id: str) -> AssetContextPayload:
         """
         Local rich JSON projection cache for offline development and testing.

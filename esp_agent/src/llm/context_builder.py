@@ -155,10 +155,14 @@ class CompactContextBuilder:
 
         summary: Dict[str, Any] = {}
         for raw_key, val in raw.items():
-            canonical = SIGNAL_MAP.get(raw_key.lower())
-            if not canonical:
-                continue
-            if isinstance(val, (int, float)):
+            canonical = SIGNAL_MAP.get(raw_key.lower(), raw_key.lower())
+            if isinstance(val, dict):
+                # Pass through pre-computed statistical summaries
+                summary[canonical] = {
+                    k: (round(v, 4) if isinstance(v, float) else v)
+                    for k, v in val.items()
+                }
+            elif isinstance(val, (int, float)):
                 summary[canonical] = {"current": round(float(val), 2), "trend": "unknown"}
             elif isinstance(val, list) and len(val) >= 2:
                 # Derive simple trend from first and last values
@@ -174,11 +178,24 @@ class CompactContextBuilder:
         return summary
 
     def _compress_engineering(self, eng: Dict[str, Any]) -> Dict[str, Any]:
-        """Keep only the key engineering KPIs relevant to diagnosis."""
-        keep = ["tdh_ft", "pump_delta_p", "bep_flow_rate", "bep_deviation_pct",
-                "frequency_hz", "frequency", "efficiency_pct"]
-        return {k: round(float(v), 2) for k, v in eng.items()
-                if k in keep and isinstance(v, (int, float))}
+        """Keep key engineering KPIs and equipment specifications relevant to diagnosis."""
+        keep_numeric = [
+            "tdh_ft", "pump_delta_p", "bep_flow_rate", "bep_deviation_pct",
+            "frequency_hz", "frequency", "efficiency_pct", "motor_hp",
+            "nameplate_amps", "bep_bpd", "be_point_bpd", "installation_depth_ft",
+            "motor_rating_hp", "nameplate_current_amps"
+        ]
+        keep_string = ["pump_model", "asset_id", "status", "asset_type"]
+
+        res: Dict[str, Any] = {}
+        for k, v in eng.items():
+            if k in keep_numeric and isinstance(v, (int, float)):
+                res[k] = round(float(v), 2)
+            elif k in keep_string and isinstance(v, str):
+                res[k] = v
+            elif isinstance(v, (int, float, str)):
+                res[k] = round(float(v), 2) if isinstance(v, float) else v
+        return res
 
     def _compress_model_outputs(self, models: Dict[str, Any]) -> Dict[str, Any]:
         """Compress ML model outputs to key probability scores."""

@@ -2,7 +2,7 @@
  * Strongly-typed API client for ESP APM FastAPI BFF Gateway
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8090";
 
 export interface AssetWorkspaceData {
   status: string;

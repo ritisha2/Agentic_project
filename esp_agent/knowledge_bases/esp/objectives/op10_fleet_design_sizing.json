@@ -12,7 +12,12 @@
     "which wells outside bep",
     "upthrust risk fleet",
     "downthrust risk fleet",
-    "operating envelope fleet"
+    "operating envelope fleet",
+    "compare operating envelopes",
+    "pump sizing across all active wells",
+    "operating outside their recommended",
+    "head-capacity envelope",
+    "hydraulic design suitability"
   ],
   "required_asset_context": [],
   "required_signals": [],

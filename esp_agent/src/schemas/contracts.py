@@ -37,6 +37,30 @@ class TelemetryPayload(BaseModel):
     metrics: Dict[str, TelemetryMetric] = Field(default_factory=dict)
     data_quality_summary: str = Field(default="GOOD")
 
+class TimeSeriesPoint(BaseModel):
+    timestamp: str = Field(description="ISO observation timestamp")
+    value: float = Field(description="Numeric measurement value")
+
+class TimeSeriesSignal(BaseModel):
+    signal: str = Field(description="Canonical signal name, e.g. flow_rate, intake_pressure")
+    unit: str = Field(description="Engineering unit, e.g. bpd, psi, °C, Hz")
+    quality: str = Field(default="GOOD", description="Signal quality flag: GOOD, DEGRADED, SPARSE, NO_DATA")
+    points: List[TimeSeriesPoint] = Field(default_factory=list, description="Timestamped measurement points")
+
+class TimeSeriesPayload(BaseModel):
+    """
+    Canonical Historian Window Contract.
+    Grounded in Guidelines.pdf Appendix B (p. 30) & historian.txt §7
+    """
+    asset_id: str
+    start_time: str
+    end_time: str
+    aggregation: str = Field(default="raw", description="raw, 1m, 5m, 15m, 1h, 1d")
+    coverage: float = Field(default=1.0, description="Window data coverage score 0.0 - 1.0")
+    quality_summary: str = Field(default="GOOD", description="GOOD, SPARSE, NO_DATA")
+    total_points: int = Field(default=0)
+    series: List[TimeSeriesSignal] = Field(default_factory=list)
+
 class RuleDeviationCounts(BaseModel):
     h1: int = Field(default=0, alias="1h", description="Rule violations in last 1 hour")
     h24: int = Field(default=0, alias="24h", description="Rule violations in last 24 hours")
@@ -91,6 +115,7 @@ class MLContractV2Payload(BaseModel):
     """
     ML Team v2.0.0 Dual-Tier Inference Engine Contract.
     Grounded in dependency_detail.md & ESP_Agentic_ML_Team_Dependencies_and_API_PreRequisites.md
+    Extended with VFD Diagnostic Engine fields (ESP_APM_models WellDiagnosticEngine).
     """
     asset_id: str
     well_id: str
@@ -109,6 +134,12 @@ class MLContractV2Payload(BaseModel):
     telemetry_received: Dict[str, float] = Field(default_factory=dict)
     reason: Optional[str] = Field(default=None, description="Reason code when status is UNAVAILABLE, e.g. SENSOR_TELEMETRY_MISSING")
     last_valid_timestamp: Optional[Any] = Field(default=None, description="Last valid observation timestamp when state is DEGRADED")
+    # ── VFD Diagnostic Engine extensions (from ESP_APM_models) ──────────────
+    health_score: Optional[float] = Field(default=None, description="Composite Health Index 0-100 (from WellDiagnosticEngine)")
+    est_time_to_trip: Optional[str] = Field(default=None, description="Estimated operational runway to trip, e.g. '18h' or 'N/A'")
+    vfd_dynamics: Optional[Dict[str, float]] = Field(default=None, description="Physics dynamics: delta_p, torque_proxy, power_proxy_kva, thermal_elevation, thermal_rate_hr, pressure_ratio")
+    normalized_features: Optional[Dict[str, float]] = Field(default=None, description="13-channel normalized [0,1] feature vector from NormalizationLayer")
+    signals_filled: Optional[List[str]] = Field(default=None, description="VFD signal names filled from calibrated defaults (not from TEL API)")
 
 class ModelOutputPayload(BaseModel):
     asset_id: str

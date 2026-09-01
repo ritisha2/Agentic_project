@@ -65,6 +65,16 @@ class EvidenceItem(BaseModel):
     assumptions: List[str] = Field(default_factory=list, description="Engineering or contextual assumptions")
     limitations: List[str] = Field(default_factory=list, description="Known boundary limitations or missing context")
     citation: Optional[str] = Field(default=None, description="Document citation, section, or line reference")
+    source_deep_link: Optional[str] = Field(
+        default=None,
+        description=(
+            "Developer-mode deep-link URI to the exact source record. "
+            "For file-based sources: file:// path with query params. "
+            "For live servers (Neo4j, pgvector): real bolt/http URI populated only when server is reachable. "
+            "Never mocked — absent when source is unavailable."
+        )
+    )
+
     derived_from: List[str] = Field(default_factory=list, description="IDs of upstream evidence items used in derivation")
     correlation_id: Optional[str] = Field(default=None, description="Run or transaction correlation ID")
 

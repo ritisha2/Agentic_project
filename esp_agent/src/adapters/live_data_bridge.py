@@ -237,6 +237,39 @@ class LiveDataBridge:
         data = self.get_timeseries(asset_id, limit=24)
         points = (data or {}).get("points", [])
         if not points:
+            try:
+                from src.tools.fetch_telemetry import get_history_window_tool
+                hist = get_history_window_tool(asset_id=asset_id, limit=30)
+                traces = []
+                for sig in hist.series:
+                    sig_name = getattr(sig, "signal", getattr(sig, "signal_name", "unknown"))
+                    pts = getattr(sig, "points", [])
+                    if not pts:
+                        continue
+                    xs = [str(p.timestamp)[-8:-3] if len(str(p.timestamp)) >= 8 else str(p.timestamp) for p in pts]
+                    ys = [float(p.value) for p in pts]
+
+                    if sig_name == "flow_rate":
+                        traces.append({
+                            "x": xs, "y": ys, "type": "scatter", "mode": "lines+markers",
+                            "name": f"Flow Rate ({sig.unit})", "line": {"color": "#ef4444", "width": 2.5}
+                        })
+                    elif "pressure" in sig_name:
+                        traces.append({
+                            "x": xs, "y": ys, "type": "scatter", "mode": "lines",
+                            "name": f"{sig_name.replace('_', ' ').title()} ({sig.unit})",
+                            "yaxis": "y2", "line": {"color": "#0284c7" if "intake" in sig_name else "#8b5cf6", "width": 2, "dash": "dot"}
+                        })
+                    elif sig_name == "motor_temperature":
+                        traces.append({
+                            "x": xs, "y": ys, "type": "scatter", "mode": "lines",
+                            "name": f"Motor Temp ({sig.unit})",
+                            "yaxis": "y2", "line": {"color": "#f59e0b", "width": 1.5, "dash": "dash"}
+                        })
+                if traces:
+                    return traces
+            except Exception as e:
+                logger.debug(f"[LiveDataBridge] Local DB trace fallback failed: {e}")
             return []
 
         timestamps = [p.get("timestamp", "")[-8:-3] for p in points]  # HH:MM
@@ -269,6 +302,44 @@ class LiveDataBridge:
                 "line": {"color": "#f59e0b", "width": 1.5, "dash": "dash"}
             })
         return traces
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Dedicated Historian REST Service (historian.txt §7, §8)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def get_available_signals(self, asset_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Query available historian signals for asset.
+        Maps to: GET /api/v1/historian/{asset_id}/available-signals
+        """
+        return self._get(f"/api/v1/historian/{asset_id}/available-signals")
+
+    def get_historian_window(
+        self,
+        asset_id: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        signals: Optional[List[str]] = None,
+        aggregation: str = "raw",
+        limit: int = 1000
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Query canonical time-series window from dedicated Historian Service.
+        Maps to: GET /api/v1/historian/{asset_id}/window
+        """
+        params = {
+            "aggregation": aggregation,
+            "limit": limit
+        }
+        if start_time:
+            params["start"] = start_time
+        if end_time:
+            params["end"] = end_time
+        if signals:
+            params["signals"] = ",".join(signals) if isinstance(signals, list) else str(signals)
+
+        return self._get(f"/api/v1/historian/{asset_id}/window", params=params)
 
 
 # Global singleton — shared across all bff_routes and graph node calls

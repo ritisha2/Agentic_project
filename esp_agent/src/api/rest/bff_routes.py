@@ -37,6 +37,155 @@ evidence_repo = EvidenceRepository()
 user_adapter = UserEntryAdapter()
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Conversational NLG Layer — makes Agent Jane respond like a real co-pilot
+# instead of emitting a rigid templated diagnostic report for every query.
+# ─────────────────────────────────────────────────────────────────────────
+from src.llm.adapter import LLMAdapter
+from src.agent.intent_router import IntentRouter
+
+_nlg_llm = LLMAdapter()
+_intent_router = IntentRouter()
+
+# Weak / conversational queries get a warm reply, not a diagnostic report.
+_CONVERSATIONAL_OBJECTIVES = {"OP07_GENERAL_INQUIRY"}
+# Fleet objectives are cross-asset — they skip the single-asset telemetry chart.
+_FLEET_OBJECTIVES = {
+    "OP08_FLEET_INVENTORY", "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+    "OP10_FLEET_DESIGN_SIZING", "OP11_FLEET_MAINTENANCE_PRIORITY",
+    "OP12_FLEET_CASE_ANALYTICS", "OP13_FLEET_EXECUTIVE_REPORTING",
+}
+
+AGENT_JANE_VOICE = (
+    "You are Agent Jane, an autonomous ESP (Electric Submersible Pump) operations co-pilot "
+    "for SCADA field engineers. You speak in a warm, professional, confident voice — like a "
+    "seasoned reliability engineer walking a colleague through a problem. Write flowing natural "
+    "prose with light markdown (short bold labels, the occasional list) for readability. Be "
+    "verbose but clear. Hard rules: never invent telemetry values — use only the numbers "
+    "provided; you are Advisory-Only and must never claim to have executed any control action."
+)
+
+
+def _iter_stream_chunks(text: str, words_per_chunk: int = 6):
+    """Yield word-grouped chunks so the UI renders a smooth typewriter effect."""
+    import re
+    tokens = re.findall(r"\S+\s*", text)
+    buf, count = "", 0
+    for t in tokens:
+        buf += t
+        count += 1
+        if count >= words_per_chunk:
+            yield buf
+            buf, count = "", 0
+    if buf:
+        yield buf
+
+
+def _compose_conversational_reply(user_query: str, asset_id: str) -> str:
+    """OP07 / weak / greeting: friendly LLM-generated reply, no diagnostics, no chart."""
+    prompt = (
+        f"The field engineer sent this message: \"{user_query}\".\n"
+        f"They are currently viewing well {asset_id}.\n"
+        f"This is a conversational / general message, NOT a diagnostic request.\n"
+        f"Respond warmly as Agent Jane: greet them, briefly introduce what you can do "
+        f"(diagnose live well telemetry, analyze gas interference & drawdown, check pump curve / "
+        f"BEP deviation, estimate health & remaining useful life, and rank fleet risk), and invite "
+        f"them to ask about a specific well or symptom. Keep it friendly and concise — 3 to 5 "
+        f"sentences. Do not fabricate any telemetry readings."
+    )
+    try:
+        resp = _nlg_llm.generate(prompt=prompt, system_prompt=AGENT_JANE_VOICE,
+                                 temperature=0.5, run_id="NLG-CONV")
+        text = (resp.content or "").strip()
+        if text:
+            return text
+    except Exception as e:
+        logger.warning(f"[BFF] Conversational NLG failed: {e}")
+    return (
+        f"Hi — I'm **Agent Jane**, your ESP operations co-pilot. I can diagnose live telemetry, "
+        f"analyze gas interference and drawdown, check pump-curve / BEP deviation, estimate health "
+        f"and remaining useful life, and rank fleet risk. Ask me something like "
+        f"*\"Why is production declining on {asset_id}?\"* to get started."
+    )
+
+
+def _fallback_template_narrative(advisory, asset_id: str) -> str:
+    """Conversational template used if the LLM narrative call fails (no LLM dependency)."""
+    assessment = getattr(advisory, "assessment", "Asset operating within normal limits.")
+    diagnosis = getattr(advisory, "diagnosis", "No critical anomaly detected.")
+    recommendation = getattr(advisory, "recommendation", "Maintain current operating envelope.")
+    confidence = getattr(advisory, "confidence", 0.95)
+    risk = getattr(advisory, "risk", "Low operational risk")
+    verification = getattr(advisory, "verification", []) or []
+    txt = (
+        f"Here's what I found on **{asset_id}**.\n\n"
+        f"**Assessment.** {assessment}\n\n"
+        f"**Diagnosis.** {diagnosis} I'm about {int(float(confidence) * 100)}% confident, "
+        f"with the risk outlook at *{risk}*.\n\n"
+        f"**What I'd do next.** {recommendation}\n\n"
+    )
+    if verification:
+        txt += "**To verify, please:**\n" + "\n".join(f"- {v}" for v in verification) + "\n\n"
+    txt += "Want me to dig into any specific signal or run a what-if on this well?"
+    return txt
+
+
+def _compose_diagnostic_narrative(advisory, user_query: str, objective_id: str, asset_id: str) -> str:
+    """Diagnostic / fleet objectives: verbose conversational narrative grounded in the advisory."""
+    assessment = getattr(advisory, "assessment", "")
+    diagnosis = getattr(advisory, "diagnosis", "")
+    recommendation = getattr(advisory, "recommendation", "")
+    risk = getattr(advisory, "risk", "")
+    confidence = getattr(advisory, "confidence", 0.0)
+    constraints = getattr(advisory, "constraints", []) or []
+    verification = getattr(advisory, "verification", []) or []
+    evidence = getattr(advisory, "evidence", []) or []
+
+    ev_lines = []
+    for ev in evidence[:8]:
+        sid = getattr(ev, "source_id", "") if not isinstance(ev, dict) else ev.get("source_id", "")
+        obs = getattr(ev, "observation", "") if not isinstance(ev, dict) else ev.get("observation", "")
+        if obs:
+            ev_lines.append(f"- {sid}: {obs}")
+    ev_block = "\n".join(ev_lines) if ev_lines else "(no anomalous evidence — signals within limits)"
+
+    try:
+        conf_pct = int(float(confidence) * 100)
+    except Exception:
+        conf_pct = 0
+
+    prompt = (
+        f"The field engineer asked: \"{user_query}\" about well {asset_id}.\n"
+        f"You already completed the analysis (objective: {objective_id}). Here are your grounded "
+        f"findings — use ONLY these, do not invent numbers:\n\n"
+        f"ASSESSMENT: {assessment}\n"
+        f"DIAGNOSIS: {diagnosis}\n"
+        f"CONFIDENCE: {conf_pct}%\n"
+        f"RISK: {risk}\n"
+        f"RECOMMENDED ACTION: {recommendation}\n"
+        f"SAFETY CONSTRAINTS: {'; '.join(map(str, constraints)) or 'standard operating limits'}\n"
+        f"VERIFICATION STEPS: {'; '.join(map(str, verification)) or 'confirm SCADA alignment'}\n"
+        f"EVIDENCE:\n{ev_block}\n\n"
+        f"Now write your reply to the engineer as Agent Jane, as a flowing conversation:\n"
+        f"1. Open with a brief, warm one-line acknowledgment of their question.\n"
+        f"2. Explain what you inspected (the signals / engineering calcs / ML & evidence).\n"
+        f"3. Walk through your reasoning and state the diagnosis with your confidence and why.\n"
+        f"4. Give the recommended action clearly, with the safety constraints.\n"
+        f"5. List the verification steps the operator should perform.\n"
+        f"6. Close by inviting a follow-up question.\n"
+        f"Use light markdown headings/bold. Be verbose but readable."
+    )
+    try:
+        resp = _nlg_llm.generate(prompt=prompt, system_prompt=AGENT_JANE_VOICE,
+                                 temperature=0.4, run_id="NLG-DIAG")
+        text = (resp.content or "").strip()
+        if text and len(text) > 40:
+            return text
+    except Exception as e:
+        logger.warning(f"[BFF] Diagnostic NLG failed, falling back to template: {e}")
+    return _fallback_template_narrative(advisory, asset_id)
+
+
 @router.get("/health")
 def bff_health():
     return {"status": "ok", "service": "bff_agent_gateway"}
@@ -192,16 +341,34 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
     run_id = f"RUN-UI-{uuid.uuid4().hex[:8]}"
 
     async def event_generator():
-        # Event 1: Initial status
+        # Route intent up-front so we can branch conversational vs diagnostic.
+        try:
+            objective_id, route_conf, route_path = _intent_router.route(req.user_query)
+        except Exception:
+            objective_id, route_conf, route_path = "OP01_CURRENT_STATUS", 0.5, "fallback"
+
         yield json.dumps({
             "type": "status",
             "run_id": run_id,
             "stage": "INITIATING",
-            "message": "Evaluating asset operational status..."
+            "message": "Understanding your question..."
         }) + "\n"
 
+        # ── Conversational fast-path: greetings / weak / general inquiry ──
+        # Skip the heavy Supervisor graph entirely and reply like a co-pilot.
+        if objective_id in _CONVERSATIONAL_OBJECTIVES or route_path == "Path_A_Greeting":
+            yield json.dumps({
+                "type": "status", "run_id": run_id, "stage": "COMPOSING",
+                "message": "Agent Jane is replying..."
+            }) + "\n"
+            reply = await asyncio.to_thread(_compose_conversational_reply, req.user_query, req.asset_id)
+            for chunk in _iter_stream_chunks(reply):
+                yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+            yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+            return
+
+        # ── Diagnostic / fleet path: run the Supervisor graph ──
         try:
-            # Event 2: Execute Supervisor Graph off the asyncio event loop thread
             advisory = await asyncio.to_thread(
                 user_adapter.run,
                 user_query=req.user_query,
@@ -212,7 +379,7 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             logger.error(f"[BFF] Error executing Supervisor run {run_id}: {ex}", exc_info=True)
             yield json.dumps({
                 "type": "text_delta",
-                "delta": f"⚠️ **Agent Execution Error**: Unable to complete analysis for asset `{req.asset_id}` ({str(ex)})."
+                "delta": f"I hit a problem completing the analysis for `{req.asset_id}` ({str(ex)}). Please retry in a moment."
             }) + "\n"
             yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
             return
@@ -222,55 +389,33 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             "type": "status",
             "run_id": run_id,
             "stage": "SPECIALISTS_RUNNING",
-            "message": f"Specialists evaluated {ev_count} evidence items."
+            "message": f"Reviewed {ev_count} evidence items — composing your briefing..."
         }) + "\n"
 
-        # Event 3: Full Advisory Payload
+        # Structured advisory payload (consumed by the evidence drawer / structured clients)
         yield json.dumps({
             "type": "advisory",
             "run_id": run_id,
             "advisory": advisory.model_dump()
         }) + "\n"
 
-        # Event 4: Stream text breakdown (narrative)
-        assessment_text = getattr(advisory, 'assessment', 'Asset Operational Status Normal')
-        diagnosis_text = getattr(advisory, 'diagnosis', 'No critical anomaly detected.')
-        recommendation_text = getattr(advisory, 'recommendation', 'Maintain current operating envelope.')
-        confidence_val = getattr(advisory, 'confidence', 0.95)
-        risk_text = getattr(advisory, 'risk', 'Low operational risk')
-
-        summary_text = (
-            f"### 🛡️ Diagnostic Summary for Asset `{req.asset_id}`\n\n"
-            f"**Assessment:** {assessment_text}\n\n"
-            f"**Diagnosis Details:** {diagnosis_text}\n\n"
-            f"#### 📊 Key Performance Indicators\n"
-            f"- **Confidence Score:** {int(confidence_val * 100)}%\n"
-            f"- **Risk Horizon:** `{risk_text}`\n\n"
-            f"#### 🔍 Supporting Evidence\n"
+        # Conversational NLG narrative — real LLM generation grounded in the advisory,
+        # replacing the old rigid templated report. Salutation -> what I inspected ->
+        # reasoning -> diagnosis -> recommendation -> verification -> follow-up invite.
+        yield json.dumps({
+            "type": "status", "run_id": run_id, "stage": "COMPOSING",
+            "message": "Writing your diagnostic briefing..."
+        }) + "\n"
+        narrative = await asyncio.to_thread(
+            _compose_diagnostic_narrative, advisory, req.user_query, objective_id, req.asset_id
         )
-        evidence_items = getattr(advisory, 'evidence', [])
-        if evidence_items:
-            for ev in evidence_items:
-                stype = getattr(ev, 'source_type', 'DATA')
-                sid = getattr(ev, 'source_id', 'SRC')
-                obs = getattr(ev, 'observation', 'Normal metric')
-                summary_text += f"- **[{stype}]** `{sid}`: {obs}\n"
-        else:
-            summary_text += "- Live telemetry and ML inference signals validated within normal operating limits.\n"
+        for chunk in _iter_stream_chunks(narrative):
+            yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
 
-        summary_text += (
-            f"\n#### ⚡ Recommended Immediate Action\n"
-            f"> {recommendation_text}\n"
-        )
-
-        # Stream text in chunks to simulate LLM token streaming
-        chunk_size = 35
-        for i in range(0, len(summary_text), chunk_size):
-            chunk = summary_text[i:i+chunk_size]
-            yield json.dumps({
-                "type": "text_delta",
-                "delta": chunk
-            }) + "\n"
+        # Fleet objectives are cross-asset — no single-asset telemetry chart. Finish here.
+        if objective_id in _FLEET_OBJECTIVES:
+            yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+            return
 
         # Event 5: Generative UI Block (Validated VisualizationSpec Pydantic Contract)
         live_traces = live_bridge.build_plotly_trace(req.asset_id)

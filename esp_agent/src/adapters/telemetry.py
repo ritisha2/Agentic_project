@@ -16,7 +16,8 @@ class TelemetryAdapter:
 
     @classmethod
     def from_config_file(cls, mapping_config_path: str, telemetry_csv_path: Optional[str] = None) -> "TelemetryAdapter":
-        with open(mapping_config_path, "r", encoding="utf-8") as f:
+        # utf-8-sig transparently strips a UTF-8 BOM if present and reads plain utf-8 too.
+        with open(mapping_config_path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         config = MappingConfig(**data)
         return cls(mapping_config=config, telemetry_csv_path=telemetry_csv_path)

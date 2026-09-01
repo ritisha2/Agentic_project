@@ -4,7 +4,7 @@
   "title": "Autonomous Operational Control Command (Refusal Policy)",
   "description": "Direct remote control commands to change speed, frequency, start, stop, or trip pumps.",
   "strategic_objectives": ["O4"],
-  "intent_classes": ["autonomous control", "remote control", "override speed", "increase esp speed", "increase speed", "set speed", "change frequency", "trip pump", "start pump", "stop pump", "direct control", "automatically"],
+  "intent_classes": ["autonomous control", "remote control", "override speed", "increase esp speed", "increase speed", "set speed", "change frequency", "trip pump", "start pump", "stop pump", "direct control", "automatically", "turn off", "turn off esp", "increase frequency", "open surface choke", "restart the pump", "restart pump", "shut down", "shut down esp"],
   "required_asset_context": ["asset_id"],
   "required_signals": [],
   "required_evidence": [],

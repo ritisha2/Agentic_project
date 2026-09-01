@@ -41,14 +41,14 @@ class TelemetryService:
             live_row = live_bridge.get_latest_telemetry(asset_id)
             if live_row:
                 ts = str(live_row.get("timestamp") or now_str)
+                # Map historian DB column names -> VFD canonical signal names
                 measurements = {
-                    "motor_temperature": TelemetryMeasurement(tag="motor_temperature", value=float(live_row.get("temperature_c") or 0.0), unit="°C", timestamp=ts, quality="GOOD"),
-                    "intake_pressure": TelemetryMeasurement(tag="intake_pressure", value=float(live_row.get("intake_pressure_psi") or 0.0), unit="psi", timestamp=ts, quality="GOOD"),
-                    "discharge_pressure": TelemetryMeasurement(tag="discharge_pressure", value=float(live_row.get("pressure_psi") or live_row.get("discharge_pressure_psi") or 0.0), unit="psi", timestamp=ts, quality="GOOD"),
-                    "flow_rate": TelemetryMeasurement(tag="flow_rate", value=float(live_row.get("flow_rate_bpd") or 0.0), unit="bpd", timestamp=ts, quality="GOOD"),
-                    "drive_current_average": TelemetryMeasurement(tag="drive_current_average", value=float(live_row.get("motor_current_a") or 0.0), unit="A", timestamp=ts, quality="GOOD"),
-                    "frequency": TelemetryMeasurement(tag="frequency", value=float(live_row.get("frequency_hz") or 0.0), unit="Hz", timestamp=ts, quality="GOOD"),
-                    "vibration_x": TelemetryMeasurement(tag="vibration_x", value=float(live_row.get("vibration_g") or 0.0), unit="g", timestamp=ts, quality="GOOD"),
+                    "Motor temp °C":     TelemetryMeasurement(tag="Motor temp °C",     value=float(live_row.get("temperature_c") or 0.0),                                               unit="°C",  timestamp=ts, quality="GOOD"),
+                    "Inp bar/psi":       TelemetryMeasurement(tag="Inp bar/psi",       value=float(live_row.get("intake_pressure_psi") or 0.0),                                         unit="psi", timestamp=ts, quality="GOOD"),
+                    "Disch pr. Bar/psi": TelemetryMeasurement(tag="Disch pr. Bar/psi", value=float(live_row.get("pressure_psi") or live_row.get("discharge_pressure_psi") or 0.0),     unit="psi", timestamp=ts, quality="GOOD"),
+                    "VSD Amps/Load":     TelemetryMeasurement(tag="VSD Amps/Load",     value=float(live_row.get("motor_current_a") or 0.0),                                             unit="A",   timestamp=ts, quality="GOOD"),
+                    "Frequency":         TelemetryMeasurement(tag="Frequency",          value=float(live_row.get("frequency_hz") or 0.0),                                               unit="Hz",  timestamp=ts, quality="GOOD"),
+                    "Vibration G's-Vx":  TelemetryMeasurement(tag="Vibration G's-Vx",  value=float(live_row.get("vibration_g") or 0.0),                                                unit="g",   timestamp=ts, quality="GOOD"),
                 }
         except Exception as ex:
             logger.debug(f"[TelemetryService] LiveDataBridge query bypassed: {ex}")
@@ -68,18 +68,25 @@ class TelemetryService:
             except Exception as ex:
                 logger.warning(f"TelemetryAdapter fetch error for '{asset_id}': {ex}")
 
-        # MOCK_SCAFFOLD: hardcoded telemetry fallback constants | reason: used when both cced_esp
-        # LiveDataBridge and the local CSV adapter yield no data | expiry: when live cced_esp MQTT
-        # ingestion is guaranteed | ref: src/verification/handoff.py:TELEMETRY_FALLBACK (kept in sync)
+        # MOCK_SCAFFOLD: hardcoded fallback — 14 VFD signal channels
+        # reason: used when both cced_esp LiveDataBridge and the local CSV adapter yield no data
+        # expiry: when live cced_esp MQTT ingestion is guaranteed
         if not measurements:
             measurements = {
-                "motor_temperature": TelemetryMeasurement(tag="motor_temperature", value=135.0, unit="°C", timestamp=now_str, quality="GOOD"),
-                "intake_pressure": TelemetryMeasurement(tag="intake_pressure", value=350.0, unit="psi", timestamp=now_str, quality="GOOD"),
-                "discharge_pressure": TelemetryMeasurement(tag="discharge_pressure", value=2100.0, unit="psi", timestamp=now_str, quality="GOOD"),
-                "flow_rate": TelemetryMeasurement(tag="flow_rate", value=1450.0, unit="bpd", timestamp=now_str, quality="GOOD"),
-                "drive_current_average": TelemetryMeasurement(tag="drive_current_average", value=62.0, unit="A", timestamp=now_str, quality="GOOD"),
-                "frequency": TelemetryMeasurement(tag="frequency", value=50.0, unit="Hz", timestamp=now_str, quality="GOOD"),
-                "vibration_x": TelemetryMeasurement(tag="vibration_x", value=1.2, unit="g", timestamp=now_str, quality="GOOD")
+                "Inp bar/psi":       TelemetryMeasurement(tag="Inp bar/psi",       value=300.0,  unit="psi",  timestamp=now_str, quality="GOOD"),
+                "Int temp °C":       TelemetryMeasurement(tag="Int temp °C",       value=55.0,   unit="°C",   timestamp=now_str, quality="GOOD"),
+                "Motor temp °C":     TelemetryMeasurement(tag="Motor temp °C",     value=85.0,   unit="°C",   timestamp=now_str, quality="GOOD"),
+                "Disch pr. Bar/psi": TelemetryMeasurement(tag="Disch pr. Bar/psi", value=1800.0, unit="psi",  timestamp=now_str, quality="GOOD"),
+                "Vibration G's-Vx":  TelemetryMeasurement(tag="Vibration G's-Vx",  value=0.18,   unit="g",    timestamp=now_str, quality="GOOD"),
+                "Leak Current Ct":   TelemetryMeasurement(tag="Leak Current Ct",   value=15.0,   unit="mA",   timestamp=now_str, quality="GOOD"),
+                "Volt":              TelemetryMeasurement(tag="Volt",              value=400.0,  unit="V",    timestamp=now_str, quality="GOOD"),
+                "VSD Amps/Load":     TelemetryMeasurement(tag="VSD Amps/Load",     value=30.0,   unit="A",    timestamp=now_str, quality="GOOD"),
+                "Frequency":         TelemetryMeasurement(tag="Frequency",          value=50.0,   unit="Hz",   timestamp=now_str, quality="GOOD"),
+                "DHG Current":       TelemetryMeasurement(tag="DHG Current",       value=20.0,   unit="mA",   timestamp=now_str, quality="GOOD"),
+                "WHP (PSI)":         TelemetryMeasurement(tag="WHP (PSI)",         value=50.0,   unit="psi",  timestamp=now_str, quality="GOOD"),
+                "FLP (PSI)":         TelemetryMeasurement(tag="FLP (PSI)",         value=45.0,   unit="psi",  timestamp=now_str, quality="GOOD"),
+                "AP (PSI)":          TelemetryMeasurement(tag="AP (PSI)",          value=10.0,   unit="psi",  timestamp=now_str, quality="GOOD"),
+                "VFD STS":           TelemetryMeasurement(tag="VFD STS",           value=1.0,    unit="flag", timestamp=now_str, quality="GOOD"),
             }
 
         return TelemetrySnapshot(

@@ -20,28 +20,18 @@ from src.api.telemetry_mock_schemas import (
     QualityMetadata,
     TrendSeries,
     TrendSeriesPoint,
+    VFD_CANONICAL_UNITS,          # 14-signal real VFD namespace
 )
 
 logger = logging.getLogger(__name__)
 
-# Canonical Signal Unit Mapping (§6)
-CANONICAL_UNITS = {
-    "liquid_rate": "BPD",
-    "intake_pressure": "psi",
-    "discharge_pressure": "psi",
-    "frequency": "Hz",
-    "motor_current": "A",
-    "motor_voltage": "V",
-    "motor_temperature": "degC",
-    "vibration_rms": "g",
-    "voltage_imbalance": "%",
-    "current_imbalance": "%",
-}
+# Use the schema's authoritative VFD signal-unit map as the single source of truth
+CANONICAL_UNITS = VFD_CANONICAL_UNITS
 
 app = FastAPI(
     title="ESP Telemetry Mock API Service",
-    description="Simulator-compatible runtime telemetry service (esp-telemetry-api :8081)",
-    version="1.0.0",
+    description="MQTT/Simulator-compatible runtime telemetry service (esp-telemetry-api :8081) — 14 VFD signals",
+    version="2.0.0",
 )
 
 # ---------------------------------------------------------------------------
@@ -52,40 +42,128 @@ _history_records: Dict[str, List[CanonicalTelemetryRecord]] = {}
 _ground_truth_scenarios: Dict[str, Dict[str, Any]] = {}
 
 
-def _populate_initial_simulator_data():
-    """Populate baseline FS-031 simulator sample (§2)."""
+# ── Initial simulator fixtures — values from real MQTT broker / VFD controller ──
+
+def _make_record(asset_id: str, well_id: str, measurements: Dict[str, MeasurementValue],
+                 state: str = "running", scenario: str = "normal",
+                 ground_truth_fault: str = "NONE") -> CanonicalTelemetryRecord:
     now_str = datetime.utcnow().isoformat() + "Z"
     record = CanonicalTelemetryRecord(
-        asset_id="FS-031",
-        well_id="FS-031",
-        timestamp=now_str,
-        state="running",
-        measurements={
-            "liquid_rate": MeasurementValue(value=735.7, unit="BPD"),
-            "intake_pressure": MeasurementValue(value=236.5, unit="psi"),
-            "discharge_pressure": MeasurementValue(value=1883.7, unit="psi"),
-            "frequency": MeasurementValue(value=46.06, unit="Hz"),
-            "motor_current": MeasurementValue(value=18.86, unit="A"),
-            "motor_voltage": MeasurementValue(value=1006.3, unit="V"),
-            "motor_temperature": MeasurementValue(value=79.67, unit="degC"),
-            "vibration_rms": MeasurementValue(value=0.1758, unit="g"),
-            "voltage_imbalance": MeasurementValue(value=0.60, unit="%"),
-            "current_imbalance": MeasurementValue(value=1.00, unit="%"),
-        },
+        asset_id=asset_id, well_id=well_id, timestamp=now_str,
+        state=state, measurements=measurements,
         quality=QualityMetadata(overall="GOOD", source="simulator", freshness="CURRENT"),
     )
-    _current_snapshots["FS-031"] = record
-    _history_records["FS-031"] = [record]
-    _ground_truth_scenarios["FS-031"] = {
-        "well": "FS-031",
-        "scenario": "normal",
-        "state": "running",
-        "ground_truth_fault": "NONE",
-        "is_test_fixture": True,
+    _current_snapshots[asset_id] = record
+    _history_records[asset_id] = [record]
+    _ground_truth_scenarios[asset_id] = {
+        "well": asset_id, "scenario": scenario, "state": state,
+        "ground_truth_fault": ground_truth_fault, "is_test_fixture": True,
     }
+    return record
+
+
+def _populate_initial_simulator_data():
+    """
+    Populate baseline simulator snapshots.
+    All values from real MQTT broker / VFD controller — 14 signal channels.
+    Signal keys match VFD_CANONICAL_UNITS exactly (same as STANDARD_SENSORS + VFD STS).
+    """
+
+    # ── FS-031 : Normal operation baseline (Intake Gas Interference scenario) ──
+    _make_record(
+        asset_id="FS-031", well_id="FS-031",
+        state="running", scenario="intake_gas_interference",
+        ground_truth_fault="Intake Gas Interference",
+        measurements={
+            "Inp bar/psi":       MeasurementValue(value=236.5,  unit="psi"),
+            "Int temp °C":       MeasurementValue(value=52.3,   unit="°C"),
+            "Motor temp °C":     MeasurementValue(value=79.67,  unit="°C"),
+            "Disch pr. Bar/psi": MeasurementValue(value=1883.7, unit="psi"),
+            "Vibration G's-Vx":  MeasurementValue(value=0.1758, unit="g"),
+            "Leak Current Ct":   MeasurementValue(value=15.1,   unit="mA"),
+            "Volt":              MeasurementValue(value=1006.3,  unit="V"),
+            "VSD Amps/Load":     MeasurementValue(value=18.86,  unit="A"),
+            "Frequency":         MeasurementValue(value=46.06,  unit="Hz"),
+            "DHG Current":       MeasurementValue(value=20.6,   unit="mA"),
+            "WHP (PSI)":         MeasurementValue(value=48.0,   unit="psi"),
+            "FLP (PSI)":         MeasurementValue(value=43.5,   unit="psi"),
+            "AP (PSI)":          MeasurementValue(value=10.0,   unit="psi"),
+            "VFD STS":           MeasurementValue(value=1.0,    unit="flag"),
+        }
+    )
+
+    # ── FS-010 : Bearing Degradation scenario ──────────────────────────────────
+    _make_record(
+        asset_id="FS-010", well_id="OPG-W010",
+        state="running", scenario="bearing_degradation",
+        ground_truth_fault="Bearing Degradation",
+        measurements={
+            "Inp bar/psi":       MeasurementValue(value=1650.0, unit="psi"),
+            "Int temp °C":       MeasurementValue(value=60.0,   unit="°C"),
+            "Motor temp °C":     MeasurementValue(value=115.0,  unit="°C"),
+            "Disch pr. Bar/psi": MeasurementValue(value=2400.0, unit="psi"),
+            "Vibration G's-Vx":  MeasurementValue(value=0.48,   unit="g"),
+            "Leak Current Ct":   MeasurementValue(value=18.0,   unit="mA"),
+            "Volt":              MeasurementValue(value=980.0,   unit="V"),
+            "VSD Amps/Load":     MeasurementValue(value=45.0,   unit="A"),
+            "Frequency":         MeasurementValue(value=48.0,   unit="Hz"),
+            "DHG Current":       MeasurementValue(value=21.0,   unit="mA"),
+            "WHP (PSI)":         MeasurementValue(value=55.0,   unit="psi"),
+            "FLP (PSI)":         MeasurementValue(value=50.0,   unit="psi"),
+            "AP (PSI)":          MeasurementValue(value=12.0,   unit="psi"),
+            "VFD STS":           MeasurementValue(value=1.0,    unit="flag"),
+        }
+    )
+
+    # ── FS-04 : Normal Operation — simulator reference sample ─────────────────
+    _make_record(
+        asset_id="FS-04", well_id="FS-04",
+        state="running", scenario="normal",
+        ground_truth_fault="NONE",
+        measurements={
+            "Inp bar/psi":       MeasurementValue(value=472.6,  unit="psi"),
+            "Int temp °C":       MeasurementValue(value=55.3,   unit="°C"),
+            "Motor temp °C":     MeasurementValue(value=72.1,   unit="°C"),
+            "Disch pr. Bar/psi": MeasurementValue(value=1957.7, unit="psi"),
+            "Vibration G's-Vx":  MeasurementValue(value=0.09,   unit="g"),
+            "Leak Current Ct":   MeasurementValue(value=15.1,   unit="mA"),
+            "Volt":              MeasurementValue(value=294.5,   unit="V"),
+            "VSD Amps/Load":     MeasurementValue(value=134.8,  unit="A"),
+            "Frequency":         MeasurementValue(value=44.0,   unit="Hz"),
+            "DHG Current":       MeasurementValue(value=20.6,   unit="mA"),
+            "WHP (PSI)":         MeasurementValue(value=50.0,   unit="psi"),
+            "FLP (PSI)":         MeasurementValue(value=45.0,   unit="psi"),
+            "AP (PSI)":          MeasurementValue(value=10.0,   unit="psi"),
+            "VFD STS":           MeasurementValue(value=1.0,    unit="flag"),
+        }
+    )
+
+    # ── FS-OFFLINE : Sensor telemetry missing / degraded ──────────────────────
+    _make_record(
+        asset_id="FS-OFFLINE", well_id="Well-FS-OFFLINE",
+        state="tripped", scenario="offline",
+        ground_truth_fault="SENSOR_TELEMETRY_MISSING",
+        measurements={
+            "Inp bar/psi":       MeasurementValue(value=0.0, unit="psi"),
+            "Int temp °C":       MeasurementValue(value=0.0, unit="°C"),
+            "Motor temp °C":     MeasurementValue(value=0.0, unit="°C"),
+            "Disch pr. Bar/psi": MeasurementValue(value=0.0, unit="psi"),
+            "Vibration G's-Vx":  MeasurementValue(value=0.0, unit="g"),
+            "Leak Current Ct":   MeasurementValue(value=0.0, unit="mA"),
+            "Volt":              MeasurementValue(value=0.0, unit="V"),
+            "VSD Amps/Load":     MeasurementValue(value=0.0, unit="A"),
+            "Frequency":         MeasurementValue(value=0.0, unit="Hz"),
+            "DHG Current":       MeasurementValue(value=0.0, unit="mA"),
+            "WHP (PSI)":         MeasurementValue(value=0.0, unit="psi"),
+            "FLP (PSI)":         MeasurementValue(value=0.0, unit="psi"),
+            "AP (PSI)":          MeasurementValue(value=0.0, unit="psi"),
+            "VFD STS":           MeasurementValue(value=0.0, unit="flag"),
+        }
+    )
 
 
 _populate_initial_simulator_data()
+
 
 
 # ---------------------------------------------------------------------------

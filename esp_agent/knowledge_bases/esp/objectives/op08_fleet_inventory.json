@@ -5,7 +5,7 @@
   "description": "List, count, and categorize assets across the fleet (types, pump models, totals). Cross-asset/aggregate query — not scoped to a single asset_id.",
   "scope": "fleet",
   "strategic_objectives": ["O1"],
-  "intent_classes": ["list all assets", "all assets", "list assets", "fleet inventory", "how many wells", "how many assets", "asset types", "asset count", "count of assets", "all wells in field", "fleet asset list"],
+  "intent_classes": ["list all assets", "all assets", "list assets", "fleet inventory", "how many wells", "how many assets", "asset types", "asset count", "count of assets", "all wells in field", "fleet asset list", "running vs stopped", "compare the installed", "list all active esp wells", "how many pumps are currently"],
   "required_asset_context": [],
   "required_signals": [],
   "required_evidence": ["fleet_asset_list"],

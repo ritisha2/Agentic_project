@@ -823,13 +823,72 @@ def create_supervisor_graph():
             )
             verification = ["1. Inspect physical wellhead gauge.", "2. Confirm SCADA telemetry alignment."]
 
+        def _evidence_label(ref: str) -> str:
+            """Derive a human-readable observation from the opaque evidence ref string."""
+            ref_s = str(ref)
+            if ref_s.startswith("esp:engineering:tdh:"):
+                val = ref_s.split("esp:engineering:tdh:")[-1]
+                return f"Engineering: Total Dynamic Head calculated at {val} ft"
+            if ref_s.startswith("esp:engineering:bep_dev:"):
+                val = ref_s.split("esp:engineering:bep_dev:")[-1]
+                return f"Engineering: BEP deviation at {val}% — pump efficiency variance detected"
+            if ref_s.startswith("esp:engineering:"):
+                key = ref_s.replace("esp:engineering:", "").replace(":", " ")
+                return f"Engineering parameter: {key}"
+            if ref_s.startswith("esp:model:") and "fault:" in ref_s:
+                fault = ref_s.split("fault:")[-1]
+                return f"ML Model: Active fault classification → {fault}"
+            if ref_s.startswith("esp:rule:") and ":WARNING" in ref_s:
+                rule = ref_s.replace("esp:rule:", "").replace(":WARNING", "")
+                return f"Operating rule breach: {rule} — threshold WARNING triggered"
+            if ref_s.startswith("esp:kb:"):
+                kb = ref_s.replace("esp:kb:", "").replace(":", " §")
+                return f"Knowledge Base: {kb}"
+            if ref_s.startswith("EVID-TEL-"):
+                return "Telemetry: Live sensor measurement from Historian — validated signal"
+            if ref_s.startswith("EVID-AST-"):
+                return "Asset Context: Equipment specification or installed configuration"
+            if ref_s.startswith("EVID-ENG-"):
+                return "Engineering: Derived operating parameter (TDH / BEP / envelope)"
+            if ref_s.startswith("EVID-ML-"):
+                return "ML Model: Fault classifier or health-index inference output"
+            if ref_s.startswith("EVID-KB-"):
+                return "Knowledge Base: Applicable operating procedure or SOP reference"
+            return f"Reference: {ref_s}"
+
+        def _evidence_deep_link(ref: str, asset: str) -> Optional[str]:
+            """Generate dynamic direct URL to the live Database GUI or in-app explorer."""
+            ref_s = str(ref)
+            if ref_s.startswith("esp:model:") and "fault:" in ref_s:
+                fault_name = ref_s.split("fault:")[-1].replace("_", " ").title()
+                # Direct deep-link to Neo4j Browser executing graph pattern
+                return f"http://localhost:7474/browser/?cmd=play&arg=MATCH%20(n%3AFaultMode%20%7Bname%3A%27{fault_name}%27%7D)-%5Br%5D-(m)%20RETURN%20n%2Cr%2Cm"
+            if ref_s.startswith("esp:kb:") or ref_s.startswith("EVID-KB-"):
+                # Direct deep-link to Qdrant Vector Dashboard collection
+                return "http://localhost:6333/dashboard#/collections/esp_kb"
+            if ref_s.startswith("EVID-TEL-") or ref_s.startswith("EVID-HIST-"):
+                # Direct trigger link to SQLite Historian Explorer with prefiltered asset
+                return f"http://localhost:3000/?openDbViewer=unlabelled_recovered&asset={asset}"
+            if ref_s.startswith("EVID-AST-") or ref_s.startswith("esp:engineering:"):
+                # Direct trigger link to Asset Deep Dive Nameplate card
+                return f"http://localhost:3000/?openAssetDeepDive={asset}"
+            return None
+
+        # Cap to 8 most informative items — prevents wall-of-noise in the UI
+        capped_refs = state["evidence_refs"][:8]
         evidence_items = [
             AdvisoryEvidenceItem(
-                source_type="Specialist",
+                source_type=("Engineering" if ref.startswith("esp:engineering")
+                             else "ML Model" if ref.startswith("esp:model")
+                             else "Rule Engine" if ref.startswith("esp:rule")
+                             else "Knowledge Base" if ref.startswith("esp:kb")
+                             else ref.split("-")[1] if ref.startswith("EVID-") and "-" in ref
+                             else "Specialist"),
                 source_id=ref,
-                observation="Verified specialist evidence ref",
+                observation=_evidence_label(ref),
+                source_deep_link=_evidence_deep_link(ref, asset_id),
                 timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            ).model_dump() for ref in state["evidence_refs"]
+            ).model_dump() for ref in capped_refs
         ]
 
         # Check gateway health status to flag live vs offline fallback mode

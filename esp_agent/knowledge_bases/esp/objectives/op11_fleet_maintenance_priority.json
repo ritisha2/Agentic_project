@@ -13,7 +13,11 @@
     "hottest wells in fleet",
     "fleet health ranking",
     "priority workovers",
-    "rul ranking"
+    "rul ranking",
+    "rank the top 5 highest risk wells",
+    "maintenance priority",
+    "most urgent for workover",
+    "compare maintenance urgency"
   ],
   "required_asset_context": [],
   "required_signals": [],

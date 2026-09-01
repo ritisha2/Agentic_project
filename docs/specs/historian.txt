@@ -1,0 +1,618 @@
+Yes. The right approach is to treat the `.db` file as the **historical source dataset**, inspect it first, then build a **Historian Service** in front of it. Do not make the Agent read the `.db` directly.
+
+## 1. What you have now
+
+```text
+Current system
+────────────────────────────────────
+
+Live Telemetry
+    ↓
+Telemetry Service
+    ↓
+Agent / LangGraph
+```
+
+Missing:
+
+```text
+Historical .db
+    ↓
+Historian Service
+    ↓
+Agent / Engineering / ML / UI
+```
+
+So the `.db` becomes the initial source for the historian capability.
+
+---
+
+# 2. First: determine what the `.db` actually is
+
+Do **not** immediately convert it.
+
+A `.db` extension does not tell us whether it is:
+
+* SQLite
+* another embedded database
+* a custom database export
+
+First inspect:
+
+```text
+database type
+tables
+columns
+indexes
+row counts
+timestamps
+asset/well IDs
+tag IDs
+units
+sampling frequency
+quality fields
+```
+
+For a historian, we specifically want something resembling:
+
+```text
+asset_id
+timestamp
+tag_id / signal
+value
+unit
+quality
+source
+```
+
+or a wide schema such as:
+
+```text
+timestamp
+asset_id
+liquid_rate
+pip
+pdp
+motor_current
+motor_temperature
+frequency
+...
+```
+
+### The most important question
+
+Does the `.db` contain **timestamped historical measurements**, or is it merely a static dataset?
+
+If it contains time-stamped measurements, it can serve as your historian source.
+
+---
+
+# 3. Recommended target architecture
+
+Since you already have PostgreSQL in the architecture, I would use **PostgreSQL + TimescaleDB** for the actual time-series storage in the production-oriented implementation.
+
+```text
+                  HISTORICAL .DB
+                       |
+                one-time importer
+                       |
+                       v
+              Historian Storage
+          PostgreSQL + TimescaleDB
+                       |
+                Historian Service
+                       |
+          +------------+------------+
+          |            |            |
+       Agent        Engineering    ML
+```
+
+But there is another valid first step:
+
+```text
+.db
+ ↓
+Historian Service
+ ↓
+read directly from .db
+```
+
+That is useful for quickly validating the API contract.
+
+Then later:
+
+```text
+.db
+ ↓
+ETL/import
+ ↓
+TimescaleDB
+ ↓
+same Historian Service
+```
+
+The Agent does not change.
+
+---
+
+# 4. Why time-series storage?
+
+Yes, **this data should be treated as time-series data** if it is historical telemetry.
+
+Typical characteristics:
+
+```text
+asset + signal + timestamp + value
+```
+
+Examples:
+
+```text
+FS-031 | liquid_rate       | 2026-08-31 10:00 | 956.4 BPD
+FS-031 | intake_pressure   | 2026-08-31 10:00 | 237.1 psi
+FS-031 | motor_temperature | 2026-08-31 10:00 | 100.2 C
+```
+
+That supports:
+
+```text
+6-hour trend
+24-hour trend
+7-day trend
+30-day trend
+before/after event
+rolling averages
+rate of change
+forecast features
+anomaly detection
+```
+
+Which is exactly what the guideline requires from `historian.get_window(...)`. 
+
+---
+
+# 5. Do not force the raw `.db` into your Agent
+
+Use this boundary:
+
+```text
+                 .db
+                  |
+              Importer
+                  |
+          Canonical historian
+                  |
+          Historian Service
+                  |
+        historian.get_window()
+                  |
+                Tool
+                  |
+              LangGraph
+```
+
+Never:
+
+```text
+Agent → SQLite → SELECT ...
+```
+
+---
+
+# 6. Canonical historian data model
+
+I would standardize it around a narrow time-series schema:
+
+```text
+telemetry_history
+──────────────────────────────────
+id
+asset_id
+timestamp
+signal_name
+value
+unit
+quality
+source
+tag_id
+ingested_at
+```
+
+Example:
+
+```text
+10001
+FS-031
+2026-08-31T10:00:00
+liquid_rate
+956.4
+BPD
+GOOD
+SIMULATOR
+R_FLOW_001
+2026-08-31T10:00:02
+```
+
+This is flexible because your current live API has multiple signals.
+
+You can later optimize storage/querying without changing the Agent contract.
+
+---
+
+# 7. Historian REST API
+
+Implement a dedicated service, for example:
+
+```text
+GET /api/v1/historian/{asset_id}/window
+```
+
+Parameters:
+
+```text
+start_time
+end_time
+tags/signals
+aggregation
+interval
+```
+
+Example:
+
+```http
+GET /api/v1/historian/FS-031/window
+    ?start=2026-08-31T08:00:00
+    &end=2026-08-31T14:00:00
+    &signals=liquid_rate,intake_pressure,discharge_pressure,motor_temperature
+    &aggregation=5m
+```
+
+Response:
+
+```json
+{
+  "asset_id": "FS-031",
+  "start_time": "...",
+  "end_time": "...",
+  "coverage": 0.98,
+  "series": [
+    {
+      "signal": "liquid_rate",
+      "unit": "BPD",
+      "quality": "GOOD",
+      "points": [
+        {
+          "timestamp": "...",
+          "value": 956.4
+        }
+      ]
+    }
+  ]
+}
+```
+
+This maps directly to the guideline's historian contract: tags + start/end + aggregation → timestamped values + quality + coverage. 
+
+---
+
+# 8. Test it independently before connecting the Agent
+
+This is important.
+
+Do:
+
+```text
+.db
+ ↓
+Historian Service
+```
+
+and test only the API.
+
+### Test 1 — health
+
+```http
+GET /health
+```
+
+Expected:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Test 2 — asset coverage
+
+```http
+GET /api/v1/historian/FS-031/available-signals
+```
+
+Expected:
+
+```text
+liquid_rate
+intake_pressure
+discharge_pressure
+motor_current
+motor_temperature
+...
+```
+
+### Test 3 — window
+
+```http
+GET /api/v1/historian/FS-031/window?... 
+```
+
+Verify:
+
+```text
+correct timestamps
+correct values
+correct asset
+correct signal
+correct unit
+```
+
+### Test 4 — aggregation
+
+Compare:
+
+```text
+raw
+1 minute
+5 minute
+15 minute
+1 hour
+```
+
+### Test 5 — quality
+
+Inject/check:
+
+```text
+missing samples
+duplicate samples
+stale samples
+bad quality
+out-of-order timestamps
+```
+
+### Test 6 — no-data period
+
+Ask for:
+
+```text
+FS-031
+2025-01-01 → 2025-01-02
+```
+
+Expected:
+
+```text
+empty / no coverage
+```
+
+not fabricated zeros.
+
+---
+
+# 9. Then compare Historian with Live Telemetry
+
+You now have:
+
+```text
+Live API
+   ↓
+Telemetry Service
+
+Historical DB
+   ↓
+Historian Service
+```
+
+Both should return canonical signal names.
+
+For example:
+
+```text
+Live:
+liquid_rate = 974.2 BPD
+
+Historian:
+liquid_rate = [...]
+```
+
+The Agent should not care where they came from.
+
+---
+
+# 10. Then connect it to the Agent
+
+Only after the historian API passes independently:
+
+```text
+Historian Service
+       ↓
+Historian Tool
+       ↓
+Tool Registry
+       ↓
+LangGraph
+```
+
+Then the query:
+
+> “Why did production drop during the last six hours?”
+
+becomes:
+
+```text
+User
+ ↓
+OP02_PRODUCTION_DECLINE_RCA
+ ↓
+get current telemetry
+ ↓
+historian.get_window()
+ ↓
+events
+ ↓
+engineering
+ ↓
+KB/faults
+ ↓
+ML
+ ↓
+Evidence Pack
+ ↓
+Advisory
+```
+
+The guideline explicitly describes this type of production-decline execution path. 
+
+---
+
+# 11. For prediction, the historian becomes critical
+
+Your previous architecture was missing this piece.
+
+Now:
+
+```text
+Live telemetry
+      +
+Historical telemetry
+      +
+Asset Context
+      +
+Engineering features
+      +
+ML model
+      ↓
+Production prediction
+```
+
+Historical data provides:
+
+```text
+baseline
+trend
+lag relationships
+degradation patterns
+training/inference windows
+event context
+```
+
+---
+
+# 12. For RCA it is equally important
+
+Example:
+
+```text
+02:00 frequency = 52 Hz
+02:15 flow begins falling
+02:20 PIP starts rising
+02:30 PDP declines
+02:45 current changes
+```
+
+The Agent can then reconstruct:
+
+```text
+EVENT
+  ↓
+SIGNAL CHANGE
+  ↓
+CORRELATION
+  ↓
+ENGINEERING DEVIATION
+  ↓
+FAULT HYPOTHESIS
+```
+
+Without historian data, you cannot reliably determine **onset and evolution**.
+
+---
+
+# 13. Where the `.db` file fits in the final architecture
+
+It should ultimately be:
+
+```text
+                         HISTORICAL DATA
+
+                           .db file
+                              |
+                         ETL / Import
+                              |
+                              v
+                    PostgreSQL / TimescaleDB
+                              |
+                       Historian Service
+                              |
+                    historian.get_window()
+                              |
+              +---------------+---------------+
+              |               |               |
+            Agent        Engineering         ML
+              |               |               |
+              +---------------+---------------+
+                              |
+                         Evidence Pack
+```
+
+The `.db` is therefore **input/source data**, not your final Agent interface.
+
+---
+
+# 14. Implementation sequence I recommend
+
+```text
+STEP 1
+Inspect .db
+   ↓
+STEP 2
+Identify timestamp / asset / signal / value / quality
+   ↓
+STEP 3
+Create canonical historian schema
+   ↓
+STEP 4
+Build importer
+   ↓
+STEP 5
+Load PostgreSQL + TimescaleDB
+   ↓
+STEP 6
+Build Historian REST API
+   ↓
+STEP 7
+Test Historian independently
+   ↓
+STEP 8
+Compare historical vs live contracts
+   ↓
+STEP 9
+Create historian Agent tool
+   ↓
+STEP 10
+Connect to Objective/LangGraph
+   ↓
+STEP 11
+Run RCA golden queries
+   ↓
+STEP 12
+Run prediction queries
+```
+
+### One thing I would do before anything else
+
+**Inspect the `.db` file.**
+
+The schema determines whether we can simply expose it through the Historian Service, whether it needs transformation, and whether we have enough data for production prediction/RCA.
+
+Upload the `.db` here, and I can inspect its tables/schema and tell you exactly **what it contains, what is missing, how to map it to the historian schema, and what the Historian API should expose**.

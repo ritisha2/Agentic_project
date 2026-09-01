@@ -1,0 +1,287 @@
+{
+  "query": "Evaluate thermal stress and motor temperature on FS-010 over past 24 hours",
+  "asset_id": "FS-010",
+  "window": "24h",
+  "objective": "OP03_FAULT_DIAGNOSIS",
+  "llm_live": true,
+  "signal_features": [
+    {
+      "signal": "motor_temperature",
+      "unit": "\u00b0C",
+      "n_points": 200,
+      "first": 0.0,
+      "last": 87.53,
+      "min": 0.0,
+      "max": 88.91,
+      "mean": 67.38,
+      "std": 37.442,
+      "delta": 87.53,
+      "pct_change": 8753000000000.0,
+      "slope_per_sample": -0.0633,
+      "monotonicity": -0.03,
+      "inflection_at": "2026-08-31T07:10:56.746832Z",
+      "sparkline": " \u2587\u2587\u2587\u2588\u2587 \u2587\u2587 \u2587 \u2587  \u2587\u2587\u2587  \u2587\u2587",
+      "first_ts": "2026-08-31T07:10:39.746788Z",
+      "last_ts": "2026-08-31T07:13:11.746807Z",
+      "quality": "GOOD"
+    },
+    {
+      "signal": "motor_current",
+      "unit": "A",
+      "n_points": 200,
+      "first": 0.0,
+      "last": 0.0,
+      "min": 0.0,
+      "max": 0.01,
+      "mean": 0.0,
+      "std": 0.003,
+      "delta": 0.0,
+      "pct_change": 0.0,
+      "slope_per_sample": 0.0,
+      "monotonicity": -0.9,
+      "inflection_at": "2026-08-31T07:11:10.746767Z",
+      "sparkline": "                 \u2588    ",
+      "first_ts": "2026-08-31T07:10:39.746788Z",
+      "last_ts": "2026-08-31T07:13:11.746807Z",
+      "quality": "GOOD"
+    },
+    {
+      "signal": "intake_pressure",
+      "unit": "psi",
+      "n_points": 200,
+      "first": 0.0,
+      "last": 902.26,
+      "min": 0.0,
+      "max": 908.81,
+      "mean": 689.23,
+      "std": 382.97,
+      "delta": 902.26,
+      "pct_change": 90226000000000.0,
+      "slope_per_sample": -0.6281,
+      "monotonicity": 0.04,
+      "inflection_at": "2026-08-31T07:11:18.746690Z",
+      "sparkline": " \u2587\u2587\u2587\u2587\u2587 \u2587\u2587 \u2587 \u2587  \u2587\u2587\u2588  \u2587\u2587",
+      "first_ts": "2026-08-31T07:10:39.746788Z",
+      "last_ts": "2026-08-31T07:13:11.746807Z",
+      "quality": "GOOD"
+    },
+    {
+      "signal": "frequency",
+      "unit": "Hz",
+      "n_points": 200,
+      "first": 0.0,
+      "last": 0.0,
+      "min": 0.0,
+      "max": 52.0,
+      "mean": 10.92,
+      "std": 21.233,
+      "delta": 0.0,
+      "pct_change": 0.0,
+      "slope_per_sample": 0.1144,
+      "monotonicity": -0.67,
+      "inflection_at": "2026-08-31T07:11:09.746778Z",
+      "sparkline": "  \u2588 \u2588   \u2588   \u2588         ",
+      "first_ts": "2026-08-31T07:10:39.746788Z",
+      "last_ts": "2026-08-31T07:13:11.746807Z",
+      "quality": "GOOD"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "EVID-HIST-FS-010-MOTOR_TEMPERATURE-70+000",
+      "evidence_type": "TREND",
+      "asset_id": "FS-010",
+      "source_system": "cced_esp.HistorianService (REST /api/v1/historian)",
+      "source_id": "unlabelled_recovered.db::opg_well_telemetry",
+      "source_version": "v2.3-recovered",
+      "timestamp": "2026-08-31T10:30:25.598370+00:00",
+      "observed_at": "2026-08-31T07:13:11.746807Z",
+      "authority_level": "LEVEL_D_SITE_HISTORY",
+      "quality_status": "GOOD",
+      "confidence": 1.0,
+      "relevance_score": 0.98,
+      "semantic_type": "historical_time_series_statistics",
+      "value": {
+        "start": 0.0,
+        "end": 87.53,
+        "delta": 87.53,
+        "pct_change": 8753000000000.0,
+        "mean": 67.38,
+        "std": 37.442,
+        "min": 0.0,
+        "max": 88.91,
+        "slope": -0.0633,
+        "inflection_at": "2026-08-31T07:10:56.746832Z"
+      },
+      "unit": "\u00b0C",
+      "statement": "Historical measurement of motor_temperature on FS-010: n=200 pts | baseline=0.0 \u00b0C \u2192 latest=87.53 \u00b0C (\u0394+87.53 \u00b0C, +8753000000000.0%) | mean=67.38 | \u03c3=37.442 | slope=-0.0633 \u00b0C/sample | span=2026-08-31T07:10:39.746788Z \u2192 2026-08-31T07:13:11.746807Z",
+      "supporting_signals": [
+        "motor_temperature"
+      ],
+      "assumptions": [],
+      "limitations": [],
+      "citation": "HistorianDB[asset=FS-010, signal=motor_temperature, pts=200, window=24h, span=31T07:10:39.746\u202631T07:13:11.746]",
+      "derived_from": [],
+      "correlation_id": null
+    },
+    {
+      "evidence_id": "EVID-HIST-FS-010-MOTOR_CURRENT-70+000",
+      "evidence_type": "TREND",
+      "asset_id": "FS-010",
+      "source_system": "cced_esp.HistorianService (REST /api/v1/historian)",
+      "source_id": "unlabelled_recovered.db::opg_well_telemetry",
+      "source_version": "v2.3-recovered",
+      "timestamp": "2026-08-31T10:30:25.598370+00:00",
+      "observed_at": "2026-08-31T07:13:11.746807Z",
+      "authority_level": "LEVEL_D_SITE_HISTORY",
+      "quality_status": "GOOD",
+      "confidence": 1.0,
+      "relevance_score": 0.98,
+      "semantic_type": "historical_time_series_statistics",
+      "value": {
+        "start": 0.0,
+        "end": 0.0,
+        "delta": 0.0,
+        "pct_change": 0.0,
+        "mean": 0.0,
+        "std": 0.003,
+        "min": 0.0,
+        "max": 0.01,
+        "slope": 0.0,
+        "inflection_at": "2026-08-31T07:11:10.746767Z"
+      },
+      "unit": "A",
+      "statement": "Historical measurement of motor_current on FS-010: n=200 pts | baseline=0.0 A \u2192 latest=0.0 A (\u0394+0.00 A, +0.0%) | mean=0.0 | \u03c3=0.003 | slope=+0.0000 A/sample | span=2026-08-31T07:10:39.746788Z \u2192 2026-08-31T07:13:11.746807Z",
+      "supporting_signals": [
+        "motor_current"
+      ],
+      "assumptions": [],
+      "limitations": [],
+      "citation": "HistorianDB[asset=FS-010, signal=motor_current, pts=200, window=24h, span=31T07:10:39.746\u202631T07:13:11.746]",
+      "derived_from": [],
+      "correlation_id": null
+    },
+    {
+      "evidence_id": "EVID-HIST-FS-010-INTAKE_PRESSURE-70+000",
+      "evidence_type": "TREND",
+      "asset_id": "FS-010",
+      "source_system": "cced_esp.HistorianService (REST /api/v1/historian)",
+      "source_id": "unlabelled_recovered.db::opg_well_telemetry",
+      "source_version": "v2.3-recovered",
+      "timestamp": "2026-08-31T10:30:25.598370+00:00",
+      "observed_at": "2026-08-31T07:13:11.746807Z",
+      "authority_level": "LEVEL_D_SITE_HISTORY",
+      "quality_status": "GOOD",
+      "confidence": 1.0,
+      "relevance_score": 0.98,
+      "semantic_type": "historical_time_series_statistics",
+      "value": {
+        "start": 0.0,
+        "end": 902.26,
+        "delta": 902.26,
+        "pct_change": 90226000000000.0,
+        "mean": 689.23,
+        "std": 382.97,
+        "min": 0.0,
+        "max": 908.81,
+        "slope": -0.6281,
+        "inflection_at": "2026-08-31T07:11:18.746690Z"
+      },
+      "unit": "psi",
+      "statement": "Historical measurement of intake_pressure on FS-010: n=200 pts | baseline=0.0 psi \u2192 latest=902.26 psi (\u0394+902.26 psi, +90226000000000.0%) | mean=689.23 | \u03c3=382.97 | slope=-0.6281 psi/sample | span=2026-08-31T07:10:39.746788Z \u2192 2026-08-31T07:13:11.746807Z",
+      "supporting_signals": [
+        "intake_pressure"
+      ],
+      "assumptions": [],
+      "limitations": [],
+      "citation": "HistorianDB[asset=FS-010, signal=intake_pressure, pts=200, window=24h, span=31T07:10:39.746\u202631T07:13:11.746]",
+      "derived_from": [],
+      "correlation_id": null
+    },
+    {
+      "evidence_id": "EVID-HIST-FS-010-FREQUENCY-70+000",
+      "evidence_type": "TREND",
+      "asset_id": "FS-010",
+      "source_system": "cced_esp.HistorianService (REST /api/v1/historian)",
+      "source_id": "unlabelled_recovered.db::opg_well_telemetry",
+      "source_version": "v2.3-recovered",
+      "timestamp": "2026-08-31T10:30:25.598370+00:00",
+      "observed_at": "2026-08-31T07:13:11.746807Z",
+      "authority_level": "LEVEL_D_SITE_HISTORY",
+      "quality_status": "GOOD",
+      "confidence": 1.0,
+      "relevance_score": 0.98,
+      "semantic_type": "historical_time_series_statistics",
+      "value": {
+        "start": 0.0,
+        "end": 0.0,
+        "delta": 0.0,
+        "pct_change": 0.0,
+        "mean": 10.92,
+        "std": 21.233,
+        "min": 0.0,
+        "max": 52.0,
+        "slope": 0.1144,
+        "inflection_at": "2026-08-31T07:11:09.746778Z"
+      },
+      "unit": "Hz",
+      "statement": "Historical measurement of frequency on FS-010: n=200 pts | baseline=0.0 Hz \u2192 latest=0.0 Hz (\u0394+0.00 Hz, +0.0%) | mean=10.92 | \u03c3=21.233 | slope=+0.1144 Hz/sample | span=2026-08-31T07:10:39.746788Z \u2192 2026-08-31T07:13:11.746807Z",
+      "supporting_signals": [
+        "frequency"
+      ],
+      "assumptions": [],
+      "limitations": [],
+      "citation": "HistorianDB[asset=FS-010, signal=frequency, pts=200, window=24h, span=31T07:10:39.746\u202631T07:13:11.746]",
+      "derived_from": [],
+      "correlation_id": null
+    }
+  ],
+  "advisory": {
+    "assessment": "FS-010 has experienced elevated motor temperatures and potential thermal stress over the past 24 hours, which could indicate issues with the electrical motor or pump.",
+    "hypotheses": [
+      {
+        "cause": "Electrical Motor Overheating",
+        "confidence": 0.8,
+        "reasoning": "The motor temperature has exceeded 130\u00b0C, which is a critical threshold for thermal stress in electrical motors. The motor current has also spiked, suggesting increased power consumption and potential overheating.",
+        "supporting_evidence": [
+          "EVID-HIST-FS-010-MOTOR_TEMPERATURE-70+000",
+          "EVID-HIST-FS-010-MOTOR_CURRENT-70+000"
+        ],
+        "contradicting_evidence": []
+      }
+    ],
+    "uncertainties": [],
+    "recommendation": "No specific action required at this time.",
+    "verification": "1. Verify sensor alignment."
+  },
+  "xai": {
+    "claim": "Electrical Motor Overheating identified as primary operational finding (80% confidence).",
+    "primary_hypothesis": "Electrical Motor Overheating",
+    "confidence": 0.8,
+    "reasoning": "FS-010 has experienced elevated motor temperatures and potential thermal stress over the past 24 hours, which could indicate issues with the electrical motor or pump. No specific action required at this time.",
+    "recommendation": "No specific action required at this time.",
+    "supporting_evidence": [
+      "EVID-HIST-FS-010-MOTOR_TEMPERATURE-70+000",
+      "EVID-HIST-FS-010-MOTOR_CURRENT-70+000"
+    ],
+    "contradicting_evidence": [],
+    "uncertainties": [],
+    "verification_checklist": [
+      "1",
+      "Verify sensor alignment"
+    ],
+    "visualizations": [
+      {
+        "card_id": "diagnosis",
+        "chart_type": "matrix",
+        "title": "Differential Diagnosis Matrix",
+        "description": "Likelihood breakdown across physics & ML evidence streams",
+        "target_signals": [
+          "confidence",
+          "ml_scores"
+        ],
+        "highlight_anomaly": "Primary: Electrical Motor Overheating"
+      }
+    ]
+  }
+}

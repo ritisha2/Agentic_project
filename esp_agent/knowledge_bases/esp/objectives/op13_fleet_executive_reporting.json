@@ -13,7 +13,11 @@
     "generate fleet report",
     "fleet health summary",
     "overall field status",
-    "fleet dashboard report"
+    "fleet dashboard report",
+    "overall field uptime",
+    "total bpd",
+    "fleet health index distribution",
+    "weekly management report"
   ],
   "required_asset_context": [],
   "required_signals": [],

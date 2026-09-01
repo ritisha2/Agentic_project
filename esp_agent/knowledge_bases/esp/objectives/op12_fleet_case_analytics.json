@@ -12,7 +12,11 @@
     "recurring failures",
     "cluster failure patterns",
     "fleet incident history",
-    "historical patterns across wells"
+    "historical patterns across wells",
+    "find historical cases",
+    "similar scale accumulation",
+    "past workover success rates",
+    "past workover success"
   ],
   "required_asset_context": [],
   "required_signals": [],

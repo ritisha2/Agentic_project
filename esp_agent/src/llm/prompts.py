@@ -49,37 +49,82 @@ ESP_DOMAIN_RULES = """ESP DOMAIN DIAGNOSTIC RULES:
 # 3. Objective Prompts Layer
 # ---------------------------------------------------------------------------
 OBJECTIVE_PROMPTS: Dict[str, str] = {
-    "OP01_PRODUCTION_DECLINE": """OBJECTIVE: Root Cause Analysis for ESP Production Decline.
+    "OP00_OPERATIONAL_CONTROL": """OBJECTIVE: Operational Safeguard & Direct Control Refusal Policy.
+Task Requirements:
+1. Explain clearly in "assessment" that direct remote actuation commands (start/stop/change frequency) cannot be executed autonomously because Agent Jane is locked in Advisory-Only mode under Safety Policy.
+2. Return an empty list [] for "hypotheses" as this is a command refusal, not a diagnostic investigation.
+3. In "recommendation", instruct the operator to contact the authorized Control Room Operator (CRO) or execute via approved SCADA interface.
+4. Set "verification" to "Confirm authorization with lead operations supervisor before manual SCADA adjustments."
+""",
+    "OP01_CURRENT_STATUS": """OBJECTIVE: Current Operational Status & Operating Point Baseline.
+Task Requirements:
+1. Summarize current running telemetry (PIP, PDP, Motor Temp, Freq, Current) and compare against BEP and operating limits.
+2. If metrics are stable within limits, note system health is nominal.
+3. Identify any baseline deviations in hypotheses.
+4. Recommend routine surveillance interval.
+""",
+    "OP02_PRODUCTION_DECLINE_RCA": """OBJECTIVE: Root Cause Analysis for ESP Production Decline.
 Task Requirements:
 1. Analyze liquid flow rate decline against baseline TDH and BEP curves.
-2. Differentiate between Intake Gas Interference (slugging) vs Mechanical Pump Wear.
+2. Differentiate between Intake Gas Interference (slugging) vs Mechanical Pump Wear or Inflow Restriction.
 3. Reference specific frozen evidence IDs (e.g. EV-001, EV-007) in hypotheses.
 4. Recommend actionable operator verification checklist.
 """,
-    "OP02_MOTOR_FAULT": """OBJECTIVE: ESP Electrical Motor Thermal & Insulation Risk Assessment.
-Task Requirements:
-1. Evaluate motor winding temperature trends and current stability.
-2. Assess 24h thermal overload risk and remaining useful life (RUL).
-3. Identify immediate cooling, frequency reduction, or trip mitigation.
-""",
     "OP03_FAULT_DIAGNOSIS": """OBJECTIVE: Comprehensive Multi-Hypothesis ESP Fault Classification.
 Task Requirements:
-1. Compare physics-based model outputs against ML classifier scores.
-2. Resolve potential conflicts between telemetry trends and ML predictions.
-3. Assign confidence scores (0.0 to 1.0) to top 2 failure mode hypotheses.
+1. Compare physics-based model outputs against telemetry indicators.
+2. Assign confidence scores (0.0 to 1.0) to top failure mode hypotheses.
+3. Provide causal reasoning grounded in sensor evidence tags.
 """,
-    "OP04_MAINTENANCE_PREDICTION": """OBJECTIVE: Predictive Maintenance & RUL Optimization.
+    "OP04_HEALTH_ASSESSMENT": """OBJECTIVE: Health Index, Degradation & Remaining Useful Life (RUL).
 Task Requirements:
-1. Estimate remaining useful life and failure mode progression.
-2. Recommend preventive workover window or VSD speed adjustment.
+1. Evaluate equipment degradation trajectory and 24h/72h/7d failure risk horizons.
+2. Report Health Index (0-100) and identify primary degrading components.
+3. Recommend preventive workover window or operating envelope adjustments.
+""",
+    "OP05_EARLY_WARNING": """OBJECTIVE: Early Warning Anomaly & Thermal/Submergence Proximity Alert.
+Task Requirements:
+1. Detect subtle multi-variate signal drift before hardware alarm trips.
+2. Assess proximity to motor thermal limit (130°C) or minimum submergence (PIP < 200 psi).
+3. Recommend proactive choke or frequency trim to prevent downtime.
+""",
+    "OP06_PROCEDURE_LOOKUP": """OBJECTIVE: Standard Operating Procedure (SOP) & OEM Manual Reference.
+Task Requirements:
+1. Provide verified troubleshooting steps and guidelines from OEM specifications.
+2. List step-by-step mitigation procedures.
 """,
     "OP07_GENERAL_INQUIRY": """OBJECTIVE: General Conversational Inquiry (greeting, identity, or capability question).
 Task Requirements:
 1. Respond conversationally and briefly introduce yourself as Agent Jane and your role.
 2. This is NOT a diagnostic request — do not fabricate fault hypotheses or evidence.
 3. Leave "hypotheses" as an empty list [] since there is no diagnostic question to evaluate.
-4. Set "recommendation" to a brief, friendly prompt inviting the user to ask a diagnostic
-   or operational question (e.g. "Ask me to diagnose an asset or check its current status.").
+4. Set "recommendation" to a brief, friendly prompt inviting the user to ask a diagnostic or operational question.
+""",
+    "OP08_FLEET_INVENTORY": """OBJECTIVE: Fleet Inventory & Multi-Asset Discovery.
+Task Requirements:
+1. Summarize active vs stopped pumps and compare installed models across requested wells.
+2. Format findings as a multi-well asset comparison.
+""",
+    "OP09_FLEET_PRODUCTION_OPTIMIZATION": """OBJECTIVE: Fleet-Wide Production Optimization & Power Balancing.
+Task Requirements:
+1. Identify high-potential optimization candidates across the field.
+2. Balance frequency adjustments against substation electrical capacity.
+""",
+    "OP10_FLEET_DESIGN_SIZING": """OBJECTIVE: Fleet Operating Envelopes & Hydraulic Design Sizing.
+Task Requirements:
+1. Evaluate whether pumps across the field operate inside OEM recommended head-capacity envelopes.
+""",
+    "OP11_FLEET_MAINTENANCE_PRIORITY": """OBJECTIVE: Fleet Risk Ranking & Workover Prioritization.
+Task Requirements:
+1. Rank top highest-risk wells across the fleet based on RUL, thermal stress, and failure probability.
+""",
+    "OP12_FLEET_CASE_ANALYTICS": """OBJECTIVE: Historical Case Analytics & Incident Clustering.
+Task Requirements:
+1. Match current symptoms against historical workover records and known field failure cases.
+""",
+    "OP13_FLEET_EXECUTIVE_REPORTING": """OBJECTIVE: Executive Performance Summary & Daily/Weekly KPI Briefing.
+Task Requirements:
+1. Summarize total field uptime, production delivery, and critical risk items for management review.
 """,
 }
 

@@ -4,7 +4,7 @@
   "title": "Early Warning Anomaly Detection",
   "description": "Detect early subtle multi-variate signal anomalies before alarms trip.",
   "strategic_objectives": ["O2", "O5"],
-  "intent_classes": ["anomaly", "early warning", "unusual", "deviation", "subtle change"],
+  "intent_classes": ["anomaly", "early warning", "unusual", "deviation", "subtle change", "motor temperature rising", "trip limit", "threshold violations", "approaching minimum submergence"],
   "required_asset_context": ["asset_id"],
   "required_signals": ["vibration_x", "intake_temperature", "motor_temperature", "tool_current"],
   "required_evidence": ["anomaly_model_output", "rule_status"],

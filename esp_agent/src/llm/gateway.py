@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Defaults to llama.cpp HTTP server (llama-server) on CPU (http://localhost:8080/v1)
 LLM_GATEWAY_URL: str = os.getenv("LLM_GATEWAY_URL", "http://localhost:8080/v1")
 LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "Qwen2.5-Coder-3B-Instruct")
-LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "60.0"))
+LLM_TIMEOUT_SEC: float = float(os.getenv("LLM_TIMEOUT_SEC", "120.0"))
 LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
 # Health probe timeout — must tolerate a model still loading weights, not just a warm server.
 LLM_HEALTH_TIMEOUT_SEC: float = float(os.getenv("LLM_HEALTH_TIMEOUT_SEC", "2.0"))
@@ -122,7 +122,7 @@ class LLMGateway:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.0,
-        max_tokens: int = 180,
+        max_tokens: int = 512,
         json_mode: bool = False,
     ) -> LLMGatewayResponse:
         """

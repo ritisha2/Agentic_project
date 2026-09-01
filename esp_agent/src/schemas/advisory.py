@@ -12,6 +12,7 @@ class AdvisoryEvidenceItem(BaseModel):
     observation: str = Field(description="Observed value or claim text")
     timestamp: str = Field(description="ISO timestamp")
     page: Optional[int] = Field(default=None, description="Page number if KB document")
+    source_deep_link: Optional[str] = Field(default=None, description="Direct URL to database web viewer or GUI")
 
 class StandardAdvisoryPayload(BaseModel):
     advisory_id: str = Field(description="Unique advisory generation ID")

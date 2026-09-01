@@ -4,7 +4,7 @@
   "title": "Asset Current Operational Status",
   "description": "Assess and report live operational metrics, running state, and immediate telemetry snapshot.",
   "strategic_objectives": ["O1", "O4"],
-  "intent_classes": ["status", "running", "stopped", "how is", "current status", "operational state"],
+  "intent_classes": ["status", "running", "stopped", "how is", "current status", "operational state", "current operating point", "operating point", "condition of", "operating close to", "performing right now"],
   "required_asset_context": ["asset_id", "status", "pump_model", "operating_envelope"],
   "required_signals": ["frequency", "motor_temperature", "intake_pressure", "discharge_pressure", "drive_current_average"],
   "required_evidence": ["current_snapshot"],

@@ -172,13 +172,12 @@ except Exception as e:
 # 13. Historical Telemetry
 # =============================================================================
 try:
-    conn = sqlite3.connect("X:/TAS/Agentic_project/cced_esp/data/unlabelled.db")
-    c = conn.cursor()
-    hist_rows = c.execute("SELECT timestamp, intake_pressure_psi, pressure_psi, temperature_c, flow_rate_bpd FROM opg_well_telemetry WHERE well_id=? OR asset_id LIKE ? ORDER BY id DESC LIMIT 50", (ASSET_ID, f"%{ASSET_ID}%")).fetchall()
-    conn.close()
-    record(13, "Historical Telemetry", "Time-series window (6h / 24h / 7d)", "Historian DB", "PASS", f"Retrieved {len(hist_rows)} rolling points from unlabelled.db", "Time-series continuity")
+    from src.tools.fetch_telemetry import get_history_window_tool
+    hist_payload = get_history_window_tool(asset_id=ASSET_ID, limit=50)
+    hist_rows = hist_payload.series[0].points if hist_payload.series else []
+    record(13, "Historical Telemetry", "Time-series window (6h / 24h / 7d)", "Historian Service", "PASS", f"Retrieved {hist_payload.total_points} rolling points via get_history_window (coverage={hist_payload.coverage})", "Time-series continuity")
 except Exception as e:
-    record(13, "Historical Telemetry", "Time-series window (6h / 24h / 7d)", "Historian DB", "FAIL", str(e))
+    record(13, "Historical Telemetry", "Time-series window (6h / 24h / 7d)", "Historian Service", "FAIL", str(e))
 
 # =============================================================================
 # 14. Historical Metadata

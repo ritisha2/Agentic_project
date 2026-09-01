@@ -52,22 +52,27 @@ class IntentRouter:
 
         objectives = self.registry.list_all()
 
+        # Detect fleet / multi-asset intent signals early
+        is_fleet_query = any(w in q_lower for w in ["fleet", "all wells", "all assets", "which wells", "rank", "across the field", "entire field", "total field", "between fs-", "compare the installed"])
+        has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
+
         # Path A: Specificity-First Deterministic & Variant Keyword Matching
-        # All candidate keywords across objectives, safety rules, and variants are collected
-        # and sorted by phrase length (longest multi-word phrases match first to prevent shadowing).
         rules = []
         for obj in objectives:
             is_safety = obj.objective_id in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
+            is_fleet_obj = obj.scope == "fleet" or obj.objective_id.startswith("OP08") or obj.objective_id.startswith("OP09") or obj.objective_id.startswith("OP10") or obj.objective_id.startswith("OP11") or obj.objective_id.startswith("OP12") or obj.objective_id.startswith("OP13")
+
+            base_prio = 100 if is_safety else (20 if (is_fleet_query and is_fleet_obj) else (15 if (not is_fleet_query and not is_fleet_obj) else 1))
+
             for kw in obj.intent_classes:
-                priority = 10 if is_safety else 1
-                rules.append((kw, obj.objective_id, 0.95, "Path_A_Deterministic", priority))
+                rules.append((kw, obj.objective_id, 0.95, "Path_A_Deterministic", base_prio))
 
             for var in obj.workflow_variants:
                 for kw in var.intent_classes:
-                    rules.append((kw, obj.objective_id, 0.96, f"Path_A_Variant_{var.variant_id}", 5))
+                    rules.append((kw, obj.objective_id, 0.96, f"Path_A_Variant_{var.variant_id}", base_prio + 2))
 
-        # Sort globally by: word count (descending), priority (descending), character length (descending)
-        rules.sort(key=lambda r: (len(r[0].split()), r[4], len(r[0])), reverse=True)
+        # Sort globally by: priority (descending), word count (descending), character length (descending)
+        rules.sort(key=lambda r: (r[4], len(r[0].split()), len(r[0])), reverse=True)
 
         for kw, obj_id, conf, path_lbl, _ in rules:
             kw_lower = kw.lower()

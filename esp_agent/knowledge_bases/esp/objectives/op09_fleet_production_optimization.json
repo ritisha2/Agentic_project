@@ -13,7 +13,12 @@
     "which wells have most upside",
     "optimize production across the fleet",
     "fleet optimization",
-    "rank fleet production"
+    "rank fleet production",
+    "production gain potential",
+    "rank all operating wells",
+    "deviation from best efficiency point",
+    "optimize total field production",
+    "within power limits"
   ],
   "required_asset_context": [],
   "required_signals": [],
