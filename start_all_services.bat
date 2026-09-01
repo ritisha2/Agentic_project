@@ -31,7 +31,8 @@ echo [2/5] Initializing Database Schemas & Knowledge Graphs...
 %PY_EXEC% esp_agent\scripts\init_db.py >nul 2>&1
 %PY_EXEC% esp_agent\scripts\seed_db.py >nul 2>&1
 %PY_EXEC% esp_agent\scripts\seed_neo4j.py >nul 2>&1
-echo [+] Neo4j & PostgreSQL verified and seeded.
+%PY_EXEC% esp_agent\scripts\seed_qdrant.py >nul 2>&1
+echo [+] Neo4j, Qdrant & PostgreSQL verified and seeded.
 echo.
 
 :: 4. Start cced_esp Backend REST Service (:8000)
