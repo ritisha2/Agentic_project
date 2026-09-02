@@ -48,9 +48,11 @@ class IntentRouter:
     # _GREETING_PREFIX: patterns that are ALWAYS social openers regardless of suffix.
     # Deliberately excludes "morning,", "afternoon,", "evening," — time-of-day words
     # followed by a request ("morning, can you check...") are operational, not small-talk.
-    _GREETING_EXACT = {"hi", "hello", "hey", "who are you", "what can you do",
-                       "help", "role", "identity", "good morning", "good afternoon",
-                       "good evening", "morning", "afternoon", "evening"}
+    _GREETING_EXACT = {
+        "hi", "hello", "hey", "who are you", "what can you do",
+        "help", "role", "identity", "good morning", "good afternoon",
+        "good evening", "morning", "afternoon", "evening"
+    }
     _GREETING_PREFIX = ("hi ", "hello ", "hey ")
 
     def __init__(self, registry: Optional[ObjectiveRegistry] = None):
@@ -81,7 +83,7 @@ class IntentRouter:
         obj_list = "\n".join(
             f"- {o.objective_id}: {o.title}"
             for o in objectives
-            if o.objective_id not in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL", "OP07_GENERAL_INQUIRY")
+            if o.objective_id not in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
         )
 
         messages = [
@@ -89,8 +91,9 @@ class IntentRouter:
                 "role": "system",
                 "content": (
                     "You are an ESP pump monitoring assistant.\n"
-                    "Classify the operator query into exactly ONE of the operational objective IDs below.\n"
-                    "If the query asks to check status, inspect health, or take a look at an asset, choose OP01_CURRENT_STATUS or OP03_FAULT_DIAGNOSIS.\n"
+                    "Classify the operator query into exactly ONE of the objective IDs below.\n"
+                    "If the query asks to check status, inspect health, or diagnose a problem on a well, choose OP01_CURRENT_STATUS or OP03_FAULT_DIAGNOSIS.\n"
+                    "If the query is casual slang, greeting, general banter, or non-technical conversation, choose OP07_GENERAL_INQUIRY.\n"
                     "Reply with only the objective_id, nothing else.\n\n"
                     f"Objectives:\n{obj_list}"
                 ),
@@ -108,6 +111,15 @@ class IntentRouter:
                         "IntentRouter Path LLM: '%s' → %s", user_query[:40], obj.objective_id
                     )
                     return RouteResult(obj.objective_id, 0.75, "Path_LLM_Fallback", False)
+
+            # Option A: If the LLM replied conversationally without emitting an exact objective ID,
+            # treat it as general inquiry / conversational small talk rather than failing silently.
+            if raw:
+                logger.info(
+                    "IntentRouter Path LLM: Conversational response ('%s') on '%s' → defaulting to OP07_GENERAL_INQUIRY",
+                    raw[:40], user_query[:40]
+                )
+                return RouteResult("OP07_GENERAL_INQUIRY", 0.75, "Path_LLM_Fallback", False)
         except Exception as ex:
             logger.warning("IntentRouter: LLM fallback call failed (%s)", ex)
         return None
@@ -158,8 +170,18 @@ class IntentRouter:
 
         q_lower = user_query.lower().strip()
 
-        # ── B4.T2: Generalised greeting / small-talk bucket ───────────────────
-        if q_lower in self._GREETING_EXACT or any(q_lower.startswith(p) for p in self._GREETING_PREFIX):
+        # ── B4.T2: Generalised greeting / small-talk bucket (Option C) ───────────
+        # Elongated casual variants ("hiiiii", "heyyy", "heeeello", "hiiiii!") collapse
+        # repeated letters and strip trailing punctuation before matching, so they land in OP07
+        # instead of falling through to the ambiguous/clarification path.
+        q_clean = q_lower.rstrip("!?. ,")
+        q_collapsed = re.sub(r"([a-z])\1{2,}", r"\1", q_clean)
+        if (
+            q_clean in self._GREETING_EXACT
+            or q_collapsed in self._GREETING_EXACT
+            or any(q_clean.startswith(p) for p in self._GREETING_PREFIX)
+            or any(q_collapsed.startswith(p) for p in self._GREETING_PREFIX)
+        ):
             logger.info("IntentRouter Path A (Greeting): Small talk / greeting detected.")
             return RouteResult("OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting", False)
 
@@ -206,11 +228,15 @@ class IntentRouter:
 
         # Conversational / generic stop words to avoid false positive substring/token matching
         STOP_WORDS = {
-            "this", "that", "there", "then", "with", "from", "have", "been",
+            "the", "and", "why", "how", "for", "are", "can", "you", "give", "get",
+            "got", "all", "any", "not", "but", "who", "his", "her", "its", "our",
+            "out", "now", "see", "too", "use", "way", "yet", "low", "down", "bug",
+            "this", "that", "there", "then", "with", "from", "have", "been", "was",
             "were", "what", "when", "where", "which", "will", "would", "could",
             "should", "about", "into", "over", "some", "take", "look", "things",
             "morning", "afternoon", "evening", "please", "check", "tell", "show",
-            "well", "wells", "asset", "assets", "pump", "pumps", "okay", "good"
+            "well", "wells", "asset", "assets", "pump", "pumps", "okay", "good",
+            "fsws", "well"
         }
         query_tokens = set(re.findall(r"\b[a-z]{3,}\b", q_lower)) - STOP_WORDS
 

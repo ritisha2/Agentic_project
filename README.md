@@ -16,6 +16,8 @@
    - [Level A: Conversational Memory & Implicit Resolution](#3-level-a-conversational-memory--implicit-resolution)
    - [Level B: HITL Clarification & Intelligent Routing](#4-level-b-hitl-clarification--intelligent-routing)
    - [Level C: Durability & Long-Term Well Memory](#5-level-c-durability--long-term-well-memory)
+   - [ML Telemetry Polling API (Secure Historical Access)](#6-ml-telemetry-polling-api-secure-historical-access)
+   - [Local CUDA GPU LLM Acceleration (RTX 3050)](#7-local-cuda-gpu-llm-acceleration-rtx-3050)
 5. [Quickstart: Single-Laptop Operation](#-quickstart-single-laptop-operation)
 6. [Detailed CLI Command Guide](#-detailed-cli-command-guide)
    - [Multi-Service Launcher](#1-multi-service-launcher)
@@ -78,10 +80,10 @@ Unlike conventional chatbots, Agent Jane combines:
             |                         |                          |
             v                         v                          v
 +-----------------------+ +-----------------------+ +-----------------------+
-|    REDIS (Port 6379)  | |   QDRANT (Port 6333)  | |   OFFICE LLM SERVER   |
+|    REDIS (Port 6379)  | |   QDRANT (Port 6333)  | |  CUDA GPU LLM SERVER  |
 | - ConversationStore   | | - esp_kb Collection   | | - llama-server :8080  |
 | - RedisCheckpointer   | | - Vector Embeddings   | | - Qwen2.5-Coder-3B    |
-| - WellEpisodicMemory  | | - OEM Manual RAG      | | - 4B-safe Prompting   |
+| - WellEpisodicMemory  | | - OEM Manual RAG      | | - RTX 3050 CUDA / GPU |
 +-----------------------+ +-----------------------+ +-----------------------+
 ```
 
@@ -93,9 +95,10 @@ Unlike conventional chatbots, Agent Jane combines:
 |---|---|---|---|
 | `:3000` | **React Frontend** | `cced_esp/frontend-react` | Operator UI, live asset telemetry, Agent Jane dock |
 | `:8000` | **Core Backend API** | `cced_esp/backend/main.py` | Telemetry REST API, SSE stream, VFD diagnostics |
+| `:8000` | **ML Telemetry API** | `cced_esp/backend/api/ml_telemetry_routes.py` | Authenticated polling of `unlabelled.db` (tabular/JSON) |
 | `:8090` | **Agent Jane BFF** | `esp_agent/run_agent_server.py` | FastAPI gateway for LangGraph agent runs & streaming |
 | `:1883` | **MQTT Broker** | Mosquitto | Pub/sub broker for real-time ESP pump telemetry |
-| `:8080` | **LLM Inference Server** | `llama-server` | Local CPU/GPU GGUF inference (Qwen2.5-Coder-3B) |
+| `:8080` | **LLM Inference Server** | `bin/llama-cpp/llama-server.exe` | Local CUDA GPU GGUF inference (RTX 3050 CUDA 12.4) |
 | `:6379` | **Redis Cache & Memory** | Redis Server | Session memory, LangGraph checkpoints, well history |
 | `:6333` | **Qdrant Vector DB** | Qdrant Engine | Knowledge base embeddings (`esp_kb`) for RAG retrieval |
 | `:7474` / `:7687` | **Neo4j Graph DB** | Neo4j | Equipment topology and failure mode knowledge graph |
@@ -109,14 +112,18 @@ Unlike conventional chatbots, Agent Jane combines:
   - `frequency`, `motor_current`, `voltage`, `active_power`, `power_factor`
   - `intake_pressure` (PIP), `discharge_pressure` (PDP), `motor_temperature`, `vibration_x/y`
   - `flow_rate`, `choke_position`, `drive_frequency_reference`, `output_torque`
-- **Zero-Loss Historian (`unlabelled_recovered.db`)**: High-speed SQLite ingestion with multi-column covering indexes (`asset_id`, `timestamp`) indexing millions of rows without table lockups.
-- **Historian Query Utility (`esp_agent/query_historian.py`)**: CLI and API tool that parses plain-English questions into bounded SQL queries, computes 6-hour statistical rollups, and extracts source-cited Level-D evidence packs.
+- **Zero-Loss Live Historian (`cced_esp/data/unlabelled.db`)**: High-speed SQLite ingestion continuously populated via live broker injection with over 2,685,000+ historical records. Multi-column covering indexes (`asset_id`, `timestamp`) allow instantaneous sub-10ms range scans.
+- **Historian Query Utility (`esp_agent/query_historian.py`)**: CLI and API tool that parses plain-English questions into bounded SQL queries against `unlabelled.db`, computes statistical rollups, detects inflection points, and extracts source-cited Level-D ground-truth evidence packs.
 
 ### 2. Dual-Tier Machine Learning & VFD Diagnostics
-- **Offline Physics & Calibration Models (`ESP_APM_models/`)**: Anomaly detectors and head degradation models calibrated against individual well baselines (`well_calibration_registry.json`).
+- **Single Source of Truth (`code/models/`)**: Fully consolidated, zero-syntax-error ML engine located in `code/models/` (legacy `ESP_APM_models/` retired):
+  - `WellDiagnosticEngine`: Live orchestrator with dynamic normalization and dynamic head ($\Delta P$) engineering.
+  - `SiteTelemetryAdapter`: Bridges raw SCADA keys into canonical 14-parameter vectors with well-calibrated fallback envelopes.
+  - `WellCalibrationRegistry`: Pre-computed statistical envelopes across 73 individual CCED wells (`well_calibration_registry.json`).
+  - `FaultClassificationEngine`: 13-fault mode classifier including Phase Imbalance ($I_{\text{imb}}, V_{\text{imb}}$), Dry-Well Pump Off, Blocked Intake, Sand Ingestion, Bearing Degradation, and Motor Overload.
+  - `MultivariateAnomalyDetector`: Statistical outlier detector flagging abnormal multi-sensor operating states.
 - **Online VFD Diagnostic Engine (`cced_esp/backend/services/vfd_diagnostic_service.py`)**:
-  - Detects **High Backpressure**, **Gas Interference / Gas Lock**, **Pump-off**, **Mechanical Wear**, and **Underload**.
-  - Computes health indices and real-time physical rule deviations.
+  - Automatically processes live MQTT payloads, computes health indices ($0-100$), generates pretty Operator Diagnostic Intelligence Cards to console, and appends durable audit logs to `cced_esp/data/logs/vfd_diagnostics.jsonl`.
   - Injected directly into the supervisor context as structured evidence (`EVID-VFD-*`).
 
 ### 3. Level A: Conversational Memory & Implicit Resolution
@@ -151,6 +158,23 @@ Unlike conventional chatbots, Agent Jane combines:
 - **Restart-Safe LangGraph Checkpointer (`RedisCheckpointer`)**:
   - Subclasses `MemorySaver`, serializing checkpoint states, blobs, and writes to Redis (`esp:lg_check:{thread_id}`) via base64-encoded binary payloads (7-day TTL).
   - Re-hydrates interrupted threads across backend process restarts, enabling true restart-safe HITL continuation.
+
+### 6. ML Telemetry Polling API (Secure Historical Access)
+- **High-Performance REST Extraction (`cced_esp/backend/api/ml_telemetry_routes.py`)**:
+  - Dedicated authenticated API for ML engineers and training pipelines to query `unlabelled.db` without filesystem access.
+  - `GET /api/v1/telemetry/unlabelled`: Single-asset time-window polling with timestamp cursor pagination.
+  - `POST /api/v1/telemetry/unlabelled/query`: Multi-asset batch extraction.
+  - `format=tabular`: Directly consumable by Pandas (`pd.DataFrame(resp["data"])`) or PyTorch `DataLoader`.
+  - Non-blocking `aiosqlite` reads with `PRAGMA query_only = ON` safe for concurrent live MQTT ingestion writes.
+  - Security gates: Mandatory `X-Broker-ID` header or `broker_id` query parameter validated against registered brokers.
+  - Complete integration guide: See [`SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md`](SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md).
+
+### 7. Local CUDA GPU LLM Acceleration (RTX 3050)
+- **Zero External API Dependency**:
+  - Powered by local `bin/llama-cpp/llama-server.exe` with NVIDIA CUDA 12.4 runtime (`ggml-cuda.dll`, `cublas64_12.dll`).
+  - Benchmarked on NVIDIA GeForce RTX 3050: **Prompt processing: 1,801 tok/s** | **Generation: 58 tok/s**.
+  - Default model: `models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf`.
+  - 1-Click launcher: `start_gpu_llm.bat` (launches server on `http://127.0.0.1:8080/v1`).
 
 ---
 
@@ -217,7 +241,7 @@ cd X:\TAS\Agentic_project\cced_esp
 
 ### 2. Historian Query CLI
 
-Query the SQLite telemetry database (`unlabelled_recovered.db`) using natural language:
+Query the live SQLite telemetry database (`cced_esp/data/unlabelled.db`) using natural language:
 
 ```powershell
 cd X:\TAS\Agentic_project\esp_agent
@@ -274,29 +298,51 @@ curl -X POST http://localhost:8090/api/ui/agent/run `
     "user_query": "morning, can you take a look at things?"
   }'
 ```
-*Expected response: An advisory with `objective_id: "CLARIFICATION"` and question asking which well to inspect.*
+#### ML Telemetry Polling API (`/api/v1/telemetry/unlabelled`)
+```powershell
+# 1. Poll latest 100 historical telemetry points for FS-031 with Broker ID authentication
+curl "http://localhost:8000/api/v1/telemetry/unlabelled?asset_id=FS-031&limit=100" `
+  -H "X-Broker-ID: CCED-ML-TEST-01"
+
+# 2. Extract in Tabular format for Pandas / NumPy ingestion
+curl "http://localhost:8000/api/v1/telemetry/unlabelled?asset_id=FS-031&format=tabular&limit=500" `
+  -H "X-Broker-ID: CCED-ML-TEST-01"
+
+# 3. Batch multi-asset extraction
+curl -X POST "http://localhost:8000/api/v1/telemetry/unlabelled/query" `
+  -H "Content-Type: application/json" `
+  -H "X-Broker-ID: CCED-ML-TEST-01" `
+  -d '{
+    "asset_ids": ["FS-031", "FS-010", "ULFA-5"],
+    "limit_per_asset": 200,
+    "format": "tabular"
+  }'
+```
+*Interactive Swagger Documentation available at: `http://localhost:8000/docs#/ML%20Telemetry`*
 
 ---
 
 ## 🧪 Running the Test Suites
 
-All test suites are located in `esp_agent/tests` and run via pytest:
+All test suites can be executed using the project Python virtual environment:
 
 ```powershell
-cd X:\TAS\Agentic_project\esp_agent
+# 1. Run ML Telemetry API Tests (7 integration tests)
+esp_agent\.venv\Scripts\pytest.exe tests/test_ml_telemetry_api.py -v
 
-# 1. Run Level A Tests (Conversational Memory & Context)
+# 2. Run 13-Fault Scenario ML Validation Suite (15/15 scenarios)
+esp_agent\.venv\Scripts\python.exe code/models/test_fault_scenarios.py
+
+# 3. Run Level A Tests (Conversational Memory & Context)
+cd X:\TAS\Agentic_project\esp_agent
 .venv\Scripts\python.exe -m pytest tests/test_plan_level_a_conversation_memory.py -v
 
-# 2. Run Level B Tests (Ambiguity Scoring & HITL Clarification)
+# 4. Run Level B Tests (Ambiguity Scoring & HITL Clarification)
 .venv\Scripts\python.exe -m pytest tests/test_plan_level_b_clarification_routing.py -v
 .venv\Scripts\python.exe -m pytest tests/test_plan_level_b_conversation.py -v
 
-# 3. Run Level C Tests (Well Episodic Durability & Restart Safety)
+# 5. Run Level C Tests (Well Episodic Durability & Restart Safety)
 .venv\Scripts\python.exe -m pytest tests/test_plan_level_c_durability.py -v
-
-# 4. Run Full Integration Suite
-.venv\Scripts\python.exe -m pytest tests/test_plan_level_c_durability.py tests/test_plan_level_b_conversation.py -v
 ```
 
 ---
@@ -308,23 +354,36 @@ X:\TAS\Agentic_project
 │
 ├── Plan.md                                <- Authoritative multi-phase delivery specification
 ├── README.md                              <- Project Master Documentation (This file)
+├── SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md <- Standalone security & API access guide
 ├── run_all_services.py                    <- Unified multi-process launcher for all servers
-├── start_all_services.bat                 <- Windows batch file quickstart
+├── start_all_services.bat                 <- Windows batch launcher (CUDA LLM + Core + BFF + Frontend)
+├── start_gpu_llm.bat                      <- Standalone 1-click CUDA GPU llama-server launcher (:8080)
+├── stop_all_services.bat                  <- Clean teardown script for all running background processes
+│
+├── bin/
+│   └── llama-cpp/                         <- Pre-compiled CUDA 12.4 llama-server & runtime DLLs
 │
 ├── cced_esp/                              <- Core Backend & React Frontend Submodule
 │   ├── backend/
 │   │   ├── main.py                        <- FastAPI Core Server (:8000)
 │   │   ├── mqtt_collector.py              <- Live MQTT Subscriber daemon
+│   │   ├── transformer.py                 <- VFD 14-signal canonical resolution & telemetry parsing
+│   │   ├── api/
+│   │   │   └── ml_telemetry_routes.py     <- Authenticated ML Telemetry Polling REST API
 │   │   └── services/
-│   │       └── vfd_diagnostic_service.py  <- 14-parameter VFD heuristic classifier
+│   │       └── vfd_diagnostic_service.py  <- 14-parameter VFD heuristic classifier & JSONL logger
 │   ├── frontend-react/                    <- Vite + React 18 UI (:3000)
 │   │   ├── src/
 │   │   │   ├── components/
 │   │   │   │   └── AgentFloatingDock.jsx  <- Agent Jane streaming chat drawer
 │   │   │   ├── context/TelemetryContext.jsx
 │   │   │   └── services/agentApi.js       <- Session ID & streaming API client
+│   │   └── package.json
 │   ├── data/
-│   │   └── unlabelled_recovered.db        <- Historical SQLite telemetry store
+│   │   ├── unlabelled.db                  <- Sole live SQLite telemetry store (2.68M+ records)
+│   │   ├── labelled.db                    <- Ground-truth labelled training scenarios
+│   │   └── logs/
+│   │       └── vfd_diagnostics.jsonl      <- Append-only durable VFD evaluation audit log
 │   └── src/                               <- Legacy inference & MQTT publisher
 │
 ├── esp_agent/                             <- Agent Jane Orchestration Core
@@ -343,31 +402,38 @@ X:\TAS\Agentic_project
 │   │   │   ├── well_memory.py             <- Level C: Per-well episodic long-term store
 │   │   │   └── redis_checkpointer.py      <- Level C: Restart-safe LangGraph checkpointer
 │   │   ├── llm/
-│   │   │   ├── gateway.py                 <- Office LLM HTTP client (Qwen2.5-Coder-3B)
+│   │   │   ├── gateway.py                 <- Local GPU LLM client (Qwen2.5-Coder-3B :8080)
 │   │   │   ├── context_builder.py         <- Compact context compressor for 4B models
 │   │   │   └── adapter.py                 <- Pydantic advisory schema generator
 │   │   └── api/rest/
 │   │       └── bff_routes.py              <- UI REST & SSE streaming endpoints
-│   └── tests/
-│       ├── test_plan_level_a_conversation_memory.py
-│       ├── test_plan_level_b_clarification_routing.py
-│       ├── test_plan_level_b_conversation.py
-│       └── test_plan_level_c_durability.py
+│   └── tests/                             <- Full Agent Jane unit & integration test suites
 │
-├── ESP_APM_models/                        <- Baseline calibration machine learning models
-│   ├── calibration_registry.py
-│   ├── anomaly_detector.py
-│   ├── fault_classifier.py
-│   └── well_calibration_registry.json
+├── code/                                  <- Canonical ML Models & Data Science Tools (Single Source of Truth)
+│   ├── models/                            <- 13-Fault Diagnostic Engine & Calibration Baselines
+│   │   ├── diagnostic_engine.py           <- WellDiagnosticEngine with SiteTelemetryAdapter
+│   │   ├── telemetry_adapter.py           <- SiteTelemetryAdapter (14-parameter normalizer)
+│   │   ├── calibration_registry.py        <- 73-well statistical baselines
+│   │   ├── fault_classifier.py            <- 13-fault mode classifier + imbalance scoring
+│   │   ├── anomaly_detector.py            <- Multivariate anomaly detection
+│   │   ├── test_fault_scenarios.py        <- 15-scenario validation suite (100% pass)
+│   │   └── well_calibration_registry.json <- Pre-computed 73-well calibration envelopes
+│   ├── eda/                               <- Streamlit & Plotly interactive analysis tools
+│   ├── categorize_and_normalize_ml.py     <- Offline batch categorization pipeline
+│   └── merge_excel.py                     <- High-performance SCADA Excel stacker
+│
+├── tests/
+│   └── test_ml_telemetry_api.py           <- 7-test integration suite for ML Telemetry API
 │
 └── models/                                <- Local LLM GGUF model storage (Git-ignored)
     ├── Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf
-    └── Qwen3-4B-Q4_K_M.gguf
+    ├── Qwen3-4B-Q4_K_M.gguf
+    └── microsoft_Phi-4-mini-instruct-Q4_K_M.gguf
 ```
 
 ---
 
-## 🔄 Git Deployment & Submodule Synchronization
+## 🔄 Git Deployment & Synchronization
 
 The repository consists of a **Root Repository** (`Agentic_project`) and an embedded **Submodule** (`cced_esp`).
 
@@ -383,8 +449,8 @@ git push origin main
 
 # 2. Commit and push the root repository (Agentic_project)
 cd X:\TAS\Agentic_project
-git add Plan.md README.md cced_esp esp_agent/ ESP_APM_models/
-git commit -m "feat: level a/b/c agent enhancements"
+git add Plan.md README.md cced_esp esp_agent/ code/ tests/ bin/
+git commit -m "feat: consolidate ml models into code and add gpu telemetry api"
 git push origin dev
 ```
 

@@ -259,7 +259,8 @@ def run_historian_query(
     # ── A. Intent routing ────────────────────────────────────────────────
     registry = ObjectiveRegistry()
     router   = IntentRouter(registry=registry)
-    obj_id, confidence, route_path = router.route(query)
+    route_res = router.route(query)
+    obj_id, confidence, route_path = route_res.objective_id, route_res.confidence, route_res.path
 
     SEP = "=" * 78
     sep = "-" * 78
@@ -416,7 +417,7 @@ def run_historian_query(
             print(f"  {v}")
     print()
     print(f" LLM ENGINE  : {mode}")
-    print(f" EVIDENCE    : {len(evidence_items)} Level-D items cited from unlabelled_recovered.db")
+    print(f" EVIDENCE    : {len(evidence_items)} Level-D items cited from unlabelled.db")
     print(f" COVERAGE    : {hist.coverage*100:.1f}% | Points: {hist.total_points} | Window: {resolved_window}")
     print(SEP)
 

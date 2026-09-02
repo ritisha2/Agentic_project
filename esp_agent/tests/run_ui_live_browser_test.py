@@ -5,6 +5,9 @@ Tests Agent Jane Generative UI workspace at http://localhost:3000/workspace/FS-0
 
 import asyncio
 import time
+import pytest
+
+playwright = pytest.importorskip("playwright", reason="playwright is not installed in the current environment")
 from playwright.async_api import async_playwright
 
 

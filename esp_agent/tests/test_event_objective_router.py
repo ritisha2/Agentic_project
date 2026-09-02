@@ -22,12 +22,24 @@ def test_intent_router_delegates_to_objective_registry():
     registry = ObjectiveRegistry()
     router = IntentRouter(registry=registry)
 
-    obj_id, conf, path = router.route(user_query="", event_code="ESP_TRIPPED")
-    assert obj_id == "OP03_FAULT_DIAGNOSIS"
-    assert conf == 1.0
-    assert path == "Path_C_Event"
+    res = router.route(user_query="", event_code="ESP_TRIPPED")
+    assert res.objective_id == "OP03_FAULT_DIAGNOSIS"
+    assert res.confidence == 1.0
+    assert res.path == "Path_C_Event"
+    assert not res.is_ambiguous
 
-    obj_id2, conf2, path2 = router.route(user_query="", event_code="PRODUCTION_DECLINE_DETECTED")
-    assert obj_id2 == "OP02_PRODUCTION_DECLINE_RCA"
-    assert conf2 == 1.0
-    assert path2 == "Path_C_Event"
+    res2 = router.route(user_query="", event_code="PRODUCTION_DECLINE_DETECTED")
+    assert res2.objective_id == "OP02_PRODUCTION_DECLINE_RCA"
+    assert res2.confidence == 1.0
+    assert res2.path == "Path_C_Event"
+    assert not res2.is_ambiguous
+
+
+def test_intent_router_greeting_option_c():
+    """Verify Option C collapses elongated greetings algorithmically and maps to OP07."""
+    router = IntentRouter()
+    for greeting in ["hi", "hiiiii", "heyyy", "heeeello", "good morning", "hi there!"]:
+        res = router.route(user_query=greeting)
+        assert res.objective_id == "OP07_GENERAL_INQUIRY"
+        assert res.path == "Path_A_Greeting"
+        assert not res.is_ambiguous

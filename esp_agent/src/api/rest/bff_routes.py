@@ -459,6 +459,15 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
                     "type": "status", "run_id": run_id, "stage": "CLARIFYING",
                     "message": "Agent Jane needs a bit more info..."
                 }) + "\n"
+                yield json.dumps({
+                    "type": "advisory", "run_id": run_id,
+                    "advisory": {
+                        "objective_id": "CLARIFICATION",
+                        "assessment": ex.question,
+                        "status": "CLARIFYING",
+                        "asset_id": ex.asset_id
+                    }
+                }) + "\n"
                 for chunk in _iter_stream_chunks(ex.question):
                     yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
                 yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
@@ -520,39 +529,17 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
             yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
             return
 
-        # Event 5: Generative UI Block (Validated VisualizationSpec Pydantic Contract)
-        live_traces = live_bridge.build_plotly_trace(req.asset_id)
-        # MOCK_SCAFFOLD: hardcoded demo chart series | reason: used when cced_esp timeseries is
-        # empty/unreachable so the UI still renders a chart | expiry: when live timeseries is
-        # guaranteed | ref: src/verification/handoff.py:CHART_FALLBACK_PRODUCTION (kept in sync)
-        default_data = [
-            {
-                "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
-                "y": [1750, 1720, 1680, 1550, 1490, 1420, 1380],
-                "type": "scatter",
-                "mode": "lines+markers",
-                "name": "Production Rate (BPD)",
-                "line": {"color": "#ef4444", "width": 2.5}
-            },
-            {
-                "x": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"],
-                "y": [4100, 4080, 4050, 3950, 3900, 3850, 3800],
-                "type": "scatter",
-                "mode": "lines+markers",
-                "name": "Total Dynamic Head (ft)",
-                "yaxis": "y2",
-                "line": {"color": "#0284c7", "width": 2, "dash": "dot"}
-            }
-        ]
+        # Event 5: Generative UI Block (Validated VisualizationSpec Pydantic Contract) - Level F4
+        live_traces = live_bridge.build_plotly_trace(req.asset_id) if req.asset_id else []
 
         vis_spec = VisualizationSpec(
             vis_id=f"vis-{run_id}",
             type="plotly_chart",
-            title=f"Telemetry Trend & Pump Curve — Asset {req.asset_id}",
+            title=f"Telemetry Trend & Operational Traces — Asset {req.asset_id}" if live_traces else f"Telemetry Trend — Asset {req.asset_id or 'General'}",
             evidence_ids=[getattr(ev, 'source_id', 'EV-01') for ev in getattr(advisory, 'evidence', [])[:3]],
             chart=ChartSpec(
                 chart_engine="plotly",
-                data=live_traces if live_traces else default_data,
+                data=live_traces if live_traces else [],
                 layout={
                     "autosize": True,
                     "margin": {"l": 40, "r": 40, "t": 30, "b": 30},
@@ -574,6 +561,7 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
             "title": vis_spec.title,
             "data": vis_spec.chart.data,
             "layout": vis_spec.chart.layout,
+            "status": "READY" if live_traces else "NO_DATA",
             "visualization_spec": vis_spec.model_dump()
         }
         yield json.dumps(chart_payload) + "\n"

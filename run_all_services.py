@@ -6,7 +6,7 @@ services, backend servers, and AI runtime engines required for the platform.
 
 Services managed / monitored:
   [Tier 1: Embedded / File-Based Databases — Always Live]
-    1. Historian DB (SQLite)      : cced_esp/data/historian/unlabelled_recovered.db (633k records)
+    1. Telemetry DB (SQLite)      : cced_esp/data/unlabelled.db (2.68M+ records)
     2. Event Store (SQLite)       : esp_agent/esp_events.db
     3. Asset Context Cache (JSON) : cced_esp/data/advait/asset_context_initial_seed_v2_rich.json
     4. Knowledge Graph File (JSON): esp_agent/knowledge_bases/esp/graph/esp_graph.json
@@ -111,9 +111,9 @@ def get_full_health_matrix() -> Dict[str, Dict[str, Any]]:
     results = {}
 
     # ── Tier 1: Embedded / File Databases ────────────────────────────────
-    hist_db = CCED_ESP_DIR / "data" / "historian" / "unlabelled_recovered.db"
+    hist_db = CCED_ESP_DIR / "data" / "unlabelled.db"
     ok, msg = check_sqlite_db(hist_db)
-    results["Historian DB (SQLite)"] = {
+    results["Telemetry DB (SQLite)"] = {
         "tier": "Tier 1 (File)",
         "live": ok,
         "type": "SQLite",

@@ -1,4 +1,4 @@
-﻿{
+{
   "domain_id": "ESP_PUMPS_VFD",
   "schema_version": "2.0",
   "description": "Field mapping from VFD MQTT signal names to canonical semantic names. Keys match STANDARD_SENSORS in ESP_APM_models/calibration_registry.py exactly.",

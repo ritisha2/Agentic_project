@@ -52,3 +52,11 @@ desktop.ini
 models/*.gguf
 models/*.bin
 models/*.safetensors
+
+# Local CUDA GPU server binaries (>100MB)
+bin/llama-cpp/
+
+# SQLite databases & logs
+*.db
+*.db-wal
+*.db-shm

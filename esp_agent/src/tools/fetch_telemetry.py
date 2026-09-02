@@ -42,11 +42,11 @@ def get_history_window_tool(
     
     _base_dir = Path(__file__).resolve().parents[3]  # root of workspace or esp_agent parent
     db_candidates = [
-        _base_dir / "cced_esp" / "data" / "historian" / "unlabelled_recovered.db",
         _base_dir / "cced_esp" / "data" / "unlabelled.db",
+        _base_dir / "data" / "unlabelled.db",
         _base_dir / "cced_esp" / "data" / "labelled.db",
-        Path("cced_esp/data/historian/unlabelled_recovered.db"),
-        Path("../cced_esp/data/historian/unlabelled_recovered.db"),
+        Path("cced_esp/data/unlabelled.db"),
+        Path("../cced_esp/data/unlabelled.db"),
     ]
     target_db = next((p for p in db_candidates if p.exists()), None)
     now_iso = datetime.now(timezone.utc).isoformat()

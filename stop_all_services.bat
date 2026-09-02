@@ -18,12 +18,22 @@ if %ERRORLEVEL% EQU 0 (
     echo [INFO] Docker not active.
 )
 
-:: 2. Terminate background Python uvicorn servers (port 8000 and port 8090)
-echo [2/2] Terminating background uvicorn servers on ports 8000 and 8090...
+:: 2. Terminate background servers (port 8000, port 8090, port 8080)
+echo [2/2] Terminating background servers on ports 8000, 8090, and 8080 (llama-server)...
+taskkill /F /IM llama-server.exe >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8090" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8080" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5173" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 

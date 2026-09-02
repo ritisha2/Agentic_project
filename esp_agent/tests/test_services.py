@@ -66,5 +66,5 @@ def test_context_builder_prompt_overlay():
     )
     overlay = builder.format_llm_prompt_overlay(pack)
     assert "EVIDENCE PACK" in overlay
-    assert "LIVE TELEMETRY READINGS" in overlay
+    assert "CANONICAL EVIDENCE ITEMS" in overlay
     assert "135.0" in overlay

@@ -13,6 +13,7 @@ class TelemetryAdapter:
         self.mapping_config = mapping_config
         self.telemetry_csv_path = telemetry_csv_path
         self._mappings = {m.source_field: m for m in mapping_config.get_mappings_list()}
+        self._canonical_mappings = {m.canonical_field: m for m in mapping_config.get_mappings_list()}
 
     @classmethod
     def from_config_file(cls, mapping_config_path: str, telemetry_csv_path: Optional[str] = None) -> "TelemetryAdapter":
@@ -99,7 +100,7 @@ class TelemetryAdapter:
             if src_field in ("timestamp", "asset_id"):
                 continue
 
-            mapping: Optional[FieldMapping] = self._mappings.get(src_field)
+            mapping: Optional[FieldMapping] = self._mappings.get(src_field) or self._canonical_mappings.get(src_field)
             if mapping:
                 canonical_name = mapping.canonical_field
                 unit = mapping.unit or ""

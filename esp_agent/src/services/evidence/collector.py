@@ -27,7 +27,7 @@ from src.schemas.evidence import (
 _ESP_AGENT_ROOT = Path(__file__).resolve().parents[3]   # esp_agent/
 _CCED_ROOT       = _ESP_AGENT_ROOT.parent / "cced_esp"
 
-DB_HISTORIAN = _CCED_ROOT / "data" / "historian" / "unlabelled_recovered.db"
+DB_HISTORIAN = _CCED_ROOT / "data" / "unlabelled.db"
 DB_EVENTS    = _ESP_AGENT_ROOT / "esp_events.db"
 KG_JSON      = _ESP_AGENT_ROOT / "knowledge_bases" / "esp" / "graph" / "esp_graph.json"
 KB_DOCS_DIR  = _ESP_AGENT_ROOT / "knowledge_bases" / "esp" / "documents"

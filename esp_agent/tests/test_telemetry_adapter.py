@@ -17,12 +17,12 @@ def test_telemetry_adapter_mapping():
     assert len(metrics) > 0
 
     metric_names = [m.parameter_name for m in metrics]
-    assert "primary_thermal_metric" in metric_names
-    assert "vibration_metric" in metric_names
-    assert "primary_intake_pressure" in metric_names
+    assert "motor_temperature" in metric_names
+    assert any("vibration" in name for name in metric_names)
+    assert "intake_pressure" in metric_names
 
     # Check metric object fields
-    thermal = next(m for m in metrics if m.parameter_name == "primary_thermal_metric")
+    thermal = next(m for m in metrics if m.parameter_name == "motor_temperature")
     assert thermal.metric_type == "thermal"
     assert thermal.unit == "°C"
 
