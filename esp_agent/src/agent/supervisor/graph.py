@@ -28,6 +28,42 @@ from src.verification import verify_telemetry, verify_model_output
 logger = logging.getLogger(__name__)
 
 
+def clarification_node(state: AgentState) -> Dict[str, Any]:
+    """
+    B3.T1 — HITL clarification node.
+    Fires only when the router marks is_ambiguous=True and no implicit well is in context.
+    Calls LangGraph interrupt() to pause the graph and surface a question to the operator.
+    The interrupt value IS the question text; the BFF streams it as a text_delta to the UI.
+    Resumes when the operator's next message arrives via Command(resume=answer).
+    """
+    user_query = state["request"]["user_query"]
+    asset_id = state["request"]["asset_id"]
+
+    # Build a context-aware clarification question
+    if not asset_id or asset_id == "UNKNOWN":
+        question = (
+            "I want to help, but I'm not sure which asset you mean. "
+            "Could you tell me which well or pump you're asking about? "
+            "(e.g. FS-031, FSWS-001-A, or another)"
+        )
+    else:
+        question = (
+            f"I'm not quite sure what you'd like me to check for {asset_id}. "
+            "Are you asking about current status, a production decline, a fault, "
+            "performance optimisation, or something else?"
+        )
+
+    logger.info("Supervisor clarification_node: interrupting for '%s...'", user_query[:40])
+    # interrupt() pauses the graph here; the value is surfaced to the caller.
+    # Execution resumes from this exact point when Command(resume=answer) is received.
+    answer = interrupt({"question": question, "asset_id": asset_id})
+
+    return {
+        "clarification_question": question,
+        "clarification_answer": str(answer) if answer else None,
+    }
+
+
 def create_supervisor_graph():
     """
     Build and compile the Supervisor Orchestration Graph powered by LangGraph.
@@ -81,41 +117,6 @@ def create_supervisor_graph():
         })
 
         return {"run": run_update, "audit": audit, "is_ambiguous": is_ambiguous}
-
-    def clarification_node(state: AgentState) -> Dict[str, Any]:
-        """
-        B3.T1 — HITL clarification node.
-        Fires only when the router marks is_ambiguous=True and no implicit well is in context.
-        Calls LangGraph interrupt() to pause the graph and surface a question to the operator.
-        The interrupt value IS the question text; the BFF streams it as a text_delta to the UI.
-        Resumes when the operator's next message arrives via Command(resume=answer).
-        """
-        user_query = state["request"]["user_query"]
-        asset_id = state["request"]["asset_id"]
-
-        # Build a context-aware clarification question
-        if not asset_id or asset_id == "UNKNOWN":
-            question = (
-                f"I want to help, but I'm not sure which asset you mean. "
-                f"Could you tell me which well or pump you're asking about? "
-                f"(e.g. FS-031, FSWS-001-A, or another)"
-            )
-        else:
-            question = (
-                f"I'm not quite sure what you'd like me to check for {asset_id}. "
-                f"Are you asking about current status, a production decline, a fault, "
-                f"performance optimisation, or something else?"
-            )
-
-        logger.info("Supervisor clarification_node: interrupting for '%s...'", user_query[:40])
-        # interrupt() pauses the graph here; the value is surfaced to the BFF caller.
-        # Execution resumes from this exact point when Command(resume=answer) is received.
-        answer = interrupt({"question": question, "asset_id": asset_id})
-
-        return {
-            "clarification_question": question,
-            "clarification_answer": str(answer) if answer else None,
-        }
 
     # Objectives that are HARD-REFUSED before any specialist/LLM work — advisory-only lock.
     # Mirrors the legacy ObjectiveRouter's refusal check (objective_router.py) so both

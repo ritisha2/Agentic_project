@@ -472,6 +472,21 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
                 yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
                 return
 
+            if getattr(advisory, "objective_id", None) == "CLARIFICATION":
+                t_id = getattr(advisory, "_thread_id", None) or session_id or run_id
+                if session_id:
+                    _pending_clarifications[session_id] = {
+                        "thread_id": t_id, "asset_id": advisory.asset_id
+                    }
+                yield json.dumps({
+                    "type": "status", "run_id": run_id, "stage": "CLARIFYING",
+                    "message": "Agent Jane needs a bit more info..."
+                }) + "\n"
+                for chunk in _iter_stream_chunks(advisory.assessment):
+                    yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
+
         ev_count = len(advisory.evidence) if hasattr(advisory, 'evidence') else 0
         yield json.dumps({
             "type": "status",

@@ -4,6 +4,7 @@ Grounded in ESP_APM_PHASE_7_LangGraph_Supervisor_MultiAgent_Architecture_Design.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any
 
 from src.schemas.advisory import StandardAdvisoryPayload
@@ -137,7 +138,29 @@ class UserEntryAdapter:
             interrupt_val = interrupts[0].value if hasattr(interrupts[0], "value") else interrupts[0]
             question = interrupt_val.get("question", str(interrupt_val)) if isinstance(interrupt_val, dict) else str(interrupt_val)
             logger.info("UserEntryAdapter: Graph interrupted for clarification (thread_id=%s)", thread_id)
-            raise ClarificationNeeded(question=question, thread_id=thread_id, asset_id=resolved_asset_id or "")
+            clarif_advisory = StandardAdvisoryPayload(
+                advisory_id=f"ADV-CLARIF-{request_id}",
+                asset_id=resolved_asset_id or "UNKNOWN",
+                objective_id="CLARIFICATION",
+                timestamp=datetime.utcnow().isoformat(),
+                assessment=question,
+                diagnosis="Clarification required: operator query is ambiguous or asset is unspecified.",
+                confidence=1.0,
+                risk="None: clarification required before analysis",
+                recommendation=question,
+                expected_impact="Clarifies asset context to enable targeted diagnosis",
+                provenance=[f"Supervisor Graph interrupt ({thread_id})"]
+            )
+            clarif_advisory._thread_id = thread_id
+            if session_id:
+                self.conv_store.append(
+                    session_id=session_id,
+                    role="assistant",
+                    content=question[:500],
+                    well_id=None,
+                    intent="CLARIFICATION",
+                )
+            return clarif_advisory
 
         advisory_dict = final_state.get("advisory_draft")
 

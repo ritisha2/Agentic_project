@@ -44,12 +44,14 @@ class IntentRouter:
     """
 
     # ── B4.T2: Generalised greeting bucket ───────────────────────────────────
-    # Covers exact matches AND prefixes so "morning, take a look" also lands here.
+    # _GREETING_EXACT: full-message social openers only.
+    # _GREETING_PREFIX: patterns that are ALWAYS social openers regardless of suffix.
+    # Deliberately excludes "morning,", "afternoon,", "evening," — time-of-day words
+    # followed by a request ("morning, can you check...") are operational, not small-talk.
     _GREETING_EXACT = {"hi", "hello", "hey", "who are you", "what can you do",
                        "help", "role", "identity", "good morning", "good afternoon",
                        "good evening", "morning", "afternoon", "evening"}
-    _GREETING_PREFIX = ("hi ", "hello ", "hey ", "morning,", "afternoon,",
-                        "evening,", "good morning", "good afternoon", "good evening")
+    _GREETING_PREFIX = ("hi ", "hello ", "hey ")
 
     def __init__(self, registry: Optional[ObjectiveRegistry] = None):
         self.registry = registry or ObjectiveRegistry()
@@ -79,15 +81,16 @@ class IntentRouter:
         obj_list = "\n".join(
             f"- {o.objective_id}: {o.title}"
             for o in objectives
-            if o.objective_id not in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
+            if o.objective_id not in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL", "OP07_GENERAL_INQUIRY")
         )
 
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "You are an ESP pump monitoring assistant. "
-                    "Classify the operator query into exactly ONE of the objective IDs below. "
+                    "You are an ESP pump monitoring assistant.\n"
+                    "Classify the operator query into exactly ONE of the operational objective IDs below.\n"
+                    "If the query asks to check status, inspect health, or take a look at an asset, choose OP01_CURRENT_STATUS or OP03_FAULT_DIAGNOSIS.\n"
                     "Reply with only the objective_id, nothing else.\n\n"
                     f"Objectives:\n{obj_list}"
                 ),
@@ -201,161 +204,66 @@ class IntentRouter:
         ])
         has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
 
+        # Conversational / generic stop words to avoid false positive substring/token matching
+        STOP_WORDS = {
+            "this", "that", "there", "then", "with", "from", "have", "been",
+            "were", "what", "when", "where", "which", "will", "would", "could",
+            "should", "about", "into", "over", "some", "take", "look", "things",
+            "morning", "afternoon", "evening", "please", "check", "tell", "show",
+            "well", "wells", "asset", "assets", "pump", "pumps", "okay", "good"
+        }
+        query_tokens = set(re.findall(r"\b[a-z]{3,}\b", q_lower)) - STOP_WORDS
+
         best_score = 0.0
         best_obj_id = "OP03_FAULT_DIAGNOSIS"
 
         for obj in objectives:
-            if obj.objective_id in HARD_REFUSAL_IDS:
+            if obj.objective_id in HARD_REFUSAL_IDS or obj.objective_id == "OP07_GENERAL_INQUIRY":
                 continue
-            score = 0.0
-            if is_fleet_query and obj.scope == "fleet":
-                score += 0.35
-            elif has_specific_asset and obj.scope == "single":
-                score += 0.25
-            words = q_lower.split()
-            for w in words:
-                if len(w) > 3:
-                    if w in obj.title.lower():
-                        score += 0.2
-                    if w in obj.description.lower():
-                        score += 0.1
+
+            title_tokens = set(re.findall(r"\b[a-z]{3,}\b", obj.title.lower()))
+            desc_tokens = set(re.findall(r"\b[a-z]{3,}\b", obj.description.lower()))
+
+            kw_matches = query_tokens & title_tokens
+            desc_matches = query_tokens & desc_tokens
+
+            keyword_score = len(kw_matches) * 0.2 + len(desc_matches) * 0.1
+            score = keyword_score
+
+            # Only apply scope / asset tie-breaker if there is some keyword affinity
+            if keyword_score > 0:
+                if is_fleet_query and obj.scope == "fleet":
+                    score += 0.35
+                elif has_specific_asset and obj.scope == "single":
+                    score += 0.25
+
             if score > best_score:
                 best_score = score
                 best_obj_id = obj.objective_id
 
         semantic_confidence = min(0.85, 0.5 + best_score)
 
+        # ── B2.T1/T2: Ambiguity signal — compute before LLM hop ──────────────
+        # Mark ambiguous when confidence is below threshold AND no known well
+        # (either from session memory or named explicitly in query) anchors the query.
+        has_known_well = bool(
+            (conversation_context and conversation_context.get("last_well"))
+            or has_specific_asset
+        )
+        is_ambiguous = (semantic_confidence < _AMBIGUITY_CONFIDENCE_THRESHOLD and not has_known_well)
+
         # ── B4.T3: Short-circuit — only call LLM fallback when semantic is weak ──
         if semantic_confidence < _LLM_FALLBACK_THRESHOLD:
             llm_result = self._llm_classify(user_query)
             if llm_result is not None:
-                return llm_result
-
-        # ── B2.T1/T2: Ambiguity signal ────────────────────────────────────────
-        # Mark ambiguous when confidence is below threshold AND no implicit well
-        # from session memory can anchor the query.
-        has_implicit_well = bool(
-            conversation_context and conversation_context.get("last_well")
-        )
-        is_ambiguous = (semantic_confidence < _AMBIGUITY_CONFIDENCE_THRESHOLD and not has_implicit_well)
+                # LLM resolved intent but asset ambiguity is independent: if the
+                # query had no well context and low semantic confidence, the operator
+                # still hasn't told us WHICH asset — so preserve is_ambiguous.
+                return RouteResult(llm_result.objective_id, llm_result.confidence,
+                                   llm_result.path, is_ambiguous)
 
         logger.info(
             "IntentRouter Path B (Semantic): Query '%s...' -> %s (conf=%.2f, ambiguous=%s)",
             user_query[:30], best_obj_id, semantic_confidence, is_ambiguous,
         )
         return RouteResult(best_obj_id, semantic_confidence, "Path_B_Semantic", is_ambiguous)
-
-
-
-        """
-        Classify intent using 3-Path strategy.
-        Returns: (objective_id: str, confidence: float, path_used: str)
-
-        Args:
-            user_query:           The raw operator query string.
-            event_code:           Optional SCADA/MQTT event code (Path C).
-            conversation_context: Optional dict with keys:
-                                    last_well      – most recent well_id in session
-                                    last_objective – objective_id from the prior turn
-                                    recent_turns   – list of recent turn dicts
-                                  When None, behaviour is identical to pre-A2 (A2.T3).
-        """
-        # ── A2.T2: Follow-up resolution ──────────────────────────────────────
-        # Bare follow-up phrases resolve to the prior objective without a full
-        # re-route, preventing silent drop to OP03_FAULT_DIAGNOSIS.
-        _FOLLOWUP_TOKENS = {
-            "why", "is that bad", "what about it", "explain", "elaborate",
-            "tell me more", "and?", "so?", "what does that mean", "how bad",
-            "what now", "what next", "what should i do", "ok and",
-        }
-        if conversation_context:
-            last_obj = conversation_context.get("last_objective")
-            q_stripped = user_query.lower().strip().rstrip("?.,!")
-            if last_obj and q_stripped in _FOLLOWUP_TOKENS:
-                logger.info(
-                    "IntentRouter Path A (Follow-up): '%s' → carry forward %s",
-                    user_query[:40], last_obj,
-                )
-                return last_obj, 0.90, "Path_A_FollowUp"
-        # ─────────────────────────────────────────────────────────────────────
-
-        # Path C: Direct Event Mapping via ObjectiveRegistry (Single Authority)
-        if event_code:
-            target_id = self.registry.resolve_event_mapping(event_code)
-            if target_id:
-                logger.info(f"IntentRouter Path C (Event): Mapped event '{event_code}' -> {target_id}")
-                return target_id, 1.0, "Path_C_Event"
-
-        q_lower = user_query.lower().strip()
-
-        # Conversational greeting & identity check
-        if q_lower in ["hi", "hello", "hey", "who are you", "what can you do", "help", "role", "identity"] or any(q_lower.startswith(g) for g in ["hi ", "hello ", "hey "]):
-            logger.info("IntentRouter Path A (Greeting): Small talk / greeting detected.")
-            return "OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting"
-
-        objectives = self.registry.list_all()
-
-        # Detect fleet / multi-asset intent signals early
-        is_fleet_query = any(w in q_lower for w in ["fleet", "all wells", "all assets", "which wells", "rank", "across the field", "entire field", "total field", "between fs-", "compare the installed"])
-        has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
-
-        # Path A: Specificity-First Deterministic & Variant Keyword Matching
-        rules = []
-        for obj in objectives:
-            is_safety = obj.objective_id in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
-            is_fleet_obj = obj.scope == "fleet" or obj.objective_id.startswith("OP08") or obj.objective_id.startswith("OP09") or obj.objective_id.startswith("OP10") or obj.objective_id.startswith("OP11") or obj.objective_id.startswith("OP12") or obj.objective_id.startswith("OP13")
-
-            base_prio = 100 if is_safety else (20 if (is_fleet_query and is_fleet_obj) else (15 if (not is_fleet_query and not is_fleet_obj) else 1))
-
-            for kw in obj.intent_classes:
-                rules.append((kw, obj.objective_id, 0.95, "Path_A_Deterministic", base_prio))
-
-            for var in obj.workflow_variants:
-                for kw in var.intent_classes:
-                    rules.append((kw, obj.objective_id, 0.96, f"Path_A_Variant_{var.variant_id}", base_prio + 2))
-
-        # Sort globally by: priority (descending), word count (descending), character length (descending)
-        rules.sort(key=lambda r: (r[4], len(r[0].split()), len(r[0])), reverse=True)
-
-        for kw, obj_id, conf, path_lbl, _ in rules:
-            kw_lower = kw.lower()
-            pattern = r"\b" + re.escape(kw_lower) + r"\b"
-            if re.search(pattern, q_lower):
-                logger.info(f"IntentRouter {path_lbl}: Keyword '{kw}' -> {obj_id}")
-                return obj_id, conf, path_lbl
-
-        # Path B: Semantic Heuristic / Keyword Overlap Fallback with Scope Tie-Breaking
-        HARD_REFUSAL_OBJECTIVE_IDS = {"OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL"}
-        is_fleet_query = any(w in q_lower for w in ["fleet", "all wells", "all assets", "which wells", "rank", "across the field"])
-        has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
-
-        best_score = 0.0
-        best_obj_id = "OP03_FAULT_DIAGNOSIS"  # Default objective
-
-        for obj in objectives:
-            if obj.objective_id in HARD_REFUSAL_OBJECTIVE_IDS:
-                continue
-            score = 0.0
-
-            # Scope bonus/penalty to prevent single vs fleet collisions
-            if is_fleet_query and obj.scope == "fleet":
-                score += 0.35
-            elif has_specific_asset and obj.scope == "single":
-                score += 0.25
-
-            # Check overlap with title & description
-            words = q_lower.split()
-            for w in words:
-                if len(w) > 3:
-                    if w in obj.title.lower():
-                        score += 0.2
-                    if w in obj.description.lower():
-                        score += 0.1
-            
-            if score > best_score:
-                best_score = score
-                best_obj_id = obj.objective_id
-
-        confidence = min(0.85, 0.5 + best_score)
-        logger.info(f"IntentRouter Path B (Semantic): Query '{user_query[:30]}...' -> {best_obj_id} (conf={confidence:.2f})")
-        return best_obj_id, confidence, "Path_B_Semantic"
