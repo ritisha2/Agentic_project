@@ -192,13 +192,26 @@ def get_full_health_matrix() -> Dict[str, Dict[str, Any]]:
     }
 
     # ── Tier 3: Applications & AI Runtime ────────────────────────────────
-    llm_ok, llm_msg = check_http_url("http://localhost:8080/v1/models")
-    results["Local LLM Server (llama.cpp)"] = {
+    env_file = ESP_AGENT_DIR / ".env"
+    llm_base = "http://localhost:8080/v1"
+    if env_file.exists():
+        try:
+            with open(env_file, "r", encoding="utf-8") as ef:
+                for line in ef:
+                    if line.strip().startswith("LLM_GATEWAY_URL="):
+                        llm_base = line.strip().split("=", 1)[1].strip()
+        except Exception:
+            pass
+    llm_base = os.getenv("LLM_GATEWAY_URL", llm_base)
+
+    llm_models_url = f"{llm_base}/models"
+    llm_ok, llm_msg = check_http_url(llm_models_url)
+    results["LLM Server (llama.cpp)"] = {
         "tier": "Tier 3 (App/AI)",
-        "live": llm_ok or check_tcp_port("localhost", 8080),
+        "live": llm_ok,
         "type": "LLM Inference",
-        "detail": llm_msg if llm_ok else ("Port 8080 open" if check_tcp_port("localhost", 8080) else "Port 8080 closed (run llama-server)"),
-        "uri": "http://localhost:8080/v1" if (llm_ok or check_tcp_port("localhost", 8080)) else "MOCK FALLBACK",
+        "detail": llm_msg if llm_ok else f"Unreachable at {llm_base}",
+        "uri": llm_base if llm_ok else "MOCK FALLBACK",
     }
 
     backend_ok, backend_msg = check_http_url("http://127.0.0.1:8000/docs")
