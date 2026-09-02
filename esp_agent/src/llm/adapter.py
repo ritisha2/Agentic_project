@@ -79,6 +79,11 @@ class LLMAdapter:
         self.gateway = gateway or LLMGateway()
         self.context_builder = context_builder or CompactContextBuilder()
         self.xai_builder = xai_builder or XAIVisualStoryBuilder()
+        # Trace of the most recent generate_advisory_from_compact_context() call —
+        # lets callers read the real is_mock/model_name/latency_ms verdict for the
+        # call that actually produced the current advisory, without re-probing
+        # gateway.is_available() after the fact (see graph.py generate_advisory_draft_node).
+        self.last_trace: Optional[LLMTraceRecord] = None
 
     def generate(
         self,
@@ -229,7 +234,7 @@ class LLMAdapter:
             raise
 
         finally:
-            tracer.record_trace(LLMTraceRecord(
+            trace = LLMTraceRecord(
                 run_id=run_id,
                 objective_id=compact_context.get("objective", "OP01_PRODUCTION_DECLINE"),
                 model_name=gw_resp.model,
@@ -241,7 +246,15 @@ class LLMAdapter:
                 validation_passed=validation_passed,
                 repair_attempts=repair_attempts[0],
                 error=error_str,
-            ))
+            )
+            tracer.record_trace(trace)
+            # Expose the trace of THIS specific call on the instance so callers (e.g.
+            # graph.py's generate_advisory_draft_node) can read the real is_mock/model_name
+            # verdict for the call that actually produced this advisory's text, instead of
+            # re-probing gateway.is_available() afterward — which checks current server
+            # health, not whether THIS call was live or mock (a real gap if the server
+            # blips mid-request and recovers before the re-probe runs).
+            self.last_trace = trace
 
         # Build XAI visual story explanation
         xai_explanation = self.xai_builder.build(advisory, compact_context)

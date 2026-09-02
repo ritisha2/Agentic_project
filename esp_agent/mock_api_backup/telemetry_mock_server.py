@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, Query, Response, status
 import uvicorn
 
-from src.api.telemetry_mock_schemas import (
+from telemetry_mock_schemas import (
     CanonicalTelemetryRecord,
     IngestTelemetryRequest,
     MeasurementValue,

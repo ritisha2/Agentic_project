@@ -6,7 +6,7 @@ Grounded in ESP_APM_Telemetry_Mock_API_Specification.docx §19
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.telemetry_mock_server import app
+from telemetry_mock_server import app
 
 client = TestClient(app)
 

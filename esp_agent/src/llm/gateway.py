@@ -23,6 +23,17 @@ import urllib.error
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+# Load esp_agent/.env before reading any LLM_* vars below. This is the module that
+# actually reads os.getenv(...) at import time, so the load must happen here rather
+# than relying on some other entrypoint to have called load_dotenv() first — no other
+# module in esp_agent currently does. find_dotenv() walks up from this file's directory
+# so this works regardless of which script/CWD imports LLMGateway first.
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv(usecwd=False), override=False)
+except Exception:  # pragma: no cover — python-dotenv should always be installed, but
+    pass            # never let a missing .env or import hiccup block LLM gateway startup.
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

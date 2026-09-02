@@ -354,6 +354,139 @@ class EvidenceCollector:
 
         return items
 
+    # ── ESP_APM_models Live VFD Diagnosis (14-signal engine, real MQTT-fed) ────
+    @classmethod
+    def collect_from_vfd_diagnostic(
+        cls,
+        asset_id: str,
+        vfd_diagnostic: Optional[Dict[str, Any]],
+    ) -> List[EvidenceItem]:
+        """
+        Build EvidenceItem(s) from ESP_APM_models.WellDiagnosticEngine's live diagnosis,
+        fetched via LiveDataBridge.get_vfd_diagnostic() -> cced_esp GET /api/vfd/diagnostics/{id}.
+        This is the sole source of truth for live ESP fault classification (the legacy
+        5-model pipeline in collect_from_models() covers a different, older evidence path).
+
+        Returns [] if vfd_diagnostic is None — never fabricates a diagnosis for a well
+        that hasn't been evaluated yet (e.g. cced_esp unreachable, or no MQTT traffic
+        seen for this well since service start).
+
+        Emits up to two items:
+          1. Fault classification + health score (always, if vfd_diagnostic is present)
+          2. Anomaly detector flag (only if the anomaly detector actually fired) — kept
+             as a SEPARATE item rather than folded into #1, since the two sub-models can
+             genuinely disagree (e.g. fault classifier says Normal Operation while the
+             IsolationForest anomaly detector flags the reading as anomalous). Surfacing
+             both lets the LLM/XAI layer reason about the disagreement explicitly instead
+             of silently picking one.
+        """
+        if not vfd_diagnostic:
+            return []
+
+        items: List[EvidenceItem] = []
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        backend_url = os.getenv("CCED_ESP_BACKEND_URL", "http://127.0.0.1:8000")
+
+        diag = vfd_diagnostic.get("diagnostic") or {}
+        dynamics = vfd_diagnostic.get("dynamics") or {}
+        ml_anom = vfd_diagnostic.get("ml_anomaly") or {}
+        engine_ts = vfd_diagnostic.get("timestamp") or now_iso
+        well_id = vfd_diagnostic.get("well_id") or asset_id
+
+        deep_link = f"{backend_url}/api/vfd/diagnostics/{asset_id}"
+
+        primary_fault = diag.get("primary_fault", "Normal Operation")
+        confidence_val = float(diag.get("confidence_val", 0.9))
+        health_score = diag.get("health_score")
+
+        # Severity-aware relevance: EvidenceRanker.calculate_score() weighs
+        # relevance_score * authority_weight * quality * confidence, with no native
+        # concept of "this evidence indicates an active fault" — only source-type
+        # authority tier. Without this boost, a genuine live critical diagnosis (e.g.
+        # High Backpressure at health 5.6) can be outranked by routine AST/TEL/ENG
+        # items (Level A/C authority) and silently dropped by the downstream cap-to-8
+        # in generate_advisory_draft_node, exactly the failure this fixes. A live
+        # fault is the single highest-value evidence a diagnostic agent can surface,
+        # so it is boosted to compete with — and typically beat — Level A authority
+        # items whenever the classifier has actually flagged a non-normal condition.
+        is_fault_active = primary_fault not in ("Normal Operation", "", None)
+        fault_relevance = 1.0 if is_fault_active else 0.75
+        est_time_to_trip = diag.get("est_time_to_trip", "N/A")
+        description = diag.get("description", "")
+        action_advisory = diag.get("action_advisory", "")
+        root_causes = diag.get("root_cause_drivers") or []
+        root_cause_str = "; ".join(f"{d[0]}: {d[1]}" for d in root_causes if isinstance(d, (list, tuple)) and len(d) == 2)
+
+        statement_parts = [
+            f"ESP_APM_models diagnosis for {well_id}: {primary_fault} "
+            f"(confidence {diag.get('confidence', f'{confidence_val*100:.0f}%')}), "
+            f"health score {health_score}/100, est. time-to-trip: {est_time_to_trip}."
+        ]
+        if description:
+            statement_parts.append(description)
+        if action_advisory:
+            statement_parts.append(f"Recommended action: {action_advisory}")
+        if root_cause_str:
+            statement_parts.append(f"Root-cause drivers: {root_cause_str}")
+
+        items.append(EvidenceItem(
+            evidence_id=f"EVID-VFD-{asset_id}-{uuid.uuid4().hex[:6]}",
+            evidence_type=EvidenceType.ML,
+            asset_id=asset_id,
+            source_system="ESP_APM_models.WellDiagnosticEngine",
+            source_id="fault_classification",
+            source_version="1.0.0",
+            timestamp=now_iso,
+            observed_at=engine_ts,
+            authority_level=AuthorityLevel.LEVEL_D_SITE_HISTORY,
+            quality_status=QualityStatus.GOOD,
+            confidence=confidence_val,
+            relevance_score=fault_relevance,
+            semantic_type="ml_fault_classification",
+            value=primary_fault,
+            statement=" ".join(statement_parts),
+            supporting_signals=list((vfd_diagnostic.get("raw_measurements") or {}).keys()),
+            citation=(
+                f"ESP_APM_models[well={well_id}, engine_ts={engine_ts}, "
+                f"fault={primary_fault}, health_score={health_score}]"
+            ),
+            source_deep_link=deep_link,
+        ))
+
+        # Dynamics (ΔP, torque proxy, thermal elevation, etc.) as a supplementary
+        # engineering-style statement folded into the same statement text is avoided here
+        # deliberately — dynamics are physics-derived intermediate values, not an
+        # independent evidence source, so they are not split into their own EvidenceItem.
+
+        if ml_anom.get("is_anomaly"):
+            anom_prob = float(ml_anom.get("anomaly_probability", 0.0))
+            items.append(EvidenceItem(
+                evidence_id=f"EVID-VFD-ANOM-{asset_id}-{uuid.uuid4().hex[:6]}",
+                evidence_type=EvidenceType.ML,
+                asset_id=asset_id,
+                source_system="ESP_APM_models.MultivariateAnomalyDetector",
+                source_id="anomaly_detector",
+                source_version="1.0.0",
+                timestamp=now_iso,
+                observed_at=engine_ts,
+                authority_level=AuthorityLevel.LEVEL_D_SITE_HISTORY,
+                quality_status=QualityStatus.GOOD,
+                confidence=anom_prob,
+                relevance_score=0.90 if is_fault_active else 0.80,
+                semantic_type="ml_anomaly_flag",
+                value="ANOMALOUS",
+                statement=(
+                    f"Multivariate IsolationForest anomaly detector flagged the current "
+                    f"14-signal reading for {well_id} as anomalous (probability {anom_prob:.2f}), "
+                    f"independent of the fault classifier's '{primary_fault}' verdict above."
+                ),
+                citation=f"ESP_APM_models.MultivariateAnomalyDetector[well={well_id}, engine_ts={engine_ts}]",
+                source_deep_link=deep_link,
+                derived_from=[items[0].evidence_id],
+            ))
+
+        return items
+
     # ── Historian Time-Series (SQLite DB) ─────────────────────────────────
     @classmethod
     def collect_from_historian(

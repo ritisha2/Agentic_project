@@ -185,6 +185,33 @@ class LiveDataBridge:
         return self._get(f"/api/esp/assets/{asset_id}/envelope")
 
     # ─────────────────────────────────────────────────────────────────────────
+    # VFD Diagnostic (ESP_APM_models.WellDiagnosticEngine, live MQTT-fed)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def get_vfd_diagnostic(self, asset_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch the latest ESP_APM_models diagnosis for this well — the 14-signal VFD
+        model, fed live off the real MQTT broker via cced_esp's vfd_diagnostic_service.
+        Maps to: GET /api/vfd/diagnostics/{asset_id}
+        Returns dict with: diagnostic {primary_fault, confidence, health_score, status,
+        est_time_to_trip, description, action_advisory, root_cause_drivers}, dynamics
+        {delta_p, torque_proxy, power_proxy_kva, thermal_elevation, ...}, ml_anomaly
+        {is_anomaly, anomaly_probability}, raw_measurements (the 14 VFD signals).
+        Returns None if the well has no diagnosis yet or cced_esp is unreachable —
+        never fabricated; distinct from get_ml_assessment() (the legacy health-index path).
+        """
+        return self._get(f"/api/vfd/diagnostics/{asset_id}")
+
+    def get_all_vfd_diagnostics(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch the latest ESP_APM_models diagnosis for every well seen so far.
+        Maps to: GET /api/vfd/diagnostics
+        Returns {well_id: diagnosis_dict, ...}; empty dict if unreachable/none yet.
+        """
+        data = self._get("/api/vfd/diagnostics")
+        return (data or {}).get("wells", {})
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Fleet Asset Registry
     # ─────────────────────────────────────────────────────────────────────────
 

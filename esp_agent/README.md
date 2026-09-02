@@ -116,25 +116,23 @@ python scripts/generate_telemetry.py
 
 ---
 
-## Next.js Web UI Interface
+## Frontend
 
-A minimal white web UI with a simple header, sidebar, chat interface, diagnostic cards, and live chart visualization is included in `ui/`.
+`esp_agent` is backend-only — it has no frontend of its own. The application's UI is
+`cced_esp/frontend-react`, a standalone React (Vite) SCADA/ESP operations dashboard
+that consumes this service's REST API (`:8090`) directly. To run it:
 
-### Launching the Web UI
+```bash
+cd cced_esp/frontend-react
+npm install
+npm run dev
+```
 
-1. Start the FastAPI Backend:
-   ```bash
-   cd esp_agent
-   python src/main.py
-   ```
-
-2. Start the Next.js Dev Server (in a new terminal):
-   ```bash
-   cd esp_agent/ui
-   npm run dev
-   ```
-
-3. Open **`http://localhost:3000`** in your browser!
+Start the FastAPI backend first so the dashboard has something to talk to:
+```bash
+cd esp_agent
+python src/main.py
+```
 
 ---
 

@@ -41,7 +41,8 @@ class ContextBuilder:
         model_outputs: Optional[Dict[str, Any]] = None,
         calculations: Optional[Dict[str, Any]] = None,
         knowledge_results: Optional[List[Dict[str, Any]]] = None,
-        specialist_results: Optional[List[Dict[str, Any]]] = None
+        specialist_results: Optional[List[Dict[str, Any]]] = None,
+        vfd_diagnostic: Optional[Dict[str, Any]] = None
     ) -> EvidencePack:
         """
         Builds, validates, ranks, deduplicates, and freezes an EvidencePack.
@@ -60,9 +61,16 @@ class ContextBuilder:
         if calculations:
             all_items.extend(EvidenceCollector.collect_from_engineering(asset_id, calculations))
 
-        # 4. Collect from Predictive Models
+        # 4. Collect from Predictive Models (legacy health-index path)
         if model_outputs:
             all_items.extend(EvidenceCollector.collect_from_models(asset_id, model_outputs))
+
+        # 4b. Collect from ESP_APM_models live VFD diagnosis (sole source of truth for
+        # live ESP fault classification — see collect_from_vfd_diagnostic() docstring).
+        # No-ops (returns []) if vfd_diagnostic is None, e.g. cced_esp unreachable or
+        # this well has no MQTT-fed diagnosis yet.
+        if vfd_diagnostic:
+            all_items.extend(EvidenceCollector.collect_from_vfd_diagnostic(asset_id, vfd_diagnostic))
 
         # 5. Collect from Knowledge RAG
         if knowledge_results is None and user_query:
@@ -161,7 +169,10 @@ class ContextBuilder:
             calculation_evidence=calc_ev,
             data_quality_summary=dq_summary,
             constraints=constraints,
-            provenance=["AssetContextService", "TelemetryService", "EngineeringService", "ModelAdapter", "RetrievalService"]
+            provenance=[
+                "AssetContextService", "TelemetryService", "EngineeringService", "ModelAdapter",
+                "RetrievalService"
+            ] + (["ESP_APM_models.WellDiagnosticEngine"] if vfd_diagnostic else [])
         )
 
         # Cryptographically Freeze Pack

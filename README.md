@@ -232,9 +232,11 @@ pip install -e .
 
 ### Step 2 — Node.js Frontend Setup
 
+The application's frontend is `cced_esp/frontend-react` — a standalone React (Vite) SCADA/telemetry dashboard. `esp_agent` has no frontend of its own; it is a backend-only agent/API service consumed via REST (`:8090`) or CLI tools (`query_historian.py`, etc.).
+
 ```bash
 # From the repository root
-cd esp_agent/ui
+cd cced_esp/frontend-react
 
 # Install all Node dependencies
 npm install
@@ -338,12 +340,12 @@ Expected: `Uvicorn running on http://0.0.0.0:8000`
 
 ---
 
-#### Terminal 5 — Next.js Frontend (Port 3000)
+#### Terminal 5 — cced_esp React Frontend (Port 3000/5173)
 ```powershell
-cd X:\TAS\Agentic_project\esp_agent\ui
+cd X:\TAS\Agentic_project\cced_esp\frontend-react
 npm run dev
 ```
-Expected: `Next.js 16.3.2 - Local: http://localhost:3000`
+This is the **main application UI** — the SCADA/ESP operations dashboard. `esp_agent` has no frontend of its own.
 
 ---
 
@@ -362,21 +364,15 @@ cd esp_agent && source .venv/bin/activate && python -m src.api.engineering_servi
 # Terminal 4 — BFF Gateway (real local LLM must already be running on :8080)
 cd esp_agent && source .venv/bin/activate && python -m src.main
 
-# Terminal 5 — Frontend
-cd esp_agent/ui && npm run dev
+# Terminal 5 — Frontend (main application UI)
+cd cced_esp/frontend-react && npm run dev
 ```
 
 ---
 
 ### Access the Application
 
-Open your browser at:
-
-```
-http://localhost:3000/workspace/FS-031
-```
-
-The **Agent Jane** floating dialog will appear bottom-right. Use the quick prompt chips or type a diagnostic query to trigger a full multi-agent run with streaming response and embedded Plotly charts.
+Open your browser at the URL printed by the `cced_esp/frontend-react` dev server (typically `http://localhost:3000` or `http://localhost:5173`). This is the ESP Operations Center dashboard — telemetry, envelope monitoring, diagnostics, and the Agent Jane advisory panel are all served from this single frontend.
 
 ---
 
@@ -639,8 +635,8 @@ pip install -e .
 ### Frontend Build Errors / Stale Cache
 
 ```bash
-cd esp_agent/ui
-rm -rf .next node_modules
+cd cced_esp/frontend-react
+rm -rf node_modules dist
 npm install
 npm run dev
 ```
