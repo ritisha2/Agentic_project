@@ -36,6 +36,10 @@ audit_service = AuditService()
 evidence_repo = EvidenceRepository()
 user_adapter = UserEntryAdapter()
 
+# Conversation memory — A3.T2 (shared singleton, same Redis as CheckpointManager)
+from src.memory.conversation_store import ConversationStore
+_conv_store = ConversationStore()
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # Conversational NLG Layer — makes Agent Jane respond like a real co-pilot
@@ -46,6 +50,7 @@ from src.agent.intent_router import IntentRouter
 
 _nlg_llm = LLMAdapter()
 _intent_router = IntentRouter()
+
 
 # Weak / conversational queries get a warm reply, not a diagnostic report.
 _CONVERSATIONAL_OBJECTIVES = {"OP07_GENERAL_INQUIRY"}
@@ -313,13 +318,30 @@ def start_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
     """
     POST /api/ui/agent/run
     Initiates a LangGraph Supervisor run with tracking correlation ID.
+    Reads X-Session-ID header for multi-turn conversation memory (A3.T2).
     """
+    session_id = request.headers.get("X-Session-ID") or None
     run_id = f"RUN-UI-{uuid.uuid4().hex[:8]}"
+
+    # Append user turn before running (so history is available in this run's context)
+    if session_id:
+        _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
+
     advisory = user_adapter.run(
         user_query=req.user_query,
         asset_id=req.asset_id,
-        request_id=run_id
+        request_id=run_id,
+        session_id=session_id,
     )
+
+    # Append agent turn after completion
+    if session_id:
+        agent_content = advisory.narrative or advisory.objective_id
+        _conv_store.append(
+            session_id, "assistant", str(agent_content)[:500],
+            well_id=req.asset_id or None,
+            intent=advisory.objective_id,
+        )
 
     return {
         "run_id": run_id,
@@ -333,17 +355,36 @@ from fastapi.responses import StreamingResponse
 import json
 
 @router.post("/agent/stream")
-async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
+async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
     """
     POST /api/ui/agent/stream
     Streams real-time execution tokens, status milestones, and Generative UI data payloads over NDJSON SSE.
+    Reads X-Session-ID header for multi-turn conversation memory (A3.T2).
     """
+    session_id = request.headers.get("X-Session-ID") or None
     run_id = f"RUN-UI-{uuid.uuid4().hex[:8]}"
+
+    # Append user turn before the run so history is available
+    if session_id:
+        _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
+
+    # Build conversation_context for the intent router
+    recent_turns: list = []
+    last_objective = None
+    if session_id:
+        recent_turns = _conv_store.get_history(session_id, limit=10)
+        for t in reversed(recent_turns):
+            if t.get("role") == "assistant" and t.get("intent_detected"):
+                last_objective = t["intent_detected"]
+                break
+    conv_ctx = {"last_well": req.asset_id or None, "last_objective": last_objective, "recent_turns": recent_turns} if session_id else None
 
     async def event_generator():
         # Route intent up-front so we can branch conversational vs diagnostic.
         try:
-            objective_id, route_conf, route_path = _intent_router.route(req.user_query)
+            objective_id, route_conf, route_path = _intent_router.route(
+                req.user_query, conversation_context=conv_ctx
+            )
         except Exception:
             objective_id, route_conf, route_path = "OP01_CURRENT_STATUS", 0.5, "fallback"
 
@@ -364,6 +405,10 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
             reply = await asyncio.to_thread(_compose_conversational_reply, req.user_query, req.asset_id)
             for chunk in _iter_stream_chunks(reply):
                 yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+            # Append agent turn for conversational replies too
+            if session_id:
+                _conv_store.append(session_id, "assistant", str(reply)[:500],
+                                   well_id=req.asset_id or None, intent=objective_id)
             yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
             return
 
@@ -373,7 +418,8 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest):
                 user_adapter.run,
                 user_query=req.user_query,
                 asset_id=req.asset_id,
-                request_id=run_id
+                request_id=run_id,
+                session_id=session_id,
             )
         except Exception as ex:
             logger.error(f"[BFF] Error executing Supervisor run {run_id}: {ex}", exc_info=True)

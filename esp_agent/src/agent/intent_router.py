@@ -30,12 +30,41 @@ class IntentRouter:
     def route(
         self,
         user_query: str,
-        event_code: Optional[str] = None
+        event_code: Optional[str] = None,
+        conversation_context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, float, str]:
         """
         Classify intent using 3-Path strategy.
         Returns: (objective_id: str, confidence: float, path_used: str)
+
+        Args:
+            user_query:           The raw operator query string.
+            event_code:           Optional SCADA/MQTT event code (Path C).
+            conversation_context: Optional dict with keys:
+                                    last_well      – most recent well_id in session
+                                    last_objective – objective_id from the prior turn
+                                    recent_turns   – list of recent turn dicts
+                                  When None, behaviour is identical to pre-A2 (A2.T3).
         """
+        # ── A2.T2: Follow-up resolution ──────────────────────────────────────
+        # Bare follow-up phrases resolve to the prior objective without a full
+        # re-route, preventing silent drop to OP03_FAULT_DIAGNOSIS.
+        _FOLLOWUP_TOKENS = {
+            "why", "is that bad", "what about it", "explain", "elaborate",
+            "tell me more", "and?", "so?", "what does that mean", "how bad",
+            "what now", "what next", "what should i do", "ok and",
+        }
+        if conversation_context:
+            last_obj = conversation_context.get("last_objective")
+            q_stripped = user_query.lower().strip().rstrip("?.,!")
+            if last_obj and q_stripped in _FOLLOWUP_TOKENS:
+                logger.info(
+                    "IntentRouter Path A (Follow-up): '%s' → carry forward %s",
+                    user_query[:40], last_obj,
+                )
+                return last_obj, 0.90, "Path_A_FollowUp"
+        # ─────────────────────────────────────────────────────────────────────
+
         # Path C: Direct Event Mapping via ObjectiveRegistry (Single Authority)
         if event_code:
             target_id = self.registry.resolve_event_mapping(event_code)

@@ -57,10 +57,12 @@ class CompactContextBuilder:
         telemetry: Optional[Dict[str, Any]] = None,
         engineering: Optional[Dict[str, Any]] = None,
         model_outputs: Optional[Dict[str, Any]] = None,
+        vfd_diagnostic: Optional[Dict[str, Any]] = None,
         specialist_results: Optional[List[Dict[str, Any]]] = None,
         evidence_refs: Optional[List[str]] = None,
         safety_constraints: Optional[List[str]] = None,
         conflicts: Optional[List[Any]] = None,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Build a compact context dict from all available supervisor state components.
@@ -78,9 +80,21 @@ class CompactContextBuilder:
         if engineering:
             compact["engineering"] = self._compress_engineering(engineering)
 
-        # --- ML/Model Scores ---
+        # --- ML/Model Scores (legacy health-index path) ---
         if model_outputs:
             compact["ml_scores"] = self._compress_model_outputs(model_outputs)
+
+        # --- ESP_APM_models Live VFD Diagnosis (sole source of truth for live fault
+        # classification — see collect_from_vfd_diagnostic() in evidence/collector.py).
+        # BUG FIX (2026-09-02): This was previously never threaded into the compact
+        # context at all, even though the evidence pack (and evidence_refs list, after
+        # the earlier cap-priority fix) correctly carried EVID-VFD-* items. The LLM
+        # prompt only ever saw bare evidence ID strings with no attached fault content,
+        # so a well showing a live CRITICAL fault (e.g. High Backpressure, health 5.6)
+        # still produced a "nominal, confidence 1.0" advisory — the model never actually
+        # saw the diagnosis text, only an opaque ID. This is the fix for that.
+        if vfd_diagnostic:
+            compact["live_fault_diagnosis"] = self._compress_vfd_diagnostic(vfd_diagnostic)
 
         # --- Specialist Findings ---
         if specialist_results:
@@ -102,6 +116,18 @@ class CompactContextBuilder:
         if conflicts:
             compact["conflicts_summary"] = self._compress_conflicts(conflicts)
 
+        # --- Conversation History (A3.T3) ---
+        # Compact: role + first 120 chars of content only — never re-dump evidence.
+        # Bounded to last 10 turns. Empty list and None both skip this key.
+        if conversation_history:
+            compact["conversation_history"] = [
+                {
+                    "role": t.get("role", "user"),
+                    "content": str(t.get("content", ""))[:120],
+                }
+                for t in conversation_history[-10:]
+            ]
+
         logger.debug(
             f"CompactContextBuilder: built compact context for {asset_id}/{objective_id} "
             f"with keys: {list(compact.keys())}"
@@ -119,12 +145,15 @@ class CompactContextBuilder:
             telemetry=ctx.get("telemetry"),
             engineering=ctx.get("engineering"),
             model_outputs=ctx.get("models"),
+            vfd_diagnostic=ctx.get("vfd_diagnostic"),
             specialist_results=state.get("specialist_results", []),
             evidence_refs=state.get("evidence_refs", []),
             safety_constraints=state.get("safety_state", {}).get("blocked_actions", []),
             conflicts=[c.model_dump() if hasattr(c, "model_dump") else c
                        for c in state.get("conflicts", [])],
+            conversation_history=ctx.get("history") or None,
         )
+
 
     # ------------------------------------------------------------------
     # Internal compression helpers
@@ -205,6 +234,37 @@ class CompactContextBuilder:
         for k, v in models.items():
             if k in keep:
                 result[k] = round(float(v), 3) if isinstance(v, (int, float)) else v
+        return result
+
+    def _compress_vfd_diagnostic(self, vfd: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compress ESP_APM_models.WellDiagnosticEngine's live diagnosis into a compact
+        dict the LLM can actually read and cite. This is the highest-value single piece
+        of evidence in the context — a live, physics-informed fault classification —
+        so it is kept as its own top-level compact_context key ("live_fault_diagnosis"),
+        never buried inside a generic list the model might skim past.
+        """
+        diag = vfd.get("diagnostic") or {}
+        ml_anom = vfd.get("ml_anomaly") or {}
+        root_causes = diag.get("root_cause_drivers") or []
+        root_cause_str = "; ".join(
+            f"{d[0]}: {d[1]}" for d in root_causes if isinstance(d, (list, tuple)) and len(d) == 2
+        )
+        result = {
+            "primary_fault": diag.get("primary_fault", "Normal Operation"),
+            "confidence": diag.get("confidence", "N/A"),
+            "health_score": diag.get("health_score"),
+            "status": diag.get("status", "").replace("🟢", "").replace("🟡", "").replace("🔴", "").strip(),
+            "est_time_to_trip": diag.get("est_time_to_trip", "N/A"),
+        }
+        if diag.get("description"):
+            result["description"] = diag["description"][:200]
+        if diag.get("action_advisory"):
+            result["recommended_action"] = diag["action_advisory"][:200]
+        if root_cause_str:
+            result["root_cause_drivers"] = root_cause_str[:200]
+        if ml_anom.get("is_anomaly"):
+            result["anomaly_flag"] = f"Independently confirmed anomalous (p={ml_anom.get('anomaly_probability', 0):.2f})"
         return result
 
     def _compress_conflicts(self, conflicts: List[Any]) -> List[str]:
