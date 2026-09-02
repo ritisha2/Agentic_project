@@ -64,6 +64,7 @@ class CompactContextBuilder:
         conflicts: Optional[List[Any]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         episodic_memory: Optional[Dict[str, Any]] = None,
+        telemetry_status: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build a compact context dict from all available supervisor state components.
@@ -76,6 +77,24 @@ class CompactContextBuilder:
         # --- Telemetry Summary ---
         if telemetry:
             compact["telemetry_summary"] = self._compress_telemetry(telemetry)
+
+        # --- Telemetry data-source honesty flag (X1) ---
+        # When the telemetry handoff verdict is not LIVE (FALLBACK/DEGRADED/MOCK), the
+        # numbers in telemetry_summary are synthetic placeholders, not measured readings.
+        # Tell the model explicitly so it never reports them as real values — the
+        # live_fault_diagnosis (VFD engine) remains the trustworthy signal in that case.
+        if telemetry_status:
+            status_val = str(telemetry_status.get("status", "")).upper()
+            if status_val and status_val != "LIVE":
+                compact["telemetry_data_source"] = {
+                    "status": status_val,
+                    "warning": (
+                        "Telemetry values above are synthetic/unavailable "
+                        f"({status_val}) — do NOT present them as measured readings. "
+                        "Base the assessment on live_fault_diagnosis and state that live "
+                        "telemetry was unavailable."
+                    ),
+                }
 
         # --- Engineering Snapshot ---
         if engineering:
@@ -164,6 +183,7 @@ class CompactContextBuilder:
                        for c in state.get("conflicts", [])],
             conversation_history=ctx.get("history") or None,
             episodic_memory=ctx.get("episodic_memory") or None,
+            telemetry_status=ctx.get("provenance", {}).get("telemetry") or None,
         )
 
 

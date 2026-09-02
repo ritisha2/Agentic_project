@@ -467,24 +467,43 @@ def create_supervisor_graph():
         # Enforce server-side Policy/ACL gate (§23)
         policy_engine.enforce_tenant_isolation(tenant_id, asset_id)
 
-        # Route through TelemetryService (§6: Agent → Service → LiveDataBridge)
+        # Route through TelemetryService (§6: Agent → Service → LiveDataBridge).
+        # Kept for the Service→handoff architecture + audit truthfulness (records which
+        # canonical signals the service surfaced); its VFD-canonical-keyed snapshot is
+        # NOT read with snake_case keys anymore (that mismatch silently dropped every
+        # value and forced the fallback path 100% of the time — the X1 root cause).
         from src.services.telemetry_service import TelemetryService
         tel_svc = TelemetryService()
         snap = tel_svc.get_latest(asset_id)
         snap_dict = snap.model_dump().get("measurements", {})
 
-        # MOCK_SCAFFOLD: inline telemetry defaults | reason: guard if a field is absent from the
-        # snapshot | expiry: when TelemetryService guarantees a full canonical signal set |
-        # ref: src/verification/handoff.py (verify_telemetry classifies the result LIVE/FALLBACK)
+        # ── Telemetry for graph reasoning: LIVE-FIRST, flagged fallback as last resort ──
+        # These inline defaults are the LAST resort and are deliberately the exact
+        # signature verify_telemetry() recognises as FALLBACK, so a fully-synthetic
+        # result is correctly classified downstream and never mistaken for live data.
+        # ref: src/verification/handoff.py
+        # MOCK_SCAFFOLD: inline telemetry fallback | expiry: when cced_esp live MQTT
+        # telemetry is guaranteed present for every asset.
         telemetry_data = {
-            "motor_temperature": snap_dict.get("motor_temperature", {}).get("value", 135.0),
-            "intake_pressure": snap_dict.get("intake_pressure", {}).get("value", 350.0),
-            "discharge_pressure": snap_dict.get("discharge_pressure", {}).get("value", 2100.0),
-            "flow_rate": snap_dict.get("flow_rate", {}).get("value", 1450.0),
-            "drive_current_average": snap_dict.get("drive_current_average", {}).get("value", 62.0),
-            "frequency": snap_dict.get("frequency", {}).get("value", 50.0),
-            "vibration_x": snap_dict.get("vibration_x", {}).get("value", 1.2),
+            "motor_temperature": 135.0,
+            "intake_pressure": 350.0,
+            "discharge_pressure": 2100.0,
+            "flow_rate": 1450.0,
+            "drive_current_average": 62.0,
+            "frequency": 50.0,
+            "vibration_x": 1.2,
         }
+        # Overlay genuine live cced_esp telemetry in the exact snake_case agent shape.
+        # Only present, non-zero fields overwrite defaults — a missing live field keeps
+        # the recognised fallback default rather than becoming a misleading 0.0.
+        try:
+            live_tel = live_bridge.get_telemetry_as_agent_dict(asset_id)
+            if live_tel and any(isinstance(v, (int, float)) and v != 0.0 for v in live_tel.values()):
+                for k, v in live_tel.items():
+                    if k in telemetry_data and isinstance(v, (int, float)) and v != 0.0:
+                        telemetry_data[k] = float(v)
+        except Exception as ex:
+            logger.debug("[data_quality_gate] live telemetry fetch failed for %s: %s", asset_id, ex)
 
         dq_report = dq_gate.evaluate(
             required_signals=req_signals,

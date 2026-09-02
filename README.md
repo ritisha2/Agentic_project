@@ -1,693 +1,428 @@
-﻿# ⚡ ESP Agentic APM Platform
+# ⚡ ESP APM — Autonomous Industrial AI Platform
 
-> **Autonomous AI Agentic Engineering & Diagnostic Management System for Electric Submersible Pumps (ESP)**
-
-Built with a LangGraph Supervisor multi-agent backbone, deterministic physics engines, dual-tier ML inference, and a Next.js Generative UI workspace — purpose-built for oil & gas ESP fleet monitoring, diagnosis, and engineering analysis.
+> **Autonomous AI Agentic Engineering, Diagnostic & Conversational Co-Pilot for Electrical Submersible Pumps (ESP)**
+> Built with LangGraph Supervisor multi-agent orchestration, deterministic physics calculation engines, dual-tier ML inference, live MQTT SCADA ingestion, and real-time React streaming UI.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [System Architecture](#system-architecture)
-2. [Repository Structure](#repository-structure)
-3. [Microservice Network & Port Map](#microservice-network--port-map)
-4. [Prerequisites](#prerequisites)
-5. [Installation](#installation)
-6. [Configuration](#configuration)
-7. [Running the Application](#running-the-application)
-8. [Health Check](#health-check)
-9. [Running Tests](#running-tests)
-10. [Offline / LLM-Free Mode](#offline--llm-free-mode)
-11. [API Reference](#api-reference)
-12. [Generative UI Workspace](#generative-ui-workspace)
-13. [Agent Architecture](#agent-architecture)
-14. [Engineering Calculation Engine](#engineering-calculation-engine)
-15. [ML Model Integration](#ml-model-integration)
-16. [Troubleshooting](#troubleshooting)
-17. [Documentation Index](#documentation-index)
+1. [Executive Overview](#-executive-overview)
+2. [End-to-End System Architecture](#-end-to-end-system-architecture)
+3. [Microservices & Active Port Map](#-microservices--active-port-map)
+4. [What Has Been Built (Phase-by-Phase Roadmap)](#-what-has-been-built-phase-by-phase-roadmap)
+   - [Live MQTT Telemetry & Historian Pipeline](#1-live-mqtt-telemetry--historian-pipeline)
+   - [Dual-Tier Machine Learning & VFD Diagnostics](#2-dual-tier-machine-learning--vfd-diagnostics)
+   - [Level A: Conversational Memory & Implicit Resolution](#3-level-a-conversational-memory--implicit-resolution)
+   - [Level B: HITL Clarification & Intelligent Routing](#4-level-b-hitl-clarification--intelligent-routing)
+   - [Level C: Durability & Long-Term Well Memory](#5-level-c-durability--long-term-well-memory)
+5. [Quickstart: Single-Laptop Operation](#-quickstart-single-laptop-operation)
+6. [Detailed CLI Command Guide](#-detailed-cli-command-guide)
+   - [Multi-Service Launcher](#1-multi-service-launcher)
+   - [Historian Query CLI](#2-historian-query-cli)
+   - [Verifying Endpoints with cURL](#3-verifying-endpoints-with-curl)
+7. [Running the Test Suites](#-running-the-test-suites)
+8. [Directory & Repository Structure](#-directory--repository-structure)
+9. [Git Deployment & Submodule Synchronization](#-git-deployment--submodule-synchronization)
+10. [Troubleshooting & FAQ](#-troubleshooting--faq)
 
 ---
 
-## System Architecture
+## 🚀 Executive Overview
 
-```
- +----------------------------------------------------------+
- |           NEXT.JS 16 GENERATIVE UI WORKSPACE             |
- |   Agent Jane Dialog . Plotly Charts . Generative Blocks  |
- |                  http://localhost:3000                    |
- +---------------------------+------------------------------+
-                             | NDJSON Streaming (SSE) / REST
-                             v
- +----------------------------------------------------------+
- |         FASTAPI BACKEND-FOR-FRONTEND (BFF) GATEWAY       |
- |            LangGraph Supervisor . Policy Gate            |
- |                  http://localhost:8000                    |
- +----------+------------------+----------------------------+
-            |                  |                  |
-            v                  v                  v
- +------------------+  +------------------+  +------------------+
- | ESP Telemetry    |  | ESP ML Model API |  | ESP Engineering  |
- | Mock API   :8081 |  | Inference  :8082 |  | Service    :8083 |
- +------------------+  +------------------+  +------------------+
+The **ESP APM Platform** is an enterprise-grade artificial intelligence supervisory co-pilot (**Agent Jane**) designed for oil & gas production operators and artificial lift engineers. 
 
- +------------------------------------------------------------------+
- |              LANGGRAPH SUPERVISOR MULTI-AGENT                    |
- |  ReliabilitySpecialist | EngineeringSpecialist                   |
- |  WellPerformanceSpecialist | DigitalTwinSpecialist               |
- |  MaintenanceSpecialist | KnowledgeSpecialist                     |
- +------------------------------------------------------------------+
-```
+Unlike conventional chatbots, Agent Jane combines:
+- **Deterministic Engineering Calculations**: Dynamic total dynamic head (TDH), pump hydraulic performance curves, electrical motor slip, and gas volume fraction (GVF).
+- **Dual-Tier ML Diagnostics**: Offline well calibration baseline models coupled with real-time Variable Frequency Drive (VFD) anomaly classifiers across 14 high-frequency parameters.
+- **Fail-Closed Safety Engine (OP00)**: Autonomous physical control refusal policy enforcing advisory-only boundaries.
+- **Stateful Multi-Turn Memory**: Cross-turn context tracking, implicit asset resolution, and cross-session per-well episodic memory.
+- **Human-In-The-Loop (HITL) Interrupts**: Self-gating clarification routing that pauses graph execution in `<10s` for ambiguous operator inquiries rather than running expensive analysis on the wrong asset.
 
 ---
 
-## Repository Structure
+## 🏗️ End-to-End System Architecture
 
 ```
-.
-├── README.md                              <- You are here
-│
-├── docs/                                  <- Master Documentation Hub
-│   ├── architecture/                      <- Architecture design specs (.docx)
-│   │   ├── ESP_APM_Engineering_Service_Architecture_Granular_Design.docx
-│   │   ├── ESP_APM_ML_Model_Integration_and_Consumption_Design.docx
-│   │   ├── ESP_APM_PHASE_8_Evidence_Pack_Agent_Context_Implementation_Design.docx
-│   │   ├── ESP_APM_PHASE_9_FRONTEND_BACKEND_PRODUCT_INTEGRATION_ARCHITECTURE.docx
-│   │   ├── ESP_APM_Telemetry_Mock_API_Specification.docx
-│   │   └── ESP_APM_Telemetry_Service_Consumption_Architecture.docx
-│   ├── specifications/                    <- Technical contracts & dependencies (.md)
-│   │   ├── ESP_Agentic_ML_Team_Dependencies_and_API_PreRequisites.md
-│   │   ├── ESP_Engineering_Research_Package.md
-│   │   └── dependency_detail.md
-│   └── engineering_registry/             <- Immutable formula & OEM registries
-│
-├── esp_agent/                             <- Primary Application Root
-│   ├── .env.example                       <- Environment variable template
-│   ├── docker-compose.yml                 <- Infrastructure (Qdrant, Neo4j, Postgres, Redis)
-│   ├── pyproject.toml                     <- Python package config (Python >= 3.10)
-│   ├── requirements.txt                   <- Python dependencies
-│   ├── langgraph.json                     <- LangGraph runtime configuration
-│   │
-│   ├── src/                               <- Core Python Application
-│   │   ├── main.py                        <- FastAPI BFF entrypoint (:8000)
-│   │   ├── adapters/                      <- External system adapters
-│   │   │   ├── telemetry_adapter.py       <- Telemetry API client (:8081)
-│   │   │   ├── ml_model_adapter.py        <- ML Model API client (:8082)
-│   │   │   ├── rag_adapter.py             <- Qdrant vector store adapter
-│   │   │   └── rule_adapter.py            <- Rule-based advisory engine
-│   │   ├── agent/                         <- LangGraph Agent Runtime
-│   │   │   ├── runtime.py                 <- Supervisor graph orchestration
-│   │   │   ├── intent_router.py           <- Query intent classification
-│   │   │   ├── objective_router.py        <- Objective routing & dispatch
-│   │   │   ├── objective_registry.py      <- Objective catalogue
-│   │   │   ├── data_quality_gate.py       <- Input quality validation gate
-│   │   │   ├── state.py                   <- Agent state schemas
-│   │   │   ├── specialists/               <- Specialist LangGraph subgraphs
-│   │   │   │   ├── reliability.py         <- ReliabilitySpecialist (ML + rules)
-│   │   │   │   ├── engineering.py         <- EngineeringSpecialist (calc engine)
-│   │   │   │   ├── well_performance.py    <- WellPerformanceSpecialist
-│   │   │   │   ├── digital_twin.py        <- DigitalTwinSpecialist
-│   │   │   │   ├── maintenance.py         <- MaintenanceSpecialist
-│   │   │   │   └── knowledge.py           <- KnowledgeSpecialist (RAG)
-│   │   │   ├── supervisor/                <- Supervisor node & routing logic
-│   │   │   └── workflows/                 <- Multi-step workflow graphs
-│   │   ├── api/                           <- FastAPI Servers
-│   │   │   ├── fastapi_app.py             <- Main app factory
-│   │   │   ├── telemetry_mock_server.py   <- Standalone Telemetry API (:8081)
-│   │   │   ├── ml_model_mock_server.py    <- Standalone ML Model API (:8082)
-│   │   │   ├── engineering_service_server.py <- Standalone Engineering API (:8083)
-│   │   │   ├── cli.py                     <- Command-line interface
-│   │   │   ├── mcp/                       <- MCP (Model Context Protocol) server
-│   │   │   └── rest/
-│   │   │       └── bff_routes.py          <- /api/ui/* endpoints + NDJSON streaming
-│   │   ├── events/                        <- Event stream models & persistence
-│   │   ├── llm/
-│   │   │   └── gateway.py                 <- llama.cpp local LLM client
-│   │   ├── policy/                        <- Safety gate & guardrails
-│   │   ├── schemas/
-│   │   │   └── engineering_contracts.py   <- Engineering calculation schemas
-│   │   └── services/
-│   │       ├── asset_context_service.py   <- Asset context & metadata
-│   │       ├── engineering/               <- Physics calculation engine
-│   │       │   ├── engine.py              <- Deterministic calc engine (A1-G3)
-│   │       │   ├── oem_repository.py      <- OEM pump curve master data
-│   │       │   └── calculation_registry.py <- Formula catalogue loader
-│   │       ├── retrieval_service.py       <- RAG knowledge retrieval
-│   │       ├── telemetry_service.py       <- Telemetry data service
-│   │       └── xai_service.py             <- Explainable AI evidence service
-│   │
-│   ├── tests/                             <- Pytest Integration Test Suite (48 files)
-│   │   ├── test_engineering_service.py    <- 9 engineering calc tests
-│   │   ├── test_telemetry_mock_api.py     <- Telemetry API tests
-│   │   ├── test_ml_model_integration.py   <- ML adapter tests
-│   │   ├── test_phase10_llm_layer.py      <- LLM gateway tests
-│   │   └── test_phase*.py                 <- Phased integration tests (phases 1-10)
-│   │
-│   └── ui/                                <- Next.js 16 Frontend
-│       ├── package.json
-│       ├── src/
-│       │   ├── app/workspace/[assetId]/   <- Dynamic workspace page
-│       │   ├── components/
-│       │   │   └── dialog/
-│       │   │       ├── AgentDialog.tsx    <- Floating, resizable dialog
-│       │   │       └── GenerativeUIBlocks.tsx <- Markdown, Plotly, action cards
-│       │   └── lib/api.ts                 <- API client + NDJSON stream reader
-│       └── next.config.ts
-│
-├── data/                                  <- Sample datasets & telemetry fixtures
-├── esp-knowledge/                         <- Knowledge base documents
-├── models/                               <- LLM model files (local llama.cpp)
-├── tools/                                <- Helper tooling & scripts
-└── bin/                                  <- Binary utilities
+                                  +---------------------------------------+
+                                  |     REACT FRONTEND (Vite / React 18)  |
+                                  |  - Real-Time Telemetry Dashboard      |
+                                  |  - Agent Floating Dock & Chat Drawer  |
+                                  |  - NDJSON Token Streaming Parser      |
+                                  |  - Plotly Interactive Charts          |
+                                  |         http://localhost:3000         |
+                                  +-------------------+-------------------+
+                                                      |
+                         +----------------------------+----------------------------+
+                         | (REST / SSE Telemetry)                                  | (NDJSON Agent Runs & Clarifications)
+                         v                                                         v
+       +------------------------------------+                    +------------------------------------+
+       |   CORE CCED_ESP BACKEND (FastAPI)  |                    |      AGENT JANE BFF GATEWAY        |
+       | - REST & SSE Telemetry Endpoints   |                    | - User Entry Adapter (v7.0)        |
+       | - Live VFD Diagnostic Service      |                    | - Session Intent Routing           |
+       | - SQLite Recovery Historian        |                    | - Clarification Pending Cache      |
+       |       http://localhost:8000        |                    |       http://localhost:8090        |
+       +-----------------+------------------+                    +-----------------+------------------+
+                         |                                                         |
+                         | (Ingestion)                                             | (LangGraph Execution)
+                         v                                                         v
+       +------------------------------------+                    +------------------------------------+
+       |        MQTT BROKER (Mosquitto)     |                    |    LANGGRAPH SUPERVISOR GRAPH      |
+       | - Topic: cced/esp/telemetry/live   |                    | - Route Objective Node             |
+       | - 14 High-Frequency VFD Parameters |                    | - HITL Clarification Node          |
+       |          localhost:1883            |                    | - Multi-Specialist Dynamic Loop    |
+       +------------------------------------+                    | - Compact Context Builder          |
+                                                                 +-----------------+------------------+
+                                                                                   |
+            +----------------------------------------------------------------------+
+            |                         |                          |
+            v                         v                          v
++-----------------------+ +-----------------------+ +-----------------------+
+|    REDIS (Port 6379)  | |   QDRANT (Port 6333)  | |   OFFICE LLM SERVER   |
+| - ConversationStore   | | - esp_kb Collection   | | - llama-server :8080  |
+| - RedisCheckpointer   | | - Vector Embeddings   | | - Qwen2.5-Coder-3B    |
+| - WellEpisodicMemory  | | - OEM Manual RAG      | | - 4B-safe Prompting   |
++-----------------------+ +-----------------------+ +-----------------------+
 ```
 
 ---
 
-## Microservice Network & Port Map
+## 🔌 Microservices & Active Port Map
 
-| Port | Service | Description | Health Check |
-|------|---------|-------------|--------------|
-| **3000** | Next.js UI Workspace | Generative UI, Agent Jane dialog, Plotly charts | `GET http://localhost:3000/workspace/FS-031` |
-| **8000** | FastAPI BFF Gateway | LangGraph supervisor, NDJSON streaming, REST API | `GET http://localhost:8000/health` |
-| **8081** | ESP Telemetry API | Canonical telemetry snapshots, asset listing | `GET http://localhost:8081/health` |
-| **8082** | ESP ML Model API | Fault classification, 24h risk prediction | `GET http://localhost:8082/api/v1/models/health` |
-| **8083** | ESP Engineering API | Deterministic calc engine (A1-G3), OEM curves | `GET http://localhost:8083/health` |
-
-**Infrastructure Services (Docker — Optional):**
-
-| Port | Service | Purpose |
-|------|---------|---------|
-| **6333** | Qdrant | Vector database for RAG knowledge retrieval |
-| **7474** | Neo4j HTTP | Graph database for asset relationships |
-| **7687** | Neo4j Bolt | Neo4j Bolt protocol |
-| **5432** | PostgreSQL | Relational event store |
-| **6379** | Redis | Event stream broker |
-| **8080** | llama.cpp server | Local LLM inference (CPU, no GPU required) |
+| Port | Service Name | Directory / Module | Purpose |
+|---|---|---|---|
+| `:3000` | **React Frontend** | `cced_esp/frontend-react` | Operator UI, live asset telemetry, Agent Jane dock |
+| `:8000` | **Core Backend API** | `cced_esp/backend/main.py` | Telemetry REST API, SSE stream, VFD diagnostics |
+| `:8090` | **Agent Jane BFF** | `esp_agent/run_agent_server.py` | FastAPI gateway for LangGraph agent runs & streaming |
+| `:1883` | **MQTT Broker** | Mosquitto | Pub/sub broker for real-time ESP pump telemetry |
+| `:8080` | **LLM Inference Server** | `llama-server` | Local CPU/GPU GGUF inference (Qwen2.5-Coder-3B) |
+| `:6379` | **Redis Cache & Memory** | Redis Server | Session memory, LangGraph checkpoints, well history |
+| `:6333` | **Qdrant Vector DB** | Qdrant Engine | Knowledge base embeddings (`esp_kb`) for RAG retrieval |
+| `:7474` / `:7687` | **Neo4j Graph DB** | Neo4j | Equipment topology and failure mode knowledge graph |
 
 ---
 
-## Prerequisites
+## 🛠️ What Has Been Built (Phase-by-Phase Roadmap)
 
-### Required
+### 1. Live MQTT Telemetry & Historian Pipeline
+- **14 VFD Telemetry Channels**: Ingests high-resolution electrical and hydraulic telemetry:
+  - `frequency`, `motor_current`, `voltage`, `active_power`, `power_factor`
+  - `intake_pressure` (PIP), `discharge_pressure` (PDP), `motor_temperature`, `vibration_x/y`
+  - `flow_rate`, `choke_position`, `drive_frequency_reference`, `output_torque`
+- **Zero-Loss Historian (`unlabelled_recovered.db`)**: High-speed SQLite ingestion with multi-column covering indexes (`asset_id`, `timestamp`) indexing millions of rows without table lockups.
+- **Historian Query Utility (`esp_agent/query_historian.py`)**: CLI and API tool that parses plain-English questions into bounded SQL queries, computes 6-hour statistical rollups, and extracts source-cited Level-D evidence packs.
 
-| Dependency | Version | Notes |
-|------------|---------|-------|
-| **Python** | >= 3.10 | Backend, agent runtime, microservices |
-| **Node.js** | >= 18.x | Next.js frontend |
-| **npm** | >= 9.x | Node package manager |
+### 2. Dual-Tier Machine Learning & VFD Diagnostics
+- **Offline Physics & Calibration Models (`ESP_APM_models/`)**: Anomaly detectors and head degradation models calibrated against individual well baselines (`well_calibration_registry.json`).
+- **Online VFD Diagnostic Engine (`cced_esp/backend/services/vfd_diagnostic_service.py`)**:
+  - Detects **High Backpressure**, **Gas Interference / Gas Lock**, **Pump-off**, **Mechanical Wear**, and **Underload**.
+  - Computes health indices and real-time physical rule deviations.
+  - Injected directly into the supervisor context as structured evidence (`EVID-VFD-*`).
 
-### Optional (Full Mode with LLM + Vector DB)
+### 3. Level A: Conversational Memory & Implicit Resolution
+- **Redis `ConversationStore` (`esp_agent/src/memory/conversation_store.py`)**:
+  - Key: `esp:conv:{session_id}`, 7-day TTL, capped at 20 turns, serves last 10.
+  - Graceful in-memory fallback if Redis is temporarily unavailable.
+- **Frontend Identity Tracking (`X-Session-ID`)**:
+  - `agentApi.js` generates and persists a session UUID in `localStorage` across page navigations and tabs.
+- **Implicit Asset Resolution**:
+  - When an operator asks a follow-up (e.g. *"is that bad?"* or *"what should I do?"*) without re-specifying the well name, `IntentRouter` and `UserEntryAdapter` resolve the well ID and prior objective from conversation context without defaulting to random assets.
 
-| Dependency | Version | Notes |
-|------------|---------|-------|
-| **Docker Desktop** | latest | For Qdrant, Neo4j, PostgreSQL, Redis |
-| **llama.cpp** | latest | Local LLM server (CPU inference, no GPU needed) |
+### 4. Level B: HITL Clarification & Intelligent Routing
+- **Ambiguity Scoring (`RouteResult.is_ambiguous`)**:
+  - Evaluates semantic confidence (`<0.65`) combined with absence of well context to flag queries as ambiguous.
+  - Prevents the legacy silent-default bug where vague queries automatically executed `OP03_FAULT_DIAGNOSIS`.
+- **LangGraph `clarification_node` & Interrupts**:
+  - Interrupts graph execution before expensive specialist calculations or LLM calls run (`<10s` turnaround).
+  - Emits clarification questions (e.g., *"Which well are you asking about — FS-031 or FSWS-001-A?"*).
+  - Operator answer resumes the identical paused thread via `Command(resume=answer)`.
+- **14-Objective LLM Classifier Fallback (`_llm_classify`)**:
+  - Calls local LLM with constrained prompt when keyword and semantic scores are low.
+  - Short-circuits when Path A deterministic rules already match (sub-2s latency).
+  - Refined greeting filter ensures operational queries (e.g., *"morning, can you take a look at things?"*) route to status/fault checks rather than small talk.
 
-> **Note**: The platform runs fully in **Offline Mode** without Docker or llama.cpp. See [Offline / LLM-Free Mode](#offline--llm-free-mode).
-
----
-
-## Installation
-
-### Step 1 — Python Backend Setup
-
-```bash
-# Navigate into the backend application root
-cd esp_agent
-
-# Create and activate a virtual environment
-python -m venv .venv
-
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Linux / macOS
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install the package in editable mode (required for python -m src.* imports)
-pip install -e .
-```
-
-### Step 2 — Node.js Frontend Setup
-
-The application's frontend is `cced_esp/frontend-react` — a standalone React (Vite) SCADA/telemetry dashboard. `esp_agent` has no frontend of its own; it is a backend-only agent/API service consumed via REST (`:8090`) or CLI tools (`query_historian.py`, etc.).
-
-```bash
-# From the repository root
-cd cced_esp/frontend-react
-
-# Install all Node dependencies
-npm install
-```
-
-### Step 3 — Infrastructure (Optional — Full Mode Only)
-
-Only needed for live Qdrant vector search and Neo4j graph traversal:
-
-```bash
-# From esp_agent/ directory
-docker-compose up -d
-
-# Verify all containers running
-docker-compose ps
-```
+### 5. Level C: Durability & Long-Term Well Memory
+- **Per-Well Episodic Store (`WellEpisodicMemoryStore`)**:
+  - Persists rolling summaries in Redis under `esp:well_memory:{well_id}` with a 30-day TTL.
+  - Tracks total assessments, last diagnosis, last recommendation, and the rolling 5 most recent diagnostic events.
+- **Context Injection (`CompactContextBuilder`)**:
+  - Injects `compact["episodic_well_memory"]` into the LLM context.
+  - When an operator opens a brand-new browser session on `FSWS-001-A`, Agent Jane recalls: *"Previous Operational Memory for FSWS-001-A: Last assessed on 2026-09-02 (High Backpressure). Recommendation: Inspect surface choke."*
+- **Restart-Safe LangGraph Checkpointer (`RedisCheckpointer`)**:
+  - Subclasses `MemorySaver`, serializing checkpoint states, blobs, and writes to Redis (`esp:lg_check:{thread_id}`) via base64-encoded binary payloads (7-day TTL).
+  - Re-hydrates interrupted threads across backend process restarts, enabling true restart-safe HITL continuation.
 
 ---
 
-## Configuration
+## 💻 Quickstart: Single-Laptop Operation
 
-Copy the example environment file:
+To operate the entire platform locally on a single workstation or laptop:
 
-```bash
-cd esp_agent
-cp .env.example .env
-```
+### Prerequisites
+1. **Windows 10/11** or **Ubuntu 22.04+**
+2. **Python 3.10+** (with virtual environment created in `esp_agent/.venv` and `cced_esp/.venv`)
+3. **Node.js 18+ & npm**
+4. **Redis Server** running locally on port `6379`
+5. **Mosquitto MQTT Broker** running locally on port `1883`
+6. **Local LLM Engine** (`llama-server` running Qwen2.5-Coder-3B or compatible OpenAI-compatible endpoint)
 
-Edit `.env` with your settings:
+### One-Command Full Startup
+Run the unified multi-service supervisor script from the project root:
 
-```dotenv
-# LLM Gateway (llama.cpp local server)
-LLM_GATEWAY_URL=http://localhost:8080/v1
-LLM_MODEL_NAME=qwen2.5-3b-instruct
-LLM_TIMEOUT_SEC=60
-LLM_MAX_RETRIES=3
-# LLM_OFFLINE is disabled by project policy — the real local LLM server is always used.
-# Do not set this variable; it has no effect (see src/llm/gateway.py).
-
-# Vector DB
-QDRANT_URL=http://localhost:6333
-
-# Graph DB
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=password123
-
-# Relational DB
-POSTGRES_URL=postgresql://localhost:5432/esp_agent
-```
-
----
-
-## Running the Application
-
-All **5 services** must run simultaneously. Open **5 separate terminal windows**.
-
-### Windows PowerShell
-
-#### Terminal 1 — Telemetry API (Port 8081)
 ```powershell
+# From the project root (X:\TAS\Agentic_project)
+python run_all_services.py
+```
+*(Or double-click `start_all_services.bat` on Windows)*
+
+This script boots and monitors:
+1. **Core Backend** on `http://localhost:8000`
+2. **Agent Jane BFF** on `http://localhost:8090`
+3. **React Frontend** on `http://localhost:3000`
+4. **MQTT Telemetry Publisher** feeding live 14-parameter data
+
+Once running, navigate your browser to **`http://localhost:3000`**.
+
+---
+
+## 📖 Detailed CLI Command Guide
+
+### 1. Multi-Service Launcher
+
+To run individual components manually in separate terminal windows:
+
+```powershell
+# Window 1: Start Redis & Mosquitto (if installed as services, skip this)
+redis-server
+mosquitto -v
+
+# Window 2: Start Core Backend (cced_esp)
+cd X:\TAS\Agentic_project\cced_esp
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Window 3: Start Agent Jane BFF (esp_agent)
 cd X:\TAS\Agentic_project\esp_agent
-.venv\Scripts\Activate.ps1
-python -m src.api.telemetry_mock_server
-```
-Expected: `Uvicorn running on http://0.0.0.0:8081`
+.venv\Scripts\python.exe run_agent_server.py --port 8090
 
----
-
-#### Terminal 2 — ML Model API (Port 8082)
-```powershell
-cd X:\TAS\Agentic_project\esp_agent
-.venv\Scripts\Activate.ps1
-python -m src.api.ml_model_mock_server
-```
-Expected: `Uvicorn running on http://0.0.0.0:8082`
-
----
-
-#### Terminal 3 — Engineering Service API (Port 8083)
-```powershell
-cd X:\TAS\Agentic_project\esp_agent
-.venv\Scripts\Activate.ps1
-python -m src.api.engineering_service_server
-```
-Expected: `Uvicorn running on http://0.0.0.0:8083`
-
----
-
-#### Terminal 4 — FastAPI BFF Gateway (Port 8000)
-
-**The local LLM server (llama.cpp on port 8080) MUST be running before this step.**
-Offline/mock mode is disabled by project policy — the gateway always uses the real LLM.
-
-```powershell
-cd X:\TAS\Agentic_project\esp_agent
-.venv\Scripts\Activate.ps1
-python -m src.main
-```
-Expected: `Uvicorn running on http://0.0.0.0:8000`
-
----
-
-#### Terminal 5 — cced_esp React Frontend (Port 3000/5173)
-```powershell
+# Window 4: Start React Frontend
 cd X:\TAS\Agentic_project\cced_esp\frontend-react
 npm run dev
-```
-This is the **main application UI** — the SCADA/ESP operations dashboard. `esp_agent` has no frontend of its own.
 
----
-
-### Linux / macOS Bash
-
-```bash
-# Terminal 1 — Telemetry
-cd esp_agent && source .venv/bin/activate && python -m src.api.telemetry_mock_server
-
-# Terminal 2 — ML Model
-cd esp_agent && source .venv/bin/activate && python -m src.api.ml_model_mock_server
-
-# Terminal 3 — Engineering
-cd esp_agent && source .venv/bin/activate && python -m src.api.engineering_service_server
-
-# Terminal 4 — BFF Gateway (real local LLM must already be running on :8080)
-cd esp_agent && source .venv/bin/activate && python -m src.main
-
-# Terminal 5 — Frontend (main application UI)
-cd cced_esp/frontend-react && npm run dev
+# Window 5: (Optional) Publish Live MQTT Telemetry Stream
+cd X:\TAS\Agentic_project\cced_esp
+.venv\Scripts\python.exe src/mqtt_publisher.py
 ```
 
 ---
 
-### Access the Application
+### 2. Historian Query CLI
 
-Open your browser at the URL printed by the `cced_esp/frontend-react` dev server (typically `http://localhost:3000` or `http://localhost:5173`). This is the ESP Operations Center dashboard — telemetry, envelope monitoring, diagnostics, and the Agent Jane advisory panel are all served from this single frontend.
-
----
-
-## Health Check
-
-Run in a new terminal after starting all services to verify everything is up:
-
-**PowerShell:**
-```powershell
-$endpoints = @(
-    "http://localhost:8081/health",
-    "http://localhost:8082/api/v1/models/health",
-    "http://localhost:8083/health",
-    "http://localhost:8000/health",
-    "http://localhost:3000/workspace/FS-031"
-)
-foreach ($ep in $endpoints) {
-    try {
-        $r = Invoke-WebRequest -Uri $ep -Method GET -TimeoutSec 5
-        Write-Host "$ep -> HTTP $($r.StatusCode)" -ForegroundColor Green
-    } catch {
-        Write-Host "$ep -> FAILED" -ForegroundColor Red
-    }
-}
-```
-
-**Bash / curl:**
-```bash
-for ep in \
-  "http://localhost:8081/health" \
-  "http://localhost:8082/api/v1/models/health" \
-  "http://localhost:8083/health" \
-  "http://localhost:8000/health" \
-  "http://localhost:3000/workspace/FS-031"; do
-    code=$(curl -o /dev/null -s -w "%{http_code}" "$ep")
-    echo "$ep -> HTTP $code"
-done
-```
-
-All five should return `HTTP 200`.
-
----
-
-## Running Tests
-
-The test suite has **48 test files** covering all platform layers.
-
-```bash
-cd esp_agent
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Engineering Calculation Engine (9 tests)
-python -m pytest tests/test_engineering_service.py -v
-
-# Telemetry API
-python -m pytest tests/test_telemetry_mock_api.py -v
-
-# ML Model Integration
-python -m pytest tests/test_ml_model_integration.py -v
-
-# LLM Gateway Layer
-python -m pytest tests/test_phase10_llm_layer.py -v
-
-# FastAPI BFF routes
-python -m pytest tests/test_fastapi.py tests/test_phase9_bff_routes.py -v
-
-# Full Phase 1-5 Architecture
-python -m pytest tests/test_phase1_architecture.py tests/test_phase2_contracts.py \
-  tests/test_phase3_kb.py tests/test_phase4_objective_layer.py \
-  tests/test_phase5_golden_scenarios.py -v
-```
-
-### Automated Browser UI Test (Playwright)
-
-```bash
-# Requires all 5 services to be running first
-cd esp_agent
-python tests/run_ui_live_browser_test.py
-```
-
----
-
-## Offline / LLM-Free Mode — DISABLED BY PROJECT POLICY
-
-`LLM_OFFLINE` no longer has any effect. The gateway always calls the real local LLM
-server (llama.cpp on port 8080). Setting `LLM_OFFLINE=1` in the environment is ignored
-(a warning is logged) — see `src/llm/gateway.py`.
-
-If the LLM server is genuinely unreachable at request time, `LLMGateway.chat()` still
-falls back to a deterministic mock response automatically as a runtime *availability*
-safeguard — that is unrelated to this env var and cannot be toggled on intentionally.
-
-Engineering calculations (A1-G3) and ML mock inference remain fully deterministic
-regardless of LLM availability, as before.
-
----
-
-## API Reference
-
-### FastAPI BFF Gateway — Port 8000
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/api/ui/assets` | List all ESP assets |
-| `GET` | `/api/ui/assets/{assetId}/workspace` | Get asset workspace context |
-| `POST` | `/api/ui/agent/stream` | **NDJSON streaming agent run** |
-| `POST` | `/api/ui/agent/query` | Synchronous agent query |
-| `GET` | `/docs` | Swagger UI |
-
-### Telemetry API — Port 8081
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/api/v1/assets` | List all monitored assets |
-| `GET` | `/api/v1/assets/{assetId}/telemetry/current` | Latest telemetry snapshot |
-| `GET` | `/api/v1/assets/{assetId}/telemetry/history` | Historical telemetry |
-| `GET` | `/docs` | Swagger UI |
-
-### ML Model API — Port 8082
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/models/health` | Health check |
-| `POST` | `/api/v1/models/fault-classification` | Fault classification inference |
-| `POST` | `/api/v1/models/risk-prediction` | 24-hour risk score prediction |
-| `GET` | `/api/v1/models/status` | Model version & status |
-| `GET` | `/docs` | Swagger UI |
-
-### Engineering Service API — Port 8083
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/api/v1/engineering/calculate` | Run deterministic engineering calculation |
-| `GET` | `/api/v1/engineering/calculations` | List available calculations (A1-G3) |
-| `GET` | `/api/v1/engineering/oem/{pumpModel}` | Get OEM pump curve data |
-| `GET` | `/docs` | Swagger UI |
-
----
-
-## Generative UI Workspace
-
-The workspace is built on **Next.js 16 App Router** with a floating, resizable **Agent Jane** dialog system.
-
-### Dialog Features
-
-- **Floating, resizable** — drag to reposition, expand/collapse between compact (480px) and wide (740px) mode
-- **NDJSON streaming** — real-time token streaming from the multi-agent backend
-- **Generative UI Blocks** rendered dynamically:
-  - `MarkdownBlock` — GitHub-flavoured markdown with code highlighting
-  - `PlotlyChartBlock` — interactive Plotly.js charts embedded inline
-  - `StatusBannerBlock` — workflow milestone banners
-  - `ActionCardBlock` — recommended operator action cards
-- **Quick Prompt Chips** — pre-configured diagnostic shortcuts:
-  - "Diagnose drawdown & motor temp"
-  - "Analyze intake gas interference"
-  - "Check pump efficiency degradation"
-
-### Key Libraries
-
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `@assistant-ui/react` | ^0.15 | AI chat UI components & streaming |
-| `@assistant-ui/react-langgraph` | ^0.14 | LangGraph to UI adapter |
-| `ai` (Vercel AI SDK) | ^7.0 | Streaming, structured outputs |
-| `react-plotly.js` | ^4.1 | Interactive engineering charts |
-| `react-markdown` | ^10.1 | Markdown rendering in dialog |
-| `remark-gfm` | ^4.0 | GitHub Flavored Markdown support |
-| `react-resizable-panels` | ^4.12 | Drag-to-resize layout panels |
-
----
-
-## Agent Architecture
-
-```
-User Query
-    |
-    v
-Intent Router (classify query intent)
-    |
-    v
-Supervisor Graph
-    +-- ReliabilitySpecialist    <- ML model outputs, failure risk, RUL
-    +-- EngineeringSpecialist    <- Physics calculations (A1-G3), OEM curves
-    +-- WellPerformanceSpecialist <- Production rate, drawdown, inflow
-    +-- DigitalTwinSpecialist    <- Virtual ESP state estimation
-    +-- MaintenanceSpecialist    <- Work order generation, maintenance planning
-    +-- KnowledgeSpecialist      <- RAG document retrieval, precedent search
-```
-
-### Design Principles
-
-- **LLM is NOT the calculation authority** — all physics formulas execute in the deterministic engine
-- **Fail-closed policy** — missing required parameters (SG, Water Cut) block calculations rather than assume defaults
-- **Evidence-packing** — every advisory is backed by traceable data provenance
-- **Offline-first** — full diagnostic capability without external LLM dependency
-
----
-
-## Engineering Calculation Engine
-
-Implemented in `esp_agent/src/services/engineering/engine.py`:
-
-| Code | Formula | Description |
-|------|---------|-------------|
-| **A1** | `H = (2.31 x dP) / SG` | Pressure to Head conversion (ft) |
-| **A2** | `P_hyd = (Q x H x SG) / 3960` | Hydraulic Power (hp) |
-| **A4** | `Q_adj = Q x (f/60)` / `H_adj = H x (f/60)^2` | Affinity Laws (VSD frequency) |
-| **A5** | `%BEP = Q_operating / Q_BEP_at_freq x 100` | Best Efficiency Point % |
-| **B1** | OEM curve interpolation | Pump head curve at operating frequency |
-| **C2** | `%Load = I_measured / I_nameplate x 100` | Motor Load % |
-| **E1** | Shaft power & efficiency | Pump efficiency from OEM curves |
-| **F1** | Wear rate estimation | Bearing & impeller wear model |
-
-**OEM Pump Models Supported:**
-- Baker Hughes D1450
-- Schlumberger DN1750
-- M500 Motor series
-
----
-
-## ML Model Integration
-
-ML adapter at `esp_agent/src/adapters/ml_model_adapter.py` consumes v2.0.0 output contracts:
-
-| Model | Outputs | Description |
-|-------|---------|-------------|
-| Fault Classifier | `fault_type`, `confidence`, `severity` | Multi-class fault classification |
-| Risk Predictor | `risk_score_24h`, `risk_score_72h`, `rul_days` | Remaining Useful Life & risk horizon |
-
-Integration flow:
-```
-POST /api/v1/models/fault-classification -> ReliabilitySpecialist
-POST /api/v1/models/risk-prediction      -> ReliabilitySpecialist
-```
-
----
-
-## Troubleshooting
-
-### Port Already in Use
+Query the SQLite telemetry database (`unlabelled_recovered.db`) using natural language:
 
 ```powershell
-# Find and kill a process on a port (Windows)
-netstat -ano | findstr :8081
-taskkill /PID <PID_NUMBER> /F
+cd X:\TAS\Agentic_project\esp_agent
+
+# Run a 6-hour production decline investigation on FS-031
+.venv\Scripts\python.exe query_historian.py --query "Why is production declining on FS-031 in the last 6 hours?" --export-json
+
+# Evaluate thermal stress on FS-010 over past 24 hours
+.venv\Scripts\python.exe query_historian.py --query "Evaluate thermal stress and motor temperature on FS-010 over past 24 hours" --window 24h --export-json
 ```
 
-### Python Module Not Found
+---
 
-```bash
-cd esp_agent
-pip install -e .
-```
+### 3. Verifying Endpoints with cURL
 
-### Frontend Build Errors / Stale Cache
-
-```bash
-cd cced_esp/frontend-react
-rm -rf node_modules dist
-npm install
-npm run dev
-```
-
-### `Failed to fetch workspace for FS-031`
-
-The FastAPI BFF Gateway (port 8000) is not running. Verify:
-
-```bash
+#### Health Check
+```powershell
+# Core Backend
 curl http://localhost:8000/health
+
+# Agent Jane BFF
+curl http://localhost:8090/health
 ```
 
-### LLM Timeout Errors
+#### Synchronous Agent Advisory (`/api/ui/agent/run`)
+```powershell
+curl -X POST http://localhost:8090/api/ui/agent/run `
+  -H "Content-Type: application/json" `
+  -H "X-Session-ID: sess-test-12345" `
+  -d '{
+    "asset_id": "FSWS-001-A",
+    "user_query": "What is the current status and health index?"
+  }'
+```
 
-`LLM_OFFLINE` is disabled by policy and will not help here. Instead:
-1. Confirm llama.cpp is running and healthy: `curl http://localhost:8080/health`
-2. Increase `LLM_TIMEOUT_SEC` / `LLM_MAX_RETRIES` in `.env` if the model is slow to respond
-   (CPU inference of a cold model can take 20-40s per call).
+#### Streaming Agent Advisory (`/api/ui/agent/stream`)
+```powershell
+curl -N -X POST http://localhost:8090/api/ui/agent/stream `
+  -H "Content-Type: application/json" `
+  -H "X-Session-ID: sess-test-12345" `
+  -d '{
+    "asset_id": "FSWS-001-A",
+    "user_query": "Is there any gas interference?"
+  }'
+```
 
-### Streaming Agent Request Failed
+#### Test Ambiguous Clarification Trigger
+```powershell
+curl -X POST http://localhost:8090/api/ui/agent/run `
+  -H "Content-Type: application/json" `
+  -H "X-Session-ID: sess-clarif-test" `
+  -d '{
+    "asset_id": null,
+    "user_query": "morning, can you take a look at things?"
+  }'
+```
+*Expected response: An advisory with `objective_id: "CLARIFICATION"` and question asking which well to inspect.*
 
-Verify the BFF streaming endpoint:
+---
 
-```bash
-curl -X POST http://localhost:8000/api/ui/agent/stream \
-  -H "Content-Type: application/json" \
-  -d '{"assetId": "FS-031", "query": "Run diagnostics"}'
+## 🧪 Running the Test Suites
+
+All test suites are located in `esp_agent/tests` and run via pytest:
+
+```powershell
+cd X:\TAS\Agentic_project\esp_agent
+
+# 1. Run Level A Tests (Conversational Memory & Context)
+.venv\Scripts\python.exe -m pytest tests/test_plan_level_a_conversation_memory.py -v
+
+# 2. Run Level B Tests (Ambiguity Scoring & HITL Clarification)
+.venv\Scripts\python.exe -m pytest tests/test_plan_level_b_clarification_routing.py -v
+.venv\Scripts\python.exe -m pytest tests/test_plan_level_b_conversation.py -v
+
+# 3. Run Level C Tests (Well Episodic Durability & Restart Safety)
+.venv\Scripts\python.exe -m pytest tests/test_plan_level_c_durability.py -v
+
+# 4. Run Full Integration Suite
+.venv\Scripts\python.exe -m pytest tests/test_plan_level_c_durability.py tests/test_plan_level_b_conversation.py -v
 ```
 
 ---
 
-## Documentation Index
+## 📂 Directory & Repository Structure
 
-| Document | Path | Contents |
-|----------|------|---------|
-| Engineering Service Architecture | `docs/architecture/ESP_APM_Engineering_Service_Architecture_Granular_Design.docx` | Calc engine design |
-| ML Model Integration Design | `docs/architecture/ESP_APM_ML_Model_Integration_and_Consumption_Design.docx` | ML contracts |
-| Evidence Pack Design (Phase 8) | `docs/architecture/ESP_APM_PHASE_8_Evidence_Pack_Agent_Context_Implementation_Design.docx` | Context & evidence |
-| Frontend/Backend Integration (Phase 9) | `docs/architecture/ESP_APM_PHASE_9_FRONTEND_BACKEND_PRODUCT_INTEGRATION_ARCHITECTURE.docx` | API & UI design |
-| Telemetry Mock API Spec | `docs/architecture/ESP_APM_Telemetry_Mock_API_Specification.docx` | Mock data contracts |
-| Telemetry Consumption Architecture | `docs/architecture/ESP_APM_Telemetry_Service_Consumption_Architecture.docx` | Telemetry design |
-| ML Team Dependencies | `docs/specifications/ESP_Agentic_ML_Team_Dependencies_and_API_PreRequisites.md` | ML API contract |
-| Engineering Research Package | `docs/specifications/ESP_Engineering_Research_Package.md` | ESP physics reference |
-| Dependency Detail | `docs/specifications/dependency_detail.md` | Service dependencies |
+```
+X:\TAS\Agentic_project
+│
+├── Plan.md                                <- Authoritative multi-phase delivery specification
+├── README.md                              <- Project Master Documentation (This file)
+├── run_all_services.py                    <- Unified multi-process launcher for all servers
+├── start_all_services.bat                 <- Windows batch file quickstart
+│
+├── cced_esp/                              <- Core Backend & React Frontend Submodule
+│   ├── backend/
+│   │   ├── main.py                        <- FastAPI Core Server (:8000)
+│   │   ├── mqtt_collector.py              <- Live MQTT Subscriber daemon
+│   │   └── services/
+│   │       └── vfd_diagnostic_service.py  <- 14-parameter VFD heuristic classifier
+│   ├── frontend-react/                    <- Vite + React 18 UI (:3000)
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   │   └── AgentFloatingDock.jsx  <- Agent Jane streaming chat drawer
+│   │   │   ├── context/TelemetryContext.jsx
+│   │   │   └── services/agentApi.js       <- Session ID & streaming API client
+│   ├── data/
+│   │   └── unlabelled_recovered.db        <- Historical SQLite telemetry store
+│   └── src/                               <- Legacy inference & MQTT publisher
+│
+├── esp_agent/                             <- Agent Jane Orchestration Core
+│   ├── run_agent_server.py                <- BFF Gateway Server entrypoint (:8090)
+│   ├── query_historian.py                 <- Natural language SQLite historian utility
+│   ├── src/
+│   │   ├── agent/
+│   │   │   ├── intent_router.py           <- 3-path router + ambiguity scorer + LLM fallback
+│   │   │   ├── objective_registry.py      <- 14 Level-2 objectives registry
+│   │   │   └── supervisor/
+│   │   │       ├── graph.py               <- LangGraph Supervisor state graph + clarification node
+│   │   │       ├── user_entry.py          <- UserEntryAdapter (v7.0) with pause/resume contracts
+│   │   │       └── state.py               <- AgentState TypedDict schema
+│   │   ├── memory/
+│   │   │   ├── conversation_store.py      <- Level A: Per-session Redis sliding memory
+│   │   │   ├── well_memory.py             <- Level C: Per-well episodic long-term store
+│   │   │   └── redis_checkpointer.py      <- Level C: Restart-safe LangGraph checkpointer
+│   │   ├── llm/
+│   │   │   ├── gateway.py                 <- Office LLM HTTP client (Qwen2.5-Coder-3B)
+│   │   │   ├── context_builder.py         <- Compact context compressor for 4B models
+│   │   │   └── adapter.py                 <- Pydantic advisory schema generator
+│   │   └── api/rest/
+│   │       └── bff_routes.py              <- UI REST & SSE streaming endpoints
+│   └── tests/
+│       ├── test_plan_level_a_conversation_memory.py
+│       ├── test_plan_level_b_clarification_routing.py
+│       ├── test_plan_level_b_conversation.py
+│       └── test_plan_level_c_durability.py
+│
+├── ESP_APM_models/                        <- Baseline calibration machine learning models
+│   ├── calibration_registry.py
+│   ├── anomaly_detector.py
+│   ├── fault_classifier.py
+│   └── well_calibration_registry.json
+│
+└── models/                                <- Local LLM GGUF model storage (Git-ignored)
+    ├── Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf
+    └── Qwen3-4B-Q4_K_M.gguf
+```
 
 ---
 
-## License
+## 🔄 Git Deployment & Submodule Synchronization
 
-Internal — ESP APM Agentic Platform — TAS Engineering Division
+The repository consists of a **Root Repository** (`Agentic_project`) and an embedded **Submodule** (`cced_esp`).
+
+### Pushing Changes Safely
+Always push the submodule first before updating the root pointer:
+
+```powershell
+# 1. Commit and push the submodule (cced_esp)
+cd X:\TAS\Agentic_project\cced_esp
+git add -A
+git commit -m "feat: backend and frontend updates"
+git push origin main
+
+# 2. Commit and push the root repository (Agentic_project)
+cd X:\TAS\Agentic_project
+git add Plan.md README.md cced_esp esp_agent/ ESP_APM_models/
+git commit -m "feat: level a/b/c agent enhancements"
+git push origin dev
+```
+
+### Cloning onto a New Machine
+```powershell
+git clone --recursive -b dev https://github.com/ritisha2/Agentic_project.git
+cd Agentic_project
+git submodule update --init --recursive
+```
 
 ---
 
-*Last updated: 2026-08-27 | Platform v1.0.0*
+## ❓ Troubleshooting & FAQ
+
+#### 1. Why does an ambiguous query like *"morning, take a look"* not run diagnostics?
+This is an intentional Level B feature. In industrial oilfields with dozens of ESP pumps, executing a 60-second diagnostic run without a specified well could generate false alarms on the wrong asset. Agent Jane pauses via `clarification_node` in `<10s` and prompts you for the target well.
+
+#### 2. Where are the `.gguf` model files?
+Because GitHub imposes a strict 100MB file size limit, `.gguf` binary weights (>2GB) are excluded via `.gitignore`. Place them in `<ProjectRoot>/models/` manually or pull them from your team's internal model registry.
+
+#### 3. How do I clear conversation or well memory for testing?
+To wipe Redis memory keys:
+```powershell
+# Open redis-cli and flush specific patterns:
+redis-cli --scan --pattern "esp:*" | xargs redis-cli del
+# Or flush entire local Redis:
+redis-cli flushall
+```
+
+#### 4. `TypeError: 'NoneType' object is not callable` in `LLMGateway`
+Ensure your local `llama-server` is listening at the URL specified in `esp_agent/.env` (`LLM_GATEWAY_URL=http://localhost:8080/v1` or office server IP). Verify health via:
+```powershell
+curl http://localhost:8080/health
+```
+
+---
+
+## 📜 License & Operational Note
+
+**Internal & Confidential** — CCED / TAS Engineering APM Project.  
+All recommendations emitted by Agent Jane are strictly **ADVISORY-ONLY**. Direct control commands to VFD drives or surface chokes must be executed and verified by a licensed human field operator.
