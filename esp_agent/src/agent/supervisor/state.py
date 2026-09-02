@@ -74,6 +74,10 @@ class AgentState(TypedDict):
     audit: AuditState
     budget: BudgetState
     error: Optional[str]
+    # B3: Clarification / HITL fields
+    is_ambiguous: bool
+    clarification_question: Optional[str]
+    clarification_answer: Optional[str]
 
 
 def create_initial_agent_state(
@@ -107,6 +111,10 @@ def create_initial_agent_state(
             "history": [],
             "engineering": {},
             "models": {},
+            # ESP_APM_models live diagnosis (14-signal VFD engine, real MQTT-fed) — a
+            # separate source from "models" above (the legacy health-index path). None
+            # until load_minimum_context_node populates it; never fabricated.
+            "vfd_diagnostic": None,
             "knowledge": []
         },
         "plan": {
@@ -137,5 +145,8 @@ def create_initial_agent_state(
             "start_time": time.time(),
             "timeout_seconds": 120.0
         },
-        "error": None
+        "error": None,
+        "is_ambiguous": False,
+        "clarification_question": None,
+        "clarification_answer": None,
     }

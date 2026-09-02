@@ -77,7 +77,7 @@ class ObjectiveRouter:
         now_str = datetime.utcnow().isoformat() + "Z"
 
         # Step 1: Intent Classification (3-Path Intent Router)
-        objective_id, routing_confidence, path_used = self.intent_router.route(user_query, event_code=event_code)
+        objective_id, routing_confidence, path_used, _is_ambiguous = self.intent_router.route(user_query, event_code=event_code)
         objective_def: Optional[ObjectiveDefinition] = self.registry.get(objective_id)
 
         # Step 2: Resolve exact asset + time window via Asset Context Service

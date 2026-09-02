@@ -7,6 +7,8 @@ import time
 import logging
 from typing import Dict, Any, List, Optional
 from langgraph.graph import StateGraph, END, START
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import interrupt
 
 from src.agent.supervisor.state import AgentState, create_initial_agent_state
 from src.agent.supervisor.specialist_contracts import SpecialistInput, SpecialistOutput, ConflictRecord
@@ -53,9 +55,17 @@ def create_supervisor_graph():
         event_id = state["request"]["event_id"]
 
         obj_id = state["run"]["objective_id"]
+        is_ambiguous = False
+
         if trigger_type == "user" and user_query:
-            obj_id, conf, path = intent_router.route(user_query)
-            logger.info(f"Supervisor resolve_objective: IntentRouter routed query '{user_query[:30]}' -> {obj_id} (conf={conf:.2f})")
+            # conversation_context carried through state context history
+            conv_ctx = state.get("context", {}).get("conversation_context") or None
+            route_result = intent_router.route(user_query, conversation_context=conv_ctx)
+            obj_id, conf, path, is_ambiguous = route_result
+            logger.info(
+                "Supervisor resolve_objective: IntentRouter routed query '%s' -> %s (conf=%.2f, ambiguous=%s)",
+                user_query[:30], obj_id, conf, is_ambiguous,
+            )
         elif trigger_type == "event" and event_id:
             obj_id = state["run"].get("objective_id") or "OP03_FAULT_DIAGNOSIS"
 
@@ -70,7 +80,42 @@ def create_supervisor_graph():
             "title": obj_def.title if obj_def else ""
         })
 
-        return {"run": run_update, "audit": audit}
+        return {"run": run_update, "audit": audit, "is_ambiguous": is_ambiguous}
+
+    def clarification_node(state: AgentState) -> Dict[str, Any]:
+        """
+        B3.T1 — HITL clarification node.
+        Fires only when the router marks is_ambiguous=True and no implicit well is in context.
+        Calls LangGraph interrupt() to pause the graph and surface a question to the operator.
+        The interrupt value IS the question text; the BFF streams it as a text_delta to the UI.
+        Resumes when the operator's next message arrives via Command(resume=answer).
+        """
+        user_query = state["request"]["user_query"]
+        asset_id = state["request"]["asset_id"]
+
+        # Build a context-aware clarification question
+        if not asset_id or asset_id == "UNKNOWN":
+            question = (
+                f"I want to help, but I'm not sure which asset you mean. "
+                f"Could you tell me which well or pump you're asking about? "
+                f"(e.g. FS-031, FSWS-001-A, or another)"
+            )
+        else:
+            question = (
+                f"I'm not quite sure what you'd like me to check for {asset_id}. "
+                f"Are you asking about current status, a production decline, a fault, "
+                f"performance optimisation, or something else?"
+            )
+
+        logger.info("Supervisor clarification_node: interrupting for '%s...'", user_query[:40])
+        # interrupt() pauses the graph here; the value is surfaced to the BFF caller.
+        # Execution resumes from this exact point when Command(resume=answer) is received.
+        answer = interrupt({"question": question, "asset_id": asset_id})
+
+        return {
+            "clarification_question": question,
+            "clarification_answer": str(answer) if answer else None,
+        }
 
     # Objectives that are HARD-REFUSED before any specialist/LLM work — advisory-only lock.
     # Mirrors the legacy ObjectiveRouter's refusal check (objective_router.py) so both
@@ -82,6 +127,9 @@ def create_supervisor_graph():
         obj_id = state["run"]["objective_id"]
         if obj_id in _HARD_REFUSAL_OBJECTIVES:
             return "control_refusal"
+        # B3: Gate on ambiguity — pause for clarification before expensive graph work
+        if state.get("is_ambiguous", False):
+            return "clarification"
         obj_def = registry.get(obj_id)
         if obj_def is not None and obj_def.scope == "fleet":
             return "fleet_inventory"
@@ -504,6 +552,14 @@ def create_supervisor_graph():
         provenance["model"] = model_verdict.to_dict()
         ctx["provenance"] = provenance
 
+        # ---- ESP_APM_models live VFD diagnosis (14-signal, real MQTT-fed engine) ----
+        # Kept as a DISTINCT context key from ctx["models"] above (the legacy health-index
+        # path) rather than merged/overwritten, since the two are structurally different
+        # and independently sourced. Absent (None) rather than faked if cced_esp has no
+        # diagnosis yet for this well — never fabricated.
+        vfd_diag = live_bridge.get_vfd_diagnostic(asset_id)
+        ctx["vfd_diagnostic"] = vfd_diag
+
         # ---- Deterministic TDH physics via the engineering tool ----
         tdh_res = mcp.invoke("calculate_tdh", {
             "pdp_psi": float(tel.get("discharge_pressure") or 2100.0),
@@ -704,6 +760,7 @@ def create_supervisor_graph():
             asset_context=state["context"].get("asset"),
             telemetry_data=state["context"].get("telemetry"),
             model_outputs=state["context"].get("models"),
+            vfd_diagnostic=state["context"].get("vfd_diagnostic"),
             calculations=state["context"].get("engineering"),
             knowledge_results=state["context"].get("knowledge"),
             specialist_results=state.get("specialist_results")
@@ -823,9 +880,23 @@ def create_supervisor_graph():
             )
             verification = ["1. Inspect physical wellhead gauge.", "2. Confirm SCADA telemetry alignment."]
 
+        # Real VFD diagnosis dict (not just the bare evidence ID) — used by _evidence_label
+        # below to render actual fault content instead of echoing the opaque ID string.
+        _vfd_ctx = state["context"].get("vfd_diagnostic")
+
         def _evidence_label(ref: str) -> str:
             """Derive a human-readable observation from the opaque evidence ref string."""
             ref_s = str(ref)
+            if ref_s.startswith("EVID-VFD-ANOM-") and _vfd_ctx:
+                anom = _vfd_ctx.get("ml_anomaly") or {}
+                prob = anom.get("anomaly_probability", 0.0)
+                return f"ESP_APM_models Anomaly Detector: reading flagged anomalous (probability {prob:.2f})"
+            if ref_s.startswith("EVID-VFD-") and _vfd_ctx:
+                diag = _vfd_ctx.get("diagnostic") or {}
+                fault = diag.get("primary_fault", "Normal Operation")
+                health = diag.get("health_score", "N/A")
+                conf = diag.get("confidence", "N/A")
+                return f"ESP_APM_models Live Diagnosis: {fault} (confidence {conf}, health {health}/100)"
             if ref_s.startswith("esp:engineering:tdh:"):
                 val = ref_s.split("esp:engineering:tdh:")[-1]
                 return f"Engineering: Total Dynamic Head calculated at {val} ft"
@@ -859,6 +930,9 @@ def create_supervisor_graph():
         def _evidence_deep_link(ref: str, asset: str) -> Optional[str]:
             """Generate dynamic direct URL to the live Database GUI or in-app explorer."""
             ref_s = str(ref)
+            if ref_s.startswith("EVID-VFD-"):
+                # Direct link to cced_esp's live VFD diagnostic REST endpoint for this well
+                return f"http://127.0.0.1:8000/api/vfd/diagnostics/{asset}"
             if ref_s.startswith("esp:model:") and "fault:" in ref_s:
                 fault_name = ref_s.split("fault:")[-1].replace("_", " ").title()
                 # Direct deep-link to Neo4j Browser executing graph pattern
@@ -874,8 +948,25 @@ def create_supervisor_graph():
                 return f"http://localhost:3000/?openAssetDeepDive={asset}"
             return None
 
-        # Cap to 8 most informative items — prevents wall-of-noise in the UI
-        capped_refs = state["evidence_refs"][:8]
+        # Cap to 8 most informative items — prevents wall-of-noise in the UI.
+        #
+        # BUG FIX (2026-09-02): state["evidence_refs"] is NOT a single consistently-ranked
+        # list — it's a concatenation of two unrelated orderings: specialist-produced refs
+        # appended first in collect_results_node (esp:model:*, esp:rule:*, esp:kb:*), followed
+        # by evidence_gate_node's ranked EvidencePack items (EVID-AST-*, EVID-TEL-*, EVID-ENG-*,
+        # EVID-VFD-*, EVID-ML-*, in EvidenceRanker authority/relevance order). A blind [:8]
+        # positional slice over this concatenation silently dropped the live ESP_APM_models VFD
+        # fault diagnosis for a well showing a CRITICAL fault (High Backpressure, health 5.6) —
+        # observed live: EVID-VFD-* items ranked at positions 15-16 of 20 and never reached the
+        # LLM prompt, producing a false "operating nominally" advisory for a genuinely faulted well.
+        #
+        # Fix: always guarantee any live VFD/ML fault evidence a seat within the cap, since a
+        # live fault classification is the single highest-value evidence this agent can surface —
+        # then fill remaining slots from the rest of the list in its existing order.
+        all_refs = state["evidence_refs"]
+        priority_refs = [r for r in all_refs if str(r).startswith(("EVID-VFD-", "EVID-ML-", "esp:model:"))]
+        remaining_refs = [r for r in all_refs if r not in priority_refs]
+        capped_refs = (priority_refs + remaining_refs)[:8]
         evidence_items = [
             AdvisoryEvidenceItem(
                 source_type=("Engineering" if ref.startswith("esp:engineering")
@@ -891,12 +982,27 @@ def create_supervisor_graph():
             ).model_dump() for ref in capped_refs
         ]
 
-        # Check gateway health status to flag live vs offline fallback mode
-        is_live = llm_adapter.gateway.is_available()
+        # Report the verdict of the SPECIFIC LLM call that produced this advisory's text
+        # (llm_adapter.last_trace, set inside generate_advisory_from_compact_context's
+        # finally block), rather than re-probing gateway.is_available() now — a re-probe
+        # reflects current server health, not whether THIS call was live or mock, and can
+        # be wrong if the server blipped mid-request and recovered before this line runs.
+        last_trace = getattr(llm_adapter, "last_trace", None)
+        if last_trace is not None:
+            is_live = not last_trace.is_mock
+            model_desc = last_trace.model_name or llm_adapter.gateway.model_name
+            latency_txt = f" | latency={last_trace.latency_ms:.0f}ms | tokens={last_trace.total_tokens}"
+        else:
+            # No LLM call actually completed this run (e.g. exception before gateway.chat()
+            # returned) — fall back to a live health probe purely as a last resort, and label
+            # it explicitly as such so it's never confused with a per-call verdict.
+            is_live = llm_adapter.gateway.is_available()
+            model_desc = llm_adapter.gateway.model_name
+            latency_txt = " | (no completed call this run — health probe only)"
         llm_provenance_flag = (
-            "LLM Engine: ONLINE (llama.cpp CPU / Qwen3-4B-Q4_K_M.gguf)"
+            f"LLM Engine: ONLINE (llama.cpp CPU / {model_desc}){latency_txt}"
             if is_live
-            else "LLM Engine: OFFLINE / MOCK FALLBACK (Local LLM Server Offline on port 8080)"
+            else f"LLM Engine: OFFLINE / MOCK FALLBACK (server unreachable at {llm_adapter.gateway.gateway_url}){latency_txt}"
         )
 
         # §3 Verification/Gating: surface the upstream data-source verdicts (LIVE vs FALLBACK/MOCK)
@@ -965,6 +1071,7 @@ def create_supervisor_graph():
     # -------------------------------------------------------------------------
 
     builder.add_node("resolve_objective", resolve_objective_node)
+    builder.add_node("clarification", clarification_node)       # B3.T1
     builder.add_node("control_refusal", control_refusal_node)
     builder.add_node("fleet_inventory", fleet_inventory_node)
     builder.add_node("resolve_asset", resolve_asset_node)
@@ -983,10 +1090,13 @@ def create_supervisor_graph():
     builder.add_conditional_edges("resolve_objective", route_after_resolve_objective, {
         "control_refusal": "control_refusal",
         "fleet_inventory": "fleet_inventory",
+        "clarification": "clarification",       # B3.T1: ambiguous → ask first
         "resolve_asset": "resolve_asset"
     })
     builder.add_edge("control_refusal", END)
     builder.add_edge("fleet_inventory", END)
+    # B3.T2: After clarification + resume, the answer is in state; continue to resolve_asset
+    builder.add_edge("clarification", "resolve_asset")
     builder.add_edge("resolve_asset", "data_quality_gate")
     builder.add_edge("data_quality_gate", "load_minimum_context")
     builder.add_edge("load_minimum_context", "plan")
@@ -1004,7 +1114,10 @@ def create_supervisor_graph():
     builder.add_edge("safety_gate", "generate_advisory_draft")
     builder.add_edge("generate_advisory_draft", END)
 
-    return builder.compile()
+    # B1.T1: Compile with MemorySaver so interrupt()/Command(resume=) works.
+    # MemorySaver is in-process; survives for the lifetime of the module singleton.
+    # thread_id must be passed in config on every invoke/stream call (= session_id or run_id).
+    return builder.compile(checkpointer=MemorySaver())
 
 
 # Export compiled singleton for LangGraph CLI / langgraph dev

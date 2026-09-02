@@ -145,7 +145,7 @@ class TestPhaseA2_RouterConversationContext:
 
     def test_backward_compatible_without_context(self):
         """A2.T3 — existing single-shot callers (no conversation_context) must keep working."""
-        obj_id, conf, path = self.router.route("Why is FS-031 producing less?")
+        obj_id, conf, path, is_ambiguous = self.router.route("Why is FS-031 producing less?")
         assert obj_id, "route() must still return an objective with no conversation_context arg"
 
     def test_route_accepts_conversation_context_param(self):
@@ -171,7 +171,7 @@ class TestPhaseA2_RouterConversationContext:
                 {"role": "assistant", "content": "FSWS-001-A shows High Backpressure."},
             ],
         }
-        obj_id, conf, path = self.router.route("is that bad?", conversation_context=conv_ctx)
+        obj_id, conf, path, is_ambiguous = self.router.route("is that bad?", conversation_context=conv_ctx)
         assert obj_id == "OP01_CURRENT_STATUS", (
             f"Follow-up 'is that bad?' with prior objective OP01_CURRENT_STATUS in context "
             f"must carry that objective forward, not silently default. Got: {obj_id} via {path}"
@@ -180,7 +180,7 @@ class TestPhaseA2_RouterConversationContext:
     def test_ambiguous_followup_without_context_still_defaults_safely(self):
         """Sanity: a follow-up with NO conversation_context at all should not crash, even if
         it still falls back to the old default — this documents current pre-Level-B behavior."""
-        obj_id, conf, path = self.router.route("is that bad?")
+        obj_id, conf, path, is_ambiguous = self.router.route("is that bad?")
         assert obj_id  # must not raise / must not be None
 
 

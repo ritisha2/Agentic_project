@@ -19,7 +19,7 @@ from src.services.case_service import CaseOutcomeService
 from src.services.audit_service import AuditService
 from src.adapters.evidence_repository import EvidenceRepository
 from src.services.xai_service import XAIEngine
-from src.agent.supervisor.user_entry import UserEntryAdapter
+from src.agent.supervisor.user_entry import UserEntryAdapter, ClarificationNeeded
 from src.adapters.live_data_bridge import live_bridge
 from src.schemas.visualization import VisualizationSpec, ChartSpec, ExplanationSpec, ExplanationSection
 
@@ -39,6 +39,11 @@ user_adapter = UserEntryAdapter()
 # Conversation memory — A3.T2 (shared singleton, same Redis as CheckpointManager)
 from src.memory.conversation_store import ConversationStore
 _conv_store = ConversationStore()
+
+# B3.T3: In-process cache of paused LangGraph threads awaiting clarification.
+# Maps session_id → {"thread_id": str, "asset_id": str}
+# Thread-safe for single-process FastAPI (GIL-protected dict).
+_pending_clarifications: Dict[str, Dict[str, str]] = {}
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -365,57 +370,107 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
     conv_ctx = {"last_well": req.asset_id or None, "last_objective": last_objective, "recent_turns": recent_turns} if session_id else None
 
     async def event_generator():
-        # Route intent up-front so we can branch conversational vs diagnostic.
-        try:
-            objective_id, route_conf, route_path = _intent_router.route(
-                req.user_query, conversation_context=conv_ctx
-            )
-        except Exception:
-            objective_id, route_conf, route_path = "OP01_CURRENT_STATUS", 0.5, "fallback"
-
-        yield json.dumps({
-            "type": "status",
-            "run_id": run_id,
-            "stage": "INITIATING",
-            "message": "Understanding your question..."
-        }) + "\n"
-
-        # ── Conversational fast-path: greetings / weak / general inquiry ──
-        # Skip the heavy Supervisor graph entirely and reply like a co-pilot.
-        if objective_id in _CONVERSATIONAL_OBJECTIVES or route_path == "Path_A_Greeting":
+        # ── B3.T3: Check for a pending clarification resume FIRST ────────────
+        # If this session was waiting for an answer, route the query as the answer.
+        pending = _pending_clarifications.pop(session_id, None) if session_id else None
+        if pending:
             yield json.dumps({
-                "type": "status", "run_id": run_id, "stage": "COMPOSING",
-                "message": "Agent Jane is replying..."
+                "type": "status", "run_id": run_id, "stage": "RESUMING",
+                "message": "Got it — continuing the analysis with your answer..."
             }) + "\n"
-            reply = await asyncio.to_thread(_compose_conversational_reply, req.user_query, req.asset_id)
-            for chunk in _iter_stream_chunks(reply):
-                yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
-            # Append exchange for conversational replies too
-            if session_id:
-                _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
-                _conv_store.append(session_id, "assistant", str(reply)[:500],
-                                   well_id=req.asset_id or None, intent=objective_id)
-            yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
-            return
+            try:
+                advisory = await asyncio.to_thread(
+                    user_adapter.resume,
+                    thread_id=pending["thread_id"],
+                    operator_answer=req.user_query,
+                    session_id=session_id,
+                    asset_id=pending.get("asset_id"),
+                )
+            except ClarificationNeeded as ex2:
+                # Nested clarification (edge case — still ask)
+                if session_id:
+                    _pending_clarifications[session_id] = {
+                        "thread_id": ex2.thread_id, "asset_id": ex2.asset_id
+                    }
+                for chunk in _iter_stream_chunks(ex2.question):
+                    yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
+            except Exception as ex:
+                logger.error("[BFF] Resume error run %s: %s", run_id, ex, exc_info=True)
+                yield json.dumps({
+                    "type": "text_delta",
+                    "delta": f"I had a problem resuming the analysis ({str(ex)}). Please try your question again."
+                }) + "\n"
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
+            # Fall through to the normal advisory streaming path below ↓
+        else:
+            # ── Normal path: Route intent up-front ───────────────────────────
+            try:
+                route_result = _intent_router.route(req.user_query, conversation_context=conv_ctx)
+                objective_id, route_conf, route_path, route_ambiguous = route_result
+            except Exception:
+                objective_id, route_conf, route_path, route_ambiguous = "OP01_CURRENT_STATUS", 0.5, "fallback", False
 
-
-        # ── Diagnostic / fleet path: run the Supervisor graph ──
-        try:
-            advisory = await asyncio.to_thread(
-                user_adapter.run,
-                user_query=req.user_query,
-                asset_id=req.asset_id,
-                request_id=run_id,
-                session_id=session_id,
-            )
-        except Exception as ex:
-            logger.error(f"[BFF] Error executing Supervisor run {run_id}: {ex}", exc_info=True)
             yield json.dumps({
-                "type": "text_delta",
-                "delta": f"I hit a problem completing the analysis for `{req.asset_id}` ({str(ex)}). Please retry in a moment."
+                "type": "status",
+                "run_id": run_id,
+                "stage": "INITIATING",
+                "message": "Understanding your question..."
             }) + "\n"
-            yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
-            return
+
+            # ── Conversational fast-path: greetings / weak / general inquiry ──
+            if objective_id in _CONVERSATIONAL_OBJECTIVES or route_path == "Path_A_Greeting":
+                yield json.dumps({
+                    "type": "status", "run_id": run_id, "stage": "COMPOSING",
+                    "message": "Agent Jane is replying..."
+                }) + "\n"
+                reply = await asyncio.to_thread(_compose_conversational_reply, req.user_query, req.asset_id)
+                for chunk in _iter_stream_chunks(reply):
+                    yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+                if session_id:
+                    _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
+                    _conv_store.append(session_id, "assistant", str(reply)[:500],
+                                       well_id=req.asset_id or None, intent=objective_id)
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
+
+            # ── Diagnostic / fleet path: run the Supervisor graph ──
+            try:
+                advisory = await asyncio.to_thread(
+                    user_adapter.run,
+                    user_query=req.user_query,
+                    asset_id=req.asset_id,
+                    request_id=run_id,
+                    session_id=session_id,
+                )
+            except ClarificationNeeded as ex:
+                # B3.T3: Graph interrupted — stream the question, record pending thread
+                if session_id:
+                    _pending_clarifications[session_id] = {
+                        "thread_id": ex.thread_id, "asset_id": ex.asset_id
+                    }
+                    _conv_store.append(session_id, "user", req.user_query,
+                                       well_id=req.asset_id or None)
+                    _conv_store.append(session_id, "assistant", ex.question[:500],
+                                       well_id=None, intent="CLARIFICATION")
+                yield json.dumps({
+                    "type": "status", "run_id": run_id, "stage": "CLARIFYING",
+                    "message": "Agent Jane needs a bit more info..."
+                }) + "\n"
+                for chunk in _iter_stream_chunks(ex.question):
+                    yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
+            except Exception as ex:
+                logger.error(f"[BFF] Error executing Supervisor run {run_id}: {ex}", exc_info=True)
+                yield json.dumps({
+                    "type": "text_delta",
+                    "delta": f"I hit a problem completing the analysis for `{req.asset_id}` ({str(ex)}). Please retry in a moment."
+                }) + "\n"
+                yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
+                return
 
         ev_count = len(advisory.evidence) if hasattr(advisory, 'evidence') else 0
         yield json.dumps({
