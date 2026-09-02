@@ -27,12 +27,12 @@ if exist "esp_agent\.venv\Scripts\python.exe" (
 )
 
 :: 3. Auto-Seed Database Schemas & Knowledge Graphs
-echo [2/5] Initializing Database Schemas & Knowledge Graphs...
+echo [2/5] Initializing Database Schemas ^& Knowledge Graphs...
 %PY_EXEC% esp_agent\scripts\init_db.py >nul 2>&1
 %PY_EXEC% esp_agent\scripts\seed_db.py >nul 2>&1
 %PY_EXEC% esp_agent\scripts\seed_neo4j.py >nul 2>&1
 %PY_EXEC% esp_agent\scripts\seed_qdrant.py >nul 2>&1
-echo [+] Neo4j, Qdrant & PostgreSQL verified and seeded.
+echo [+] Neo4j, Qdrant ^& PostgreSQL verified and seeded.
 echo.
 
 :: 4. Start cced_esp Backend REST Service (:8000)
@@ -49,7 +49,7 @@ timeout /t 4 /nobreak >nul
 echo.
 
 :: 5. Probe & Print Full Health Matrix
-echo [4/4] Probing all Database & Application Services...
+echo [4/4] Probing all Database ^& Application Services...
 %PY_EXEC% run_all_services.py --status
 
 echo.
