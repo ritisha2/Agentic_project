@@ -10,6 +10,7 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import interrupt
 
+from src.memory.redis_checkpointer import RedisCheckpointer
 from src.agent.supervisor.state import AgentState, create_initial_agent_state
 from src.agent.supervisor.specialist_contracts import SpecialistInput, SpecialistOutput, ConflictRecord
 from src.agent.supervisor.checkpoint import CheckpointManager
@@ -1115,10 +1116,9 @@ def create_supervisor_graph():
     builder.add_edge("safety_gate", "generate_advisory_draft")
     builder.add_edge("generate_advisory_draft", END)
 
-    # B1.T1: Compile with MemorySaver so interrupt()/Command(resume=) works.
-    # MemorySaver is in-process; survives for the lifetime of the module singleton.
-    # thread_id must be passed in config on every invoke/stream call (= session_id or run_id).
-    return builder.compile(checkpointer=MemorySaver())
+    # B1.T1 / C2.T1: Compile with RedisCheckpointer for restart-safe interrupt()/resume.
+    # Backed by Redis with in-memory fallback; thread_id = session_id or run_id.
+    return builder.compile(checkpointer=RedisCheckpointer())
 
 
 # Export compiled singleton for LangGraph CLI / langgraph dev

@@ -63,6 +63,7 @@ class CompactContextBuilder:
         safety_constraints: Optional[List[str]] = None,
         conflicts: Optional[List[Any]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
+        episodic_memory: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build a compact context dict from all available supervisor state components.
@@ -128,6 +129,16 @@ class CompactContextBuilder:
                 for t in conversation_history[-10:]
             ]
 
+        # --- Episodic Well Memory (C1.T2) ---
+        # High-signal summary of prior diagnoses and recommendations for this asset across sessions.
+        if episodic_memory:
+            compact["episodic_well_memory"] = {
+                "last_assessed": episodic_memory.get("last_updated", "Unknown"),
+                "prior_objective": episodic_memory.get("last_objective", "N/A"),
+                "prior_diagnosis": episodic_memory.get("last_diagnosis", "Nominal"),
+                "prior_recommendation": episodic_memory.get("last_recommendation", "Continue monitoring"),
+            }
+
         logger.debug(
             f"CompactContextBuilder: built compact context for {asset_id}/{objective_id} "
             f"with keys: {list(compact.keys())}"
@@ -152,6 +163,7 @@ class CompactContextBuilder:
             conflicts=[c.model_dump() if hasattr(c, "model_dump") else c
                        for c in state.get("conflicts", [])],
             conversation_history=ctx.get("history") or None,
+            episodic_memory=ctx.get("episodic_memory") or None,
         )
 
 

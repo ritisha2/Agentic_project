@@ -12,6 +12,7 @@ from src.agent.intent_router import IntentRouter
 from src.agent.supervisor.state import create_initial_agent_state
 from src.agent.supervisor.graph import supervisor_graph
 from src.memory.conversation_store import ConversationStore
+from src.memory.well_memory import WellEpisodicMemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,11 @@ class UserEntryAdapter:
         self,
         intent_router: Optional[IntentRouter] = None,
         conversation_store: Optional[ConversationStore] = None,
+        well_memory_store: Optional[WellEpisodicMemoryStore] = None,
     ):
         self.intent_router = intent_router or IntentRouter()
         self.conv_store = conversation_store or ConversationStore()
+        self.well_memory = well_memory_store or WellEpisodicMemoryStore()
 
     def run(
         self,
@@ -123,6 +126,9 @@ class UserEntryAdapter:
         initial_state["context"]["history"] = recent_turns
         # Thread conversation_context into state so graph's resolve_objective_node can read it
         initial_state["context"]["conversation_context"] = conversation_context  # type: ignore[index]
+        # C1.T2: Thread episodic well memory into state for CompactContextBuilder
+        if resolved_asset_id:
+            initial_state["context"]["episodic_memory"] = self.well_memory.get_memory(resolved_asset_id)
         initial_state["is_ambiguous"] = is_ambiguous
 
         # B1.T2: thread_id = session_id when available; fall back to request_id.
@@ -178,6 +184,9 @@ class UserEntryAdapter:
                     well_id=resolved_asset_id or None,
                     intent=advisory.objective_id,
                 )
+            # C1.T1: Record completed advisory into per-well episodic memory
+            if resolved_asset_id:
+                self.well_memory.record_advisory(resolved_asset_id, advisory)
             return advisory
 
         raise RuntimeError(f"Supervisor Graph execution failed to produce advisory for request '{request_id}'.")
@@ -228,6 +237,8 @@ class UserEntryAdapter:
                     well_id=asset_id or None,
                     intent=advisory.objective_id,
                 )
+            if asset_id:
+                self.well_memory.record_advisory(asset_id, advisory)
             return advisory
 
         raise RuntimeError(f"Supervisor Graph resume failed to produce advisory for thread '{thread_id}'.")
