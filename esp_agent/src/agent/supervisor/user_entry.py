@@ -31,7 +31,7 @@ class UserEntryAdapter:
     def run(
         self,
         user_query: str,
-        asset_id: str,
+        asset_id: Optional[str] = None,
         request_id: str = "REQ-001",
         tenant_id: Optional[str] = None,
         session_id: Optional[str] = None,
@@ -40,9 +40,10 @@ class UserEntryAdapter:
         Classify intent, initialize AgentState, and execute Supervisor Graph.
 
         A3.T1 additions:
-        - When asset_id is blank, resolve from ConversationStore.get_last_well().
+        - When asset_id is blank/None, resolve from ConversationStore.get_last_well().
         - Build conversation_context and pass it into route().
         - Thread recent_turns into state context.history so the LLM narrative sees them.
+        - Persist user and assistant turns to ConversationStore if session_id is active.
         """
         # ── Resolve implicit well from conversation memory (A3.T1) ────────────
         resolved_asset_id = asset_id
@@ -50,14 +51,22 @@ class UserEntryAdapter:
         last_objective: Optional[str] = None
 
         if session_id:
-            recent_turns = self.conv_store.get_history(session_id, limit=10)
             if not resolved_asset_id:
                 resolved_asset_id = self.conv_store.get_last_well(session_id) or ""
+            recent_turns = self.conv_store.get_history(session_id, limit=10)
             # Most recent assistant turn's intent becomes last_objective
             for turn in reversed(recent_turns):
                 if turn.get("role") == "assistant" and turn.get("intent_detected"):
                     last_objective = turn["intent_detected"]
                     break
+            # Record user turn
+            self.conv_store.append(
+                session_id=session_id,
+                role="user",
+                content=user_query,
+                well_id=resolved_asset_id or None,
+            )
+
 
         conversation_context: Optional[Dict[str, Any]] = None
         if session_id:
@@ -93,7 +102,18 @@ class UserEntryAdapter:
         if advisory_dict:
             advisory = StandardAdvisoryPayload(**advisory_dict)
             advisory.provenance.append(f"User Entry Adapter v7.0 ({path})")
+            if session_id:
+                agent_content = getattr(advisory, "assessment", None) or getattr(advisory, "diagnosis", None) or advisory.objective_id
+                self.conv_store.append(
+
+                    session_id=session_id,
+                    role="assistant",
+                    content=str(agent_content)[:500],
+                    well_id=resolved_asset_id or None,
+                    intent=advisory.objective_id,
+                )
             return advisory
+
 
         raise RuntimeError(f"Supervisor Graph execution failed to produce advisory for request '{request_id}'.")
 

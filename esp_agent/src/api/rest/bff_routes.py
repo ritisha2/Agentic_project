@@ -216,7 +216,8 @@ async def warmup_endpoint():
 
 class UIAdvisoryRunRequest(BaseModel):
     user_query: str = Field(description="Natural language user question")
-    asset_id: str = Field(description="Target ESP asset ID")
+    asset_id: Optional[str] = Field(default=None, description="Target ESP asset ID")
+
 
 
 @router.get("/assets/{asset_id}/workspace", response_model=Dict[str, Any])
@@ -323,10 +324,6 @@ def start_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
     session_id = request.headers.get("X-Session-ID") or None
     run_id = f"RUN-UI-{uuid.uuid4().hex[:8]}"
 
-    # Append user turn before running (so history is available in this run's context)
-    if session_id:
-        _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
-
     advisory = user_adapter.run(
         user_query=req.user_query,
         asset_id=req.asset_id,
@@ -334,21 +331,13 @@ def start_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
         session_id=session_id,
     )
 
-    # Append agent turn after completion
-    if session_id:
-        agent_content = advisory.narrative or advisory.objective_id
-        _conv_store.append(
-            session_id, "assistant", str(agent_content)[:500],
-            well_id=req.asset_id or None,
-            intent=advisory.objective_id,
-        )
-
     return {
         "run_id": run_id,
         "status": "COMPLETED",
         "objective_id": advisory.objective_id,
         "advisory": advisory.model_dump()
     }
+
 
 
 from fastapi.responses import StreamingResponse
@@ -363,10 +352,6 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
     """
     session_id = request.headers.get("X-Session-ID") or None
     run_id = f"RUN-UI-{uuid.uuid4().hex[:8]}"
-
-    # Append user turn before the run so history is available
-    if session_id:
-        _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
 
     # Build conversation_context for the intent router
     recent_turns: list = []
@@ -405,12 +390,14 @@ async def stream_ui_agent_run(req: UIAdvisoryRunRequest, request: Request):
             reply = await asyncio.to_thread(_compose_conversational_reply, req.user_query, req.asset_id)
             for chunk in _iter_stream_chunks(reply):
                 yield json.dumps({"type": "text_delta", "delta": chunk}) + "\n"
-            # Append agent turn for conversational replies too
+            # Append exchange for conversational replies too
             if session_id:
+                _conv_store.append(session_id, "user", req.user_query, well_id=req.asset_id or None)
                 _conv_store.append(session_id, "assistant", str(reply)[:500],
                                    well_id=req.asset_id or None, intent=objective_id)
             yield json.dumps({"type": "done", "run_id": run_id}) + "\n"
             return
+
 
         # ── Diagnostic / fleet path: run the Supervisor graph ──
         try:

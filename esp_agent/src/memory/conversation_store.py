@@ -42,9 +42,11 @@ class ConversationStore:
 
     def __init__(self, connection_mgr: Optional[RedisConnectionManager] = None):
         # Reuse existing singleton — do NOT open a new client.
-        self._redis = connection_mgr or RedisConnectionManager()
+        self.connection_mgr = connection_mgr or RedisConnectionManager()
+        self._redis = self.connection_mgr
         # In-memory fallback: session_id -> list[turn]
         self._fallback: Dict[str, List[Dict[str, Any]]] = {}
+
 
     # ------------------------------------------------------------------
     # Public API
