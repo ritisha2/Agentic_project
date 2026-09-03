@@ -1,7 +1,7 @@
 """
 Verification script — confirms the full data flow claimed in this session:
     MQTT -> unlabelled.db (opg_well_telemetry) -> code/models/ WellDiagnosticEngine
-      -> :8000 API (/api/vfd/diagnostics/{well_id}, /api/v1/telemetry/unlabelled)
+      -> :8000 API (/api/vfd/diagnostics/{well_id})
       -> code/eda/dashboard.py (direct SQLite + in-process engine, separate path)
 
 This is a READ-ONLY diagnostic script. It does not modify unlabelled.db, does not

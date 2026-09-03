@@ -95,7 +95,6 @@ Unlike conventional chatbots, Agent Jane combines:
 |---|---|---|---|
 | `:3000` | **React Frontend** | `cced_esp/frontend-react` | Operator UI, live asset telemetry, Agent Jane dock |
 | `:8000` | **Core Backend API** | `cced_esp/backend/main.py` | Telemetry REST API, SSE stream, VFD diagnostics |
-| `:8000` | **ML Telemetry API** | `cced_esp/backend/api/ml_telemetry_routes.py` | Authenticated polling of `unlabelled.db` (tabular/JSON) |
 | `:8090` | **Agent Jane BFF** | `esp_agent/run_agent_server.py` | FastAPI gateway for LangGraph agent runs & streaming |
 | `:1883` | **MQTT Broker** | Mosquitto | Pub/sub broker for real-time ESP pump telemetry |
 | `:8080` | **LLM Inference Server** | `bin/llama-cpp/llama-server.exe` | Local CUDA GPU GGUF inference (RTX 3050 CUDA 12.4) |
@@ -159,17 +158,7 @@ Unlike conventional chatbots, Agent Jane combines:
   - Subclasses `MemorySaver`, serializing checkpoint states, blobs, and writes to Redis (`esp:lg_check:{thread_id}`) via base64-encoded binary payloads (7-day TTL).
   - Re-hydrates interrupted threads across backend process restarts, enabling true restart-safe HITL continuation.
 
-### 6. ML Telemetry Polling API (Secure Historical Access)
-- **High-Performance REST Extraction (`cced_esp/backend/api/ml_telemetry_routes.py`)**:
-  - Dedicated authenticated API for ML engineers and training pipelines to query `unlabelled.db` without filesystem access.
-  - `GET /api/v1/telemetry/unlabelled`: Single-asset time-window polling with timestamp cursor pagination.
-  - `POST /api/v1/telemetry/unlabelled/query`: Multi-asset batch extraction.
-  - `format=tabular`: Directly consumable by Pandas (`pd.DataFrame(resp["data"])`) or PyTorch `DataLoader`.
-  - Non-blocking `aiosqlite` reads with `PRAGMA query_only = ON` safe for concurrent live MQTT ingestion writes.
-  - Security gates: Mandatory `X-Broker-ID` header or `broker_id` query parameter validated against registered brokers.
-  - Complete integration guide: See [`SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md`](SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md).
-
-### 7. Local CUDA GPU LLM Acceleration (RTX 3050)
+### 6. Local CUDA GPU LLM Acceleration (RTX 3050)
 - **Zero External API Dependency**:
   - Powered by local `bin/llama-cpp/llama-server.exe` with NVIDIA CUDA 12.4 runtime (`ggml-cuda.dll`, `cublas64_12.dll`).
   - Benchmarked on NVIDIA GeForce RTX 3050: **Prompt processing: 1,801 tok/s** | **Generation: 58 tok/s**.
@@ -297,29 +286,6 @@ curl -X POST http://localhost:8090/api/ui/agent/run `
     "asset_id": null,
     "user_query": "morning, can you take a look at things?"
   }'
-```
-#### ML Telemetry Polling API (`/api/v1/telemetry/unlabelled`)
-```powershell
-# 1. Poll latest 100 historical telemetry points for FS-031 with Broker ID authentication
-curl "http://localhost:8000/api/v1/telemetry/unlabelled?asset_id=FS-031&limit=100" `
-  -H "X-Broker-ID: CCED-ML-TEST-01"
-
-# 2. Extract in Tabular format for Pandas / NumPy ingestion
-curl "http://localhost:8000/api/v1/telemetry/unlabelled?asset_id=FS-031&format=tabular&limit=500" `
-  -H "X-Broker-ID: CCED-ML-TEST-01"
-
-# 3. Batch multi-asset extraction
-curl -X POST "http://localhost:8000/api/v1/telemetry/unlabelled/query" `
-  -H "Content-Type: application/json" `
-  -H "X-Broker-ID: CCED-ML-TEST-01" `
-  -d '{
-    "asset_ids": ["FS-031", "FS-010", "ULFA-5"],
-    "limit_per_asset": 200,
-    "format": "tabular"
-  }'
-```
-*Interactive Swagger Documentation available at: `http://localhost:8000/docs#/ML%20Telemetry`*
-
 ---
 
 ## 🧪 Running the Test Suites
@@ -327,10 +293,7 @@ curl -X POST "http://localhost:8000/api/v1/telemetry/unlabelled/query" `
 All test suites can be executed using the project Python virtual environment:
 
 ```powershell
-# 1. Run ML Telemetry API Tests (7 integration tests)
-esp_agent\.venv\Scripts\pytest.exe tests/test_ml_telemetry_api.py -v
-
-# 2. Run 13-Fault Scenario ML Validation Suite (15/15 scenarios)
+# 1. Run 13-Fault Scenario ML Validation Suite (15/15 scenarios)
 esp_agent\.venv\Scripts\python.exe code/models/test_fault_scenarios.py
 
 # 3. Run Level A Tests (Conversational Memory & Context)
@@ -354,7 +317,6 @@ X:\TAS\Agentic_project
 │
 ├── Plan.md                                <- Authoritative multi-phase delivery specification
 ├── README.md                              <- Project Master Documentation (This file)
-├── SECURITY_AND_UNLABELLED_TELEMETRY_API_HANDOUT.md <- Standalone security & API access guide
 ├── run_all_services.py                    <- Unified multi-process launcher for all servers
 ├── start_all_services.bat                 <- Windows batch launcher (CUDA LLM + Core + BFF + Frontend)
 ├── start_gpu_llm.bat                      <- Standalone 1-click CUDA GPU llama-server launcher (:8080)
@@ -369,7 +331,6 @@ X:\TAS\Agentic_project
 │   │   ├── mqtt_collector.py              <- Live MQTT Subscriber daemon
 │   │   ├── transformer.py                 <- VFD 14-signal canonical resolution & telemetry parsing
 │   │   ├── api/
-│   │   │   └── ml_telemetry_routes.py     <- Authenticated ML Telemetry Polling REST API
 │   │   └── services/
 │   │       └── vfd_diagnostic_service.py  <- 14-parameter VFD heuristic classifier & JSONL logger
 │   ├── frontend-react/                    <- Vite + React 18 UI (:3000)
