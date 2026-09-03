@@ -1665,113 +1665,122 @@ def main():
             f_info = FAULT_DEFINITIONS.get(target_fault, {})
             st.info(f"**{target_fault}** ({f_info.get('severity', 'WARNING')}): {f_info.get('description', '')}")
 
+            if "fleet_scan_results" not in st.session_state:
+                st.session_state.fleet_scan_results = None
+            if "fleet_scan_fault" not in st.session_state:
+                st.session_state.fleet_scan_fault = None
+
             if st.button(f"🔎 Scan 73 Wells for '{target_fault}'", type="primary"):
                 with st.spinner(f"Scanning historical data across all 73 wells for '{target_fault}'..."):
-                    fleet_res = scan_fleet_for_fault_history(target_fault, max_wells=73)
+                    st.session_state.fleet_scan_results = scan_fleet_for_fault_history(target_fault, max_wells=73)
+                    st.session_state.fleet_scan_fault = target_fault
 
-                    if fleet_res.empty:
-                        st.success(f"✅ Zero occurrences of '{target_fault}' found across the scanned wells.")
-                    else:
-                        st.markdown(f"### 🚩 Found {len(fleet_res)} Incidents of `{target_fault}` Across Fleet")
+            if st.session_state.fleet_scan_results is not None and st.session_state.fleet_scan_fault == target_fault:
+                fleet_res = st.session_state.fleet_scan_results
 
-                        # Cluster & Well Summary
-                        c1, c2 = st.columns([1, 2])
-                        with c1:
-                            st.markdown("#### 🛢️ Incidents by Well")
-                            well_counts = fleet_res["Well_ID"].value_counts().reset_index()
-                            well_counts.columns = ["Well_ID", "Incident_Count"]
-                            st.dataframe(well_counts, use_container_width=True)
+                if fleet_res.empty:
+                    st.success(f"✅ Zero occurrences of '{target_fault}' found across the scanned wells.")
+                else:
+                    st.markdown(f"### 🚩 Found {len(fleet_res)} Incidents of `{target_fault}` Across Fleet")
 
-                        with c2:
-                            st.markdown("#### 📊 Fleet Distribution Chart")
-                            bar_fig = px.bar(
-                                well_counts,
-                                x="Well_ID",
-                                y="Incident_Count",
-                                title=f"Historical '{target_fault}' Incidents per Well",
-                                color="Incident_Count",
-                                color_continuous_scale="Reds"
-                            )
-                            bar_fig.update_layout(height=350)
-                            st.plotly_chart(bar_fig, use_container_width=True, key="fig_tab7_fleet_bar")
+                    # Cluster & Well Summary
+                    c1, c2 = st.columns([1, 2])
+                    with c1:
+                        st.markdown("#### 🛢️ Incidents by Well")
+                        well_counts = fleet_res["Well_ID"].value_counts().reset_index()
+                        well_counts.columns = ["Well_ID", "Incident_Count"]
+                        st.dataframe(well_counts, use_container_width=True)
 
-                        # Detailed Fleet Incident Table
-                        st.markdown("#### 📋 Detailed Incident Log Across Fleet")
-                        st.dataframe(fleet_res, use_container_width=True)
-
-                        # Interactive Incident Forensic Deep-Dive
-                        st.markdown("---")
-                        st.subheader("🔬 Incident Forensic Deep-Dive & Tipping Evidence")
-                        st.caption("Select any incident from the fleet log above to inspect its before-during-after tipping timeline, baseline corridor breakout, and physical evidence.")
-
-                        incident_options = [
-                            f"#{i+1} | Well: {r['Well_ID']} | Time: {str(r['Timestamp'])[:19]} | Health: {r['Health_Score']}/100"
-                            for i, r in fleet_res.iterrows()
-                        ]
-                        sel_incident_str = st.selectbox(
-                            "🎯 Select Incident to Inspect Forensic Tipping Pattern & Evidence:",
-                            incident_options,
-                            index=0
+                    with c2:
+                        st.markdown("#### 📊 Fleet Distribution Chart")
+                        bar_fig = px.bar(
+                            well_counts,
+                            x="Well_ID",
+                            y="Incident_Count",
+                            title=f"Historical '{target_fault}' Incidents per Well",
+                            color="Incident_Count",
+                            color_continuous_scale="Reds"
                         )
-                        sel_idx = incident_options.index(sel_incident_str)
-                        incident_meta = fleet_res.iloc[sel_idx].to_dict()
+                        bar_fig.update_layout(height=350)
+                        st.plotly_chart(bar_fig, use_container_width=True, key="fig_tab7_fleet_bar")
 
-                        target_well = incident_meta["Well_ID"]
-                        target_time = str(incident_meta["Timestamp"])
+                    # Detailed Fleet Incident Table
+                    st.markdown("#### 📋 Detailed Incident Log Across Fleet")
+                    st.dataframe(fleet_res, use_container_width=True)
 
-                        # Load the telemetry window around the incident
-                        df_forensic = load_incident_telemetry_window(target_well, target_time, window_minutes=60)
+                    # Interactive Incident Forensic Deep-Dive
+                    st.markdown("---")
+                    st.subheader("🔬 Incident Forensic Deep-Dive & Tipping Evidence")
+                    st.caption("Select any incident from the fleet log above to inspect its before-during-after tipping timeline, baseline corridor breakout, and physical evidence.")
 
-                        # Get well profile from registry
-                        well_prof = engine.registry.get_well_profile(target_well) if engine else {}
+                    incident_options = [
+                        f"#{i+1} | Well: {r['Well_ID']} | Time: {str(r['Timestamp'])[:19]} | Health: {r['Health_Score']}/100"
+                        for i, r in fleet_res.iterrows()
+                    ]
+                    sel_incident_str = st.selectbox(
+                        "🎯 Select Incident to Inspect Forensic Tipping Pattern & Evidence:",
+                        incident_options,
+                        index=0
+                    )
+                    sel_idx = incident_options.index(sel_incident_str)
+                    incident_meta = fleet_res.iloc[sel_idx].to_dict()
 
-                        # 1. Summary Metric Chips
-                        m_c1, m_c2, m_c3, m_c4 = st.columns(4)
-                        m_c1.metric("Asset ID", target_well)
-                        m_c2.metric("Detected Fault", incident_meta["Detected_Fault"])
-                        m_c3.metric("Health Score at Trip", f"{incident_meta['Health_Score']:.1f} / 100")
-                        m_c4.metric("Incident Timestamp", target_time[:19].replace("T", " "))
+                    target_well = incident_meta["Well_ID"]
+                    target_time = str(incident_meta["Timestamp"])
 
-                        # Data Source Provenance Badge (§7 UI Transparency)
-                        src_tag = "normalized.db (Historical Batch)"
-                        if not df_forensic.empty and "Source_File" in df_forensic.columns:
-                            first_src = str(df_forensic["Source_File"].iloc[0])
-                            if "live" in first_src.lower() or "mqtt" in first_src.lower():
-                                src_tag = "🟢 Live MQTT Stream (Edge Ingestion)"
-                            else:
-                                src_tag = f"🏛️ Historian Archive ({first_src})"
-                        st.caption(f"📡 **Data Lineage:** `{src_tag}` | High-Resolution Window (±30m) | Loaded: `{len(df_forensic)} samples`")
+                    # Load the telemetry window around the incident
+                    df_forensic = load_incident_telemetry_window(target_well, target_time, window_minutes=60)
 
-                        # 2. Synchronized Tipping Timeline Plot
-                        if render_incident_tipping_timeline is not None and not df_forensic.empty:
-                            fig_tipping = render_incident_tipping_timeline(
-                                df_forensic, incident_meta, well_prof, height=620
-                            )
-                            st.plotly_chart(fig_tipping, use_container_width=True, key=f"fig_tab7_tipping_{sel_idx}")
-                        elif df_forensic.empty:
-                            st.info(f"Detailed high-resolution telemetry window not found in normalized.db for Well {target_well} around {target_time}.")
+                    # Get well profile from registry
+                    well_prof = engine.registry.get_well_profile(target_well) if engine else {}
 
-                        # 3. Evidence Table & Recommended Advisory
-                        e_col1, e_col2 = st.columns([3, 2])
-                        with e_col1:
-                            st.markdown("#### 📊 Parameter Breakout vs. Calibrated Normal Envelope (P10 - P90)")
-                            if not df_forensic.empty and build_evidence_comparison_table is not None:
-                                trip_row = df_forensic.iloc[len(df_forensic)//2].to_dict()
-                                evidence_df = build_evidence_comparison_table(trip_row, well_prof)
-                                st.dataframe(evidence_df, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("Parameter breakout table unavailable.")
+                    # 1. Summary Metric Chips
+                    m_c1, m_c2, m_c3, m_c4 = st.columns(4)
+                    m_c1.metric("Asset ID", target_well)
+                    m_c2.metric("Detected Fault", incident_meta["Detected_Fault"])
+                    m_c3.metric("Health Score at Trip", f"{incident_meta['Health_Score']:.1f} / 100")
+                    m_c4.metric("Incident Timestamp", target_time[:19].replace("T", " "))
 
-                        with e_col2:
-                            st.markdown("#### 🛠️ Recommended Engineering Advisory")
-                            st.warning(f"**Immediate Action:** {incident_meta.get('Advisory', 'Inspect well parameters and verify choke/VFD status.')}")
-                            st.markdown(f"""
-                            **Diagnostic Summary:**
-                            - **Fault Diagnosis:** `{incident_meta['Detected_Fault']}`
-                            - **Detection Confidence:** `{float(incident_meta.get('Confidence', 0.95))*100:.1f}%`
-                            - **Operational Status:** `{incident_meta.get('Status', 'CRITICAL')}`
-                            - **Physical Mechanism:** Multi-parameter coupling diverged beyond the calibrated healthy envelope.
-                            """)
+                    # Data Source Provenance Badge (§7 UI Transparency)
+                    src_tag = "normalized.db (Historical Batch)"
+                    if not df_forensic.empty and "Source_File" in df_forensic.columns:
+                        first_src = str(df_forensic["Source_File"].iloc[0])
+                        if "live" in first_src.lower() or "mqtt" in first_src.lower():
+                            src_tag = "🟢 Live MQTT Stream (Edge Ingestion)"
+                        else:
+                            src_tag = f"🏛️ Historian Archive ({first_src})"
+                    st.caption(f"📡 **Data Lineage:** `{src_tag}` | High-Resolution Window (±30m) | Loaded: `{len(df_forensic)} samples`")
+
+                    # 2. Synchronized Tipping Timeline Plot
+                    if render_incident_tipping_timeline is not None and not df_forensic.empty:
+                        fig_tipping = render_incident_tipping_timeline(
+                            df_forensic, incident_meta, well_prof, height=620
+                        )
+                        st.plotly_chart(fig_tipping, use_container_width=True, key=f"fig_tab7_tipping_{sel_idx}")
+                    elif df_forensic.empty:
+                        st.info(f"Detailed high-resolution telemetry window not found in normalized.db for Well {target_well} around {target_time}.")
+
+                    # 3. Evidence Table & Recommended Advisory
+                    e_col1, e_col2 = st.columns([3, 2])
+                    with e_col1:
+                        st.markdown("#### 📊 Parameter Breakout vs. Calibrated Normal Envelope (P10 - P90)")
+                        if not df_forensic.empty and build_evidence_comparison_table is not None:
+                            trip_row = df_forensic.iloc[len(df_forensic)//2].to_dict()
+                            evidence_df = build_evidence_comparison_table(trip_row, well_prof)
+                            st.dataframe(evidence_df, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("Parameter breakout table unavailable.")
+
+                    with e_col2:
+                        st.markdown("#### 🛠️ Recommended Engineering Advisory")
+                        st.warning(f"**Immediate Action:** {incident_meta.get('Advisory', 'Inspect well parameters and verify choke/VFD status.')}")
+                        st.markdown(f"""
+                        **Diagnostic Summary:**
+                        - **Fault Diagnosis:** `{incident_meta['Detected_Fault']}`
+                        - **Detection Confidence:** `{float(incident_meta.get('Confidence', 0.95))*100:.1f}%`
+                        - **Operational Status:** `{incident_meta.get('Status', 'CRITICAL')}`
+                        - **Physical Mechanism:** Multi-parameter coupling diverged beyond the calibrated healthy envelope.
+                        """)
 
     # =============================================================
     # TAB 8: Data Table Explorer & CSV Download
