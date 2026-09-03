@@ -1737,8 +1737,12 @@ def main():
                     # 1. Summary Metric Chips
                     m_c1, m_c2, m_c3, m_c4 = st.columns(4)
                     m_c1.metric("Asset ID", target_well)
-                    m_c2.metric("Detected Fault", incident_meta["Detected_Fault"])
-                    m_c3.metric("Health Score at Trip", f"{incident_meta['Health_Score']:.1f} / 100")
+                    try:
+                        h_val = float(incident_meta.get("Health_Score", 0.0))
+                        h_str = f"{h_val:.1f} / 100"
+                    except Exception:
+                        h_str = f"{incident_meta.get('Health_Score', 'N/A')} / 100"
+                    m_c3.metric("Health Score at Trip", h_str)
                     m_c4.metric("Incident Timestamp", target_time[:19].replace("T", " "))
 
                     # Data Source Provenance Badge (§7 UI Transparency)
@@ -1774,10 +1778,20 @@ def main():
                     with e_col2:
                         st.markdown("#### 🛠️ Recommended Engineering Advisory")
                         st.warning(f"**Immediate Action:** {incident_meta.get('Advisory', 'Inspect well parameters and verify choke/VFD status.')}")
+
+                        raw_conf = str(incident_meta.get('Confidence', '95%')).replace('%', '').strip()
+                        try:
+                            c_val = float(raw_conf)
+                            if c_val <= 1.0:
+                                c_val *= 100.0
+                            conf_str = f"{c_val:.1f}%"
+                        except Exception:
+                            conf_str = str(incident_meta.get('Confidence', '95.0%'))
+
                         st.markdown(f"""
                         **Diagnostic Summary:**
                         - **Fault Diagnosis:** `{incident_meta['Detected_Fault']}`
-                        - **Detection Confidence:** `{float(incident_meta.get('Confidence', 0.95))*100:.1f}%`
+                        - **Detection Confidence:** `{conf_str}`
                         - **Operational Status:** `{incident_meta.get('Status', 'CRITICAL')}`
                         - **Physical Mechanism:** Multi-parameter coupling diverged beyond the calibrated healthy envelope.
                         """)
