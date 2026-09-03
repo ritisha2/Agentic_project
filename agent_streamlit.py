@@ -418,6 +418,12 @@ if "pending_clarification" not in st.session_state:
 if "latest_advisory" not in st.session_state:
     st.session_state.latest_advisory = None
 
+if "latest_diagnosis" not in st.session_state:
+    st.session_state.latest_diagnosis = None
+
+if "active_well" not in st.session_state:
+    st.session_state.active_well = None
+
 
 # ── Main Application UI ───────────────────────────────────────────────────────
 def main():
@@ -453,28 +459,44 @@ def main():
         st.session_state.chat_messages = []
         st.session_state.pending_clarification = {"active": False, "thread_id": None}
         st.session_state.latest_advisory = None
+        st.session_state.latest_diagnosis = None
         st.rerun()
 
-    # ── Fetch Telemetry & Diagnosis for Active Well ───────────────────────────
+    # Reset diagnostic state if user switches well
+    if st.session_state.active_well != selected_asset:
+        st.session_state.active_well = selected_asset
+        st.session_state.latest_advisory = None
+        st.session_state.latest_diagnosis = None
+
+    # ── Fetch Telemetry for Active Well ───────────────────────────────────────
     df_telemetry = fetch_telemetry_history(selected_asset, limit=hist_limit)
     latest_dict = df_telemetry.iloc[-1].to_dict() if not df_telemetry.empty else None
-    diagnosis = fetch_well_diagnosis(selected_asset, latest_dict)
+    diagnosis = st.session_state.latest_diagnosis
 
     # ── Header Title & System KPI Summary ─────────────────────────────────────
     header_col1, header_col2, header_col3 = st.columns([3, 1, 1])
     with header_col1:
         st.subheader(f"Well Asset: {selected_asset}")
-        status_val = diagnosis.get("status", "🟢 NORMAL")
-        badge_class = "status-badge-normal" if "NORMAL" in status_val else ("status-badge-critical" if "CRITICAL" in status_val else "status-badge-risk")
-        st.markdown(f"Status: <span class='{badge_class}'>{status_val}</span> &nbsp;|&nbsp; Primary Fault: **{diagnosis.get('primary_fault', 'Normal')}**", unsafe_allow_html=True)
+        if diagnosis:
+            status_val = diagnosis.get("status", "🟢 NORMAL")
+            badge_class = "status-badge-normal" if "NORMAL" in status_val else ("status-badge-critical" if "CRITICAL" in status_val else "status-badge-risk")
+            st.markdown(f"Status: <span class='{badge_class}'>{status_val}</span> &nbsp;|&nbsp; Primary Fault: **{diagnosis.get('primary_fault', 'Normal')}**", unsafe_allow_html=True)
+        else:
+            st.markdown("Status: <span style='color: #8b949e; background: rgba(139,148,158,0.15); border: 1px solid #8b949e; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.88rem;'>⚪ STANDBY</span> &nbsp;|&nbsp; Primary Fault: *Awaiting Agent Query*", unsafe_allow_html=True)
 
     with header_col2:
-        h_score = diagnosis.get("health_score", 90.0)
-        st.metric("Health Index", f"{h_score:.1f} / 100", delta=f"{h_score - 100:.1f}" if h_score < 100 else "0.0")
+        if diagnosis:
+            h_score = diagnosis.get("health_score", 90.0)
+            st.metric("Health Index", f"{h_score:.1f} / 100", delta=f"{h_score - 100:.1f}" if h_score < 100 else "0.0")
+        else:
+            st.metric("Health Index", "— / 100")
 
     with header_col3:
-        ttt = diagnosis.get("est_time_to_trip", "N/A")
-        st.metric("Est. Time-to-Trip", ttt)
+        if diagnosis:
+            ttt = diagnosis.get("est_time_to_trip", "N/A")
+            st.metric("Est. Time-to-Trip", ttt)
+        else:
+            st.metric("Est. Time-to-Trip", "—")
 
     st.divider()
 
@@ -496,46 +518,63 @@ def main():
         with col_deck:
             st.markdown("#### 📋 Diagnostic Intelligence Card")
             
-            # Key Dynamics KPI row
-            dyn = diagnosis.get("key_dynamics", {})
-            kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
-            kpi_c1.metric("Head ΔP", f"{dyn.get('delta_p', 0.0):.0f} PSI")
-            kpi_c2.metric("Torque", f"{dyn.get('torque_proxy', 0.0):.2f} A/Hz")
-            kpi_c3.metric("Power", f"{dyn.get('power_proxy_kva', 0.0):.1f} kVA")
-            kpi_c4.metric("ΔT Elevation", f"{dyn.get('thermal_elevation', 0.0):.1f} °C")
+            if diagnosis is None:
+                st.info(
+                    f"💡 **Agent Ready & Awaiting Query**\n\n"
+                    f"No active diagnostic run yet for **{selected_asset}**.\n\n"
+                    f"Type an operational query in the chat or select a prompt below to trigger Agent Jane's diagnostic workflow."
+                )
+                st.markdown("**Suggested Quick Inquiries:**")
+                qp1, qp2 = st.columns(2)
+                with qp1:
+                    if st.button(f"🔍 Evaluate {selected_asset} Health", key=f"qp1_{selected_asset}", use_container_width=True):
+                        st.session_state._queued_query = f"Evaluate current operational health and fault status of {selected_asset}"
+                        st.rerun()
+                with qp2:
+                    if st.button(f"🌡️ Check Thermal & VFD", key=f"qp2_{selected_asset}", use_container_width=True):
+                        st.session_state._queued_query = f"Check thermal stress, motor temp, and VFD load for {selected_asset}"
+                        st.rerun()
+            else:
+                # Key Dynamics KPI row
+                dyn = diagnosis.get("key_dynamics", {})
+                kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
+                kpi_c1.metric("Head ΔP", f"{dyn.get('delta_p', 0.0):.0f} PSI")
+                kpi_c2.metric("Torque", f"{dyn.get('torque_proxy', 0.0):.2f} A/Hz")
+                kpi_c3.metric("Power", f"{dyn.get('power_proxy_kva', 0.0):.1f} kVA")
+                kpi_c4.metric("ΔT Elevation", f"{dyn.get('thermal_elevation', 0.0):.1f} °C")
 
-            # Executive Description & Root Cause
-            st.markdown(f"**Fault Description:**\n{diagnosis.get('description', 'Operating nominal.')}")
+                # Executive Description & Root Cause
+                st.markdown(f"**Fault Description:**\n{diagnosis.get('description', 'Operating nominal.')}")
 
-            # Root cause drivers
-            drivers = diagnosis.get("root_cause_drivers", [])
-            if drivers:
-                st.markdown("**Root-Cause Drivers:**")
-                for d_name, d_val in drivers:
-                    st.markdown(f"- **{d_name}**: `{d_val}`")
+                # Root cause drivers
+                drivers = diagnosis.get("root_cause_drivers", [])
+                if drivers:
+                    st.markdown("**Root-Cause Drivers:**")
+                    for d_name, d_val in drivers:
+                        st.markdown(f"- **{d_name}**: `{d_val}`")
 
-            # Action Box
-            act_text = diagnosis.get("action_advisory") or "Maintain current parameters; continue standard monitoring."
-            st.markdown(f"""
-            <div class="action-box">
-                <span style="font-weight: 600; color: #58a6ff;">👉 Recommended Operator Action:</span><br>
-                {act_text}
-            </div>
-            """, unsafe_allow_html=True)
+                # Action Box
+                act_text = diagnosis.get("action_advisory") or "Maintain current parameters; continue standard monitoring."
+                st.markdown(f"""
+                <div class="action-box">
+                    <span style="font-weight: 600; color: #58a6ff;">👉 Recommended Operator Action:</span><br>
+                    {act_text}
+                </div>
+                """, unsafe_allow_html=True)
 
-            # Latest LLM Advisory if one was generated
-            adv = st.session_state.latest_advisory
-            if adv and getattr(adv, "assessment", None):
-                st.markdown("---")
-                st.markdown("#### 🤖 LLM Multi-Objective Advisory")
-                st.markdown(f"**Objective ID:** `{adv.objective_id}` | **Confidence:** `{adv.confidence:.2f}`")
-                st.info(f"**Assessment:** {adv.assessment}")
-                if getattr(adv, "diagnosis", None):
-                    st.markdown(f"**Diagnosis Hypothesis:** {adv.diagnosis}")
-                if getattr(adv, "recommendation", None):
-                    st.success(f"**Action:** {adv.recommendation}")
-                if getattr(adv, "risk", None):
-                    st.warning(f"**Risk Horizon:** {adv.risk}")
+                # Latest LLM Advisory if one was generated
+                adv = st.session_state.latest_advisory
+                if adv and getattr(adv, "assessment", None):
+                    st.markdown("---")
+                    st.markdown("#### 🤖 LLM Multi-Objective Advisory")
+                    st.markdown(f"**Objective ID:** `{adv.objective_id}` | **Confidence:** `{adv.confidence:.2f}`")
+                    st.info(f"**Assessment:** {adv.assessment}")
+                    if getattr(adv, "diagnosis", None):
+                        st.markdown(f"**Diagnosis Hypothesis:** {adv.diagnosis}")
+                    if getattr(adv, "recommendation", None):
+                        st.success(f"**Action:** {adv.recommendation}")
+                    if getattr(adv, "risk", None):
+                        st.warning(f"**Risk Horizon:** {adv.risk}")
 
         # ── Right: Interactive Operator Chat ──────────────────────────────────
         with col_chat:
@@ -547,6 +586,12 @@ def main():
                 for msg in st.session_state.chat_messages:
                     with st.chat_message(msg["role"]):
                         st.markdown(msg["content"])
+
+            # Check if a queued quick query was triggered
+            query_to_process = None
+            if "_queued_query" in st.session_state and st.session_state._queued_query:
+                query_to_process = st.session_state._queued_query
+                del st.session_state["_queued_query"]
 
             # Render HITL Clarification Alert Banner if active
             pending = st.session_state.pending_clarification
@@ -563,25 +608,27 @@ def main():
                 btn_cols = st.columns(min(len(assets[:4]), 4))
                 for idx, a_opt in enumerate(assets[:4]):
                     if btn_cols[idx].button(f"👉 {a_opt}", key=f"chip_{a_opt}"):
-                        st.session_state.chat_messages.append({"role": "user", "content": a_opt})
-                        with st.spinner(f"Resuming LangGraph state machine with {a_opt}..."):
-                            adv, is_c = execute_agent_query(a_opt, a_opt, st.session_state.session_id)
-                            st.session_state.latest_advisory = adv
-                            ans_text = adv.assessment if adv and getattr(adv, "assessment", None) else f"Analysis updated for {a_opt}."
-                            st.session_state.chat_messages.append({"role": "assistant", "content": ans_text})
-                        st.rerun()
+                        query_to_process = a_opt
 
             # Chat Input Form
             user_input = st.chat_input("Type an operational query (e.g. 'Evaluate thermal stress and vibration on FS-031')...")
             if user_input:
-                st.session_state.chat_messages.append({"role": "user", "content": user_input})
-                with st.spinner("Agent Jane analyzing SCADA telemetry and executing supervisor graph..."):
-                    adv, is_c = execute_agent_query(user_input, selected_asset, st.session_state.session_id)
+                query_to_process = user_input
+
+            if query_to_process:
+                st.session_state.chat_messages.append({"role": "user", "content": query_to_process})
+                with st.spinner(f"Agent Jane analyzing {selected_asset} and executing supervisor graph..."):
+                    adv, is_c = execute_agent_query(query_to_process, selected_asset, st.session_state.session_id)
                     st.session_state.latest_advisory = adv
+                    
+                    # Compute and set diagnosis as part of the query response
+                    diag = fetch_well_diagnosis(selected_asset, latest_dict)
+                    st.session_state.latest_diagnosis = diag
+
                     if adv:
                         resp_text = adv.assessment if getattr(adv, "assessment", None) else adv.recommendation
                     else:
-                        resp_text = f"Evaluated {selected_asset}. Current health index is {diagnosis.get('health_score', 90):.1f}/100 with status {diagnosis.get('status')}."
+                        resp_text = f"Evaluated {selected_asset}. Health score: {diag.get('health_score', 90):.1f}/100 ({diag.get('status')}). Primary finding: {diag.get('primary_fault')}."
                     st.session_state.chat_messages.append({"role": "assistant", "content": resp_text})
                 st.rerun()
 
@@ -692,6 +739,7 @@ def main():
         st.caption("Each evidence item is anchored to an immutable database record, deterministic formula, or authoritative OEM manual.")
 
         adv = st.session_state.latest_advisory
+        diagnosis = st.session_state.latest_diagnosis
         evidence_list = []
 
         # If LLM advisory produced evidence items
@@ -704,21 +752,25 @@ def main():
                     "Timestamp": e.timestamp,
                     "Deep-Link": e.source_deep_link or "In-Process"
                 })
-        else:
+        elif diagnosis:
             # Baseline live evidence synthesis
             now_str = datetime.datetime.utcnow().isoformat() + "Z"
             dyn = diagnosis.get("key_dynamics", {})
+            latest_safe = latest_dict or {}
             evidence_list = [
-                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:intake_pressure", "Observation": f"Intake Pressure measured at {latest_dict.get('Inp bar/psi', 237.0):.1f} PSI", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
-                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:motor_temp", "Observation": f"Motor Temp measured at {latest_dict.get('Motor temp °C', 78.9):.1f} °C", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
+                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:intake_pressure", "Observation": f"Intake Pressure measured at {latest_safe.get('Inp bar/psi', 237.0):.1f} PSI", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
+                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:motor_temp", "Observation": f"Motor Temp measured at {latest_safe.get('Motor temp °C', 78.9):.1f} °C", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
                 {"Authority": "LEVEL_C_ENGINEERING", "Source ID": "esp:engineering:delta_p", "Observation": f"Dynamic Head ΔP calculated at {dyn.get('delta_p', 1658.0):.1f} PSI", "Timestamp": now_str, "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/delta_p"},
                 {"Authority": "LEVEL_C_ENGINEERING", "Source ID": "esp:engineering:torque_proxy", "Observation": f"Torque Proxy evaluated at {dyn.get('torque_proxy', 0.41):.2f} A/Hz", "Timestamp": now_str, "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/torque_proxy"},
                 {"Authority": "LEVEL_B_ML_MODEL", "Source ID": "FaultClassificationEngine", "Observation": f"13-Fault diagnostic evaluated '{diagnosis.get('primary_fault')}' (Confidence: {diagnosis.get('confidence')})", "Timestamp": now_str, "Deep-Link": "models/fault_classifier.py"},
                 {"Authority": "LEVEL_A_SPEC", "Source ID": "AssetContextService", "Observation": f"Installed equipment envelope calibrated against 73-well registry profile for {selected_asset}", "Timestamp": now_str, "Deep-Link": "code/models/well_calibration_registry.json"}
             ]
 
-        df_evid = pd.DataFrame(evidence_list)
-        st.dataframe(df_evid, use_container_width=True, hide_index=True)
+        if evidence_list:
+            df_evid = pd.DataFrame(evidence_list)
+            st.dataframe(df_evid, use_container_width=True, hide_index=True)
+        else:
+            st.info(f"📋 **Evidence Pack Standby:** Awaiting diagnostic run for **{selected_asset}**. Submit an operational query in Tab 1 to generate §3.1 authority-ranked evidence citations.")
 
         st.divider()
         st.markdown("#### ⚡ Real-Time LLM Inference Telemetry")
