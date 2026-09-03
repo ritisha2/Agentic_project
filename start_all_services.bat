@@ -48,8 +48,12 @@ echo [5/6] Starting esp_agent Gateway BFF Server on port 8090...
 start "ESP Platform - esp_agent Gateway (:8090)" cmd /k "cd /d %~dp0esp_agent && %PY_EXEC% -m uvicorn src.api.rest.gateway:app --host 0.0.0.0 --port 8090"
 
 :: 7. Start React Frontend UI (:3000)
-echo [6/6] Starting React Frontend UI...
+echo [6/7] Starting React Frontend UI on port 3000...
 start "ESP Platform - React Frontend UI" cmd /k "cd /d %~dp0cced_esp\frontend-react && npm run dev"
+
+:: 8. Start Agent Streamlit Operations Center (:8501)
+echo [7/7] Starting Agent Streamlit Operations Center on port 8501...
+start "ESP Platform - Agent Streamlit UI (:8501)" cmd /k "cd /d %~dp0 && python -m streamlit run agent_streamlit.py"
 
 :: Wait 4 seconds for servers to bind
 echo Waiting 4 seconds for services to initialize...
@@ -63,6 +67,7 @@ echo Probing all Database ^& Application Services...
 echo.
 echo ===============================================================================
 echo   ALL SERVICES ARE INITIALIZED!
+echo   - Agent Streamlit UI : http://localhost:8501
 echo   - React Frontend UI  : http://localhost:3000 (or http://localhost:5173)
 echo   - cced_esp API Docs  : http://localhost:8000/docs
 echo   - esp_agent API Docs : http://localhost:8090/docs
