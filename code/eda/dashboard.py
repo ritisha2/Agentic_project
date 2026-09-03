@@ -1732,6 +1732,16 @@ def main():
                         m_c3.metric("Health Score at Trip", f"{incident_meta['Health_Score']:.1f} / 100")
                         m_c4.metric("Incident Timestamp", target_time[:19].replace("T", " "))
 
+                        # Data Source Provenance Badge (§7 UI Transparency)
+                        src_tag = "normalized.db (Historical Batch)"
+                        if not df_forensic.empty and "Source_File" in df_forensic.columns:
+                            first_src = str(df_forensic["Source_File"].iloc[0])
+                            if "live" in first_src.lower() or "mqtt" in first_src.lower():
+                                src_tag = "🟢 Live MQTT Stream (Edge Ingestion)"
+                            else:
+                                src_tag = f"🏛️ Historian Archive ({first_src})"
+                        st.caption(f"📡 **Data Lineage:** `{src_tag}` | High-Resolution Window (±30m) | Loaded: `{len(df_forensic)} samples`")
+
                         # 2. Synchronized Tipping Timeline Plot
                         if render_incident_tipping_timeline is not None and not df_forensic.empty:
                             fig_tipping = render_incident_tipping_timeline(

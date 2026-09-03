@@ -28,9 +28,15 @@ def render_incident_tipping_timeline(
       Row 3: Thermal and Mechanical (Motor Temp C and Vibration G) + Normal Temp Corridor
     With a vertical red dashed line at the exact moment of the fault trip.
     """
-    if df_window.empty:
+    if df_window is None or len(df_window) < 5:
         fig = go.Figure()
-        fig.add_annotation(text="No telemetry data found for the specified incident window", showarrow=False)
+        msg = "⚠️ Insufficient telemetry data found for the requested incident window (< 5 samples)." if df_window is not None and len(df_window) > 0 else "⚠️ No telemetry data found for the specified incident window."
+        fig.add_annotation(
+            text=msg,
+            showarrow=False,
+            font=dict(size=14, color="#ffb74d")
+        )
+        fig.update_layout(template="plotly_dark", height=300)
         return fig
 
     fig = make_subplots(

@@ -18,8 +18,12 @@ import time
 import uuid
 import sqlite3
 import datetime
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+
+logger = logging.getLogger("agent.forensics")
+logging.basicConfig(level=logging.INFO)
 
 import numpy as np
 import pandas as pd
@@ -800,6 +804,10 @@ def main():
                         # Check if user asked for a chart, plot, trend, tipping timeline, or evidence visual
                         if any(w in q_lower for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"]) and HAS_FIGURE_FACTORY:
                             try:
+                                logger.info(
+                                    "[Trajectory Debugging] Forensic visual requested. Query='%s', Resolved_Asset='%s', Resolved_TS='%s', Available_Samples=%d",
+                                    query_to_process, selected_asset, latest_dict.get("timestamp"), len(df_telemetry)
+                                )
                                 if not df_telemetry.empty:
                                     df_win = df_telemetry.tail(60).copy()
                                     meta = {
@@ -816,7 +824,7 @@ def main():
                                             pass
                                     msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
                             except Exception as fig_err:
-                                print(f"Error rendering inline chat figure: {fig_err}")
+                                logger.error(f"[Trajectory Debugging] Error rendering inline chat figure: {fig_err}")
 
                     chat_payload = {"role": "assistant", "content": resp_text}
                     if msg_fig is not None:
