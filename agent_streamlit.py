@@ -572,40 +572,18 @@ if "active_well" not in st.session_state:
 
 # ── Main Application UI ───────────────────────────────────────────────────────
 def main():
-    # ── Sidebar: Infrastructure & Well Navigation ─────────────────────────────
-    st.sidebar.title("⚡ Agent Streamlit")
-    st.sidebar.markdown("**ESP APM Autonomous Operations & Diagnostic Center**")
+    # ── Sidebar: Minimal Well Context & Quick Inquiries ─────────────────────────
+    st.sidebar.title("🤖 Agent Jane")
+    st.sidebar.caption("ESP Autonomous Operations & Predictive Diagnostics")
     st.sidebar.divider()
 
-    # 1. Service Status Indicators
-    srv = check_service_health()
-    st.sidebar.markdown("**Microservice Health**")
-    col_s1, col_s2 = st.sidebar.columns(2)
-    col_s1.markdown(f"{'🟢' if srv['core_api'] else '⚪'} Core API (:8000)")
-    col_s1.markdown(f"{'🟢' if srv['sqlite'] else '⚪'} SQLite DB")
-    col_s2.markdown(f"{'🟢' if srv['cuda_llm'] else '⚪'} CUDA LLM (:8080)")
-    col_s2.markdown(f"{'🟢' if srv['bff'] else '⚪'} Agent BFF (:8090)")
-    st.sidebar.divider()
-
-    # 2. Dynamic Asset Discovery
+    # 1. Target Well Selector
     assets = discover_active_assets()
     selected_asset = st.sidebar.selectbox(
-        "🛢️ Select Target Well / Asset",
+        "🛢️ Target Well Context",
         assets,
         index=assets.index("FS-031") if "FS-031" in assets else 0
     )
-
-    # 3. Telemetry Fetch Limit
-    hist_limit = st.sidebar.slider("Historical Records Limit", 50, 1000, 200, step=50)
-    st.sidebar.caption(f"Active Session: `{st.session_state.session_id[:16]}...`")
-
-    # Clear chat button
-    if st.sidebar.button("🗑️ Reset Chat Session"):
-        st.session_state.chat_messages = []
-        st.session_state.pending_clarification = {"active": False, "thread_id": None}
-        st.session_state.latest_advisory = None
-        st.session_state.latest_diagnosis = None
-        st.rerun()
 
     # Reset diagnostic state if user switches well
     if st.session_state.active_well != selected_asset:
@@ -613,448 +591,142 @@ def main():
         st.session_state.latest_advisory = None
         st.session_state.latest_diagnosis = None
 
-    # ── Fetch Telemetry for Active Well ───────────────────────────────────────
-    df_telemetry = fetch_telemetry_history(selected_asset, limit=hist_limit)
+    # Fetch latest telemetry snapshot for well context
+    df_telemetry = fetch_telemetry_history(selected_asset, limit=200)
     latest_dict = df_telemetry.iloc[-1].to_dict() if not df_telemetry.empty else None
     diagnosis = st.session_state.latest_diagnosis
 
-    # ── Header Title & System KPI Summary ─────────────────────────────────────
-    header_col1, header_col2, header_col3 = st.columns([3, 1, 1])
-    with header_col1:
-        st.subheader(f"Well Asset: {selected_asset}")
-        if diagnosis and diagnosis.get("health_score") is not None:
-            status_val = diagnosis.get("status", "🟢 NORMAL")
-            badge_class = "status-badge-normal" if "NORMAL" in status_val else ("status-badge-critical" if "CRITICAL" in status_val else "status-badge-risk")
-            src_tag = "📡 Live Backend (/api/vfd/diagnostics)" if diagnosis.get("_source") == "backend_api" else "⚙️ In-Process Diagnostic Engine"
-            st.markdown(f"Status: <span class='{badge_class}'>{status_val}</span> &nbsp;|&nbsp; Primary Fault: **{diagnosis.get('primary_fault', 'Normal')}**", unsafe_allow_html=True)
-            st.caption(f"Provenance: `{src_tag}`")
-        elif diagnosis and diagnosis.get("_source") == "unavailable":
-            st.markdown("Status: <span style='color: #8b949e; background: rgba(139,148,158,0.15); border: 1px solid #8b949e; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.88rem;'>⚪ NO LIVE DATA</span> &nbsp;|&nbsp; Primary Fault: *None Available*", unsafe_allow_html=True)
-            st.caption("⚠️ No live diagnosis or telemetry records available for this well.")
-        else:
-            st.markdown("Status: <span style='color: #8b949e; background: rgba(139,148,158,0.15); border: 1px solid #8b949e; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.88rem;'>⚪ STANDBY</span> &nbsp;|&nbsp; Primary Fault: *Awaiting Agent Query*", unsafe_allow_html=True)
-            st.caption("Awaiting operator prompt to trigger evaluation.")
+    # Quick Suggested Prompt Buttons
+    st.sidebar.markdown("### 💡 Quick Inquiries")
+    if st.sidebar.button(f"🔍 Evaluate {selected_asset} Health", use_container_width=True):
+        st.session_state._queued_query = f"Evaluate current operational health and fault status of {selected_asset}"
+        st.rerun()
 
-    with header_col2:
-        if diagnosis and diagnosis.get("health_score") is not None:
-            h_score = diagnosis.get("health_score", 90.0)
-            st.metric("Health Index", f"{h_score:.1f} / 100", delta=f"{h_score - 100:.1f}" if h_score < 100 else "0.0")
-        else:
-            st.metric("Health Index", "— / 100")
+    if st.sidebar.button(f"📈 Show Tipping Evidence", use_container_width=True):
+        st.session_state._queued_query = f"Show forensic tipping timeline and evidence for {selected_asset}"
+        st.rerun()
 
-    with header_col3:
-        if diagnosis and diagnosis.get("health_score") is not None:
-            ttt = diagnosis.get("est_time_to_trip", "N/A")
-            st.metric("Est. Time-to-Trip", ttt)
+    if st.sidebar.button(f"🌡️ Check Thermal & VFD Load", use_container_width=True):
+        st.session_state._queued_query = f"Check thermal stress, motor temperature, and VFD load for {selected_asset}"
+        st.rerun()
+
+    st.sidebar.divider()
+    if st.sidebar.button("🗑️ Reset Chat Session", use_container_width=True):
+        st.session_state.chat_messages = [
+            {
+                "role": "assistant",
+                "content": f"👋 **Agent Jane online.** Connected to Well **{selected_asset}**. Ask me any operational, thermal, or forensic question."
+            }
+        ]
+        st.session_state.pending_clarification = {"active": False, "thread_id": None}
+        st.session_state.latest_advisory = None
+        st.session_state.latest_diagnosis = None
+        st.rerun()
+
+    # Collapsible microservices health in sidebar
+    with st.sidebar.expander("🔌 Microservice Status", expanded=False):
+        srv = check_service_health()
+        col_s1, col_s2 = st.columns(2)
+        col_s1.markdown(f"{'🟢' if srv['core_api'] else '⚪'} Core API")
+        col_s1.markdown(f"{'🟢' if srv['sqlite'] else '⚪'} SQLite DB")
+        col_s2.markdown(f"{'🟢' if srv['cuda_llm'] else '⚪'} CUDA LLM")
+        col_s2.markdown(f"{'🟢' if srv['bff'] else '⚪'} Agent BFF")
+
+    st.sidebar.caption(f"Session: `{st.session_state.session_id[:14]}...`")
+
+    # ── Main Chat Header ──────────────────────────────────────────────────────
+    st.title("🤖 Operator Chat with Agent Jane")
+
+    # State Pill
+    if diagnosis and diagnosis.get("status"):
+        stat = diagnosis["status"]
+        if "STANDBY" in stat:
+            st.caption(f"Active Asset: **{selected_asset}** | Status: `⚪ STANDBY / OFFLINE` (VFD Unpowered)")
+        elif "CRITICAL" in stat:
+            st.caption(f"Active Asset: **{selected_asset}** | Status: `🔴 CRITICAL` ({diagnosis.get('primary_fault', 'Fault Detected')})")
         else:
-            st.metric("Est. Time-to-Trip", "—")
+            st.caption(f"Active Asset: **{selected_asset}** | Status: `🟢 NORMAL` (Health: {diagnosis.get('health_score', 95):.1f}/100)")
+    else:
+        st.caption(f"Active Asset: **{selected_asset}** | Status: `🟢 CONNECTED` — Awaiting operator inquiry")
 
     st.divider()
 
-    # ── Primary Tabbed Operations Center ──────────────────────────────────────
-    tab_advisory, tab_viz, tab_evidence, tab_fleet = st.tabs([
-        "🎯 AI Advisory & Chat (Agent Jane)",
-        "📈 Telemetry & Dynamic Visualizations",
-        "📌 Evidence Pack & Audit Trail (§3.1)",
-        "🗄️ Fleet Health & Database Explorer"
-    ])
+    # ── Chat Stream (Full Width) ──────────────────────────────────────────────
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("figure") is not None:
+                st.plotly_chart(msg["figure"], use_container_width=True)
 
-    # =========================================================================
-    # TAB 1: AI Advisory Deck & Chat Dialog (Agent Jane)
-    # =========================================================================
-    with tab_advisory:
-        col_deck, col_chat = st.columns([1, 1], gap="large")
+    # ── Check Queued Quick Query ──────────────────────────────────────────────
+    query_to_process = None
+    if "_queued_query" in st.session_state and st.session_state._queued_query:
+        query_to_process = st.session_state._queued_query
+        del st.session_state["_queued_query"]
 
-        # ── Left: Structured Advisory Deck / Diagnostic Card ─────────────────
-        with col_deck:
-            st.markdown("#### 📋 Diagnostic Intelligence Card")
-            
-            if diagnosis is None:
-                st.info(
-                    f"💡 **Agent Ready & Awaiting Query**\n\n"
-                    f"No active diagnostic run yet for **{selected_asset}**.\n\n"
-                    f"Type an operational query in the chat or select a prompt below to trigger Agent Jane's diagnostic workflow."
-                )
-                st.markdown("**Suggested Quick Inquiries:**")
-                qp1, qp2 = st.columns(2)
-                with qp1:
-                    if st.button(f"🔍 Evaluate {selected_asset} Health", key=f"qp1_{selected_asset}", use_container_width=True):
-                        st.session_state._queued_query = f"Evaluate current operational health and fault status of {selected_asset}"
-                        st.rerun()
-                with qp2:
-                    if st.button(f"🌡️ Check Thermal & VFD", key=f"qp2_{selected_asset}", use_container_width=True):
-                        st.session_state._queued_query = f"Check thermal stress, motor temp, and VFD load for {selected_asset}"
-                        st.rerun()
-            elif diagnosis.get("_source") == "unavailable":
-                st.warning(
-                    f"⚠️ **Diagnosis Unavailable for {selected_asset}**\n\n"
-                    f"Neither the backend API (`/api/vfd/diagnostics/{selected_asset}`) nor local telemetry returned records for this asset.\n\n"
-                    f"Ensure backend services are running or select another well with active telemetry."
-                )
+    # ── HITL Clarification Block ──────────────────────────────────────────────
+    pending = st.session_state.pending_clarification
+    if pending.get("active") and pending.get("question"):
+        st.warning(f"⚠️ **Clarification Required:** {pending['question']}")
+        btn_cols = st.columns(min(len(assets[:4]), 4))
+        for idx, a_opt in enumerate(assets[:4]):
+            if btn_cols[idx].button(f"👉 {a_opt}", key=f"chip_{a_opt}"):
+                query_to_process = a_opt
+
+    # ── Chat Input Pinned at Bottom ───────────────────────────────────────────
+    user_input = st.chat_input("Ask Agent Jane anything about ESP well health, faults, or telemetry...")
+    if user_input:
+        query_to_process = user_input
+
+    if query_to_process:
+        st.session_state.chat_messages.append({"role": "user", "content": query_to_process})
+        with st.spinner(f"Agent Jane analyzing {selected_asset} and evaluating diagnostics..."):
+            adv, is_c = execute_agent_query(query_to_process, selected_asset, st.session_state.session_id)
+            st.session_state.latest_advisory = adv
+
+            # Fetch fresh diagnosis
+            diag = fetch_well_diagnosis(selected_asset, latest_dict)
+            st.session_state.latest_diagnosis = diag
+
+            q_lower = query_to_process.lower()
+            is_info_only = any(w in q_lower for w in ["what is an esp", "define esp", "explain concept", "tell me about esp", "who are you"])
+            msg_fig = None
+
+            if is_info_only:
+                resp_text = adv.assessment if (adv and getattr(adv, "assessment", None)) else "ESP (Electrical Submersible Pump) artificial lift technology utilizes a downhole multistage centrifugal pump driven by a 3-phase induction motor."
             else:
-                # Key Dynamics KPI row
-                dyn = diagnosis.get("key_dynamics", {})
-                kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
-                dp_val = dyn.get('delta_p')
-                tq_val = dyn.get('torque_proxy')
-                pw_val = dyn.get('power_proxy_kva')
-                te_val = dyn.get('thermal_elevation')
-                kpi_c1.metric("Head ΔP", f"{dp_val:.0f} PSI" if dp_val is not None else "—")
-                kpi_c2.metric("Torque", f"{tq_val:.2f} A/Hz" if tq_val is not None else "—")
-                kpi_c3.metric("Power", f"{pw_val:.1f} kVA" if pw_val is not None else "—")
-                kpi_c4.metric("ΔT Elevation", f"{te_val:.1f} °C" if te_val is not None else "—")
+                resp_text = format_progressive_disclosure(adv, diag, selected_asset)
 
-                # Diagnostic Source Caption
-                src_label = "📡 Live Backend (/api/vfd/diagnostics)" if diagnosis.get("_source") == "backend_api" else "⚙️ In-Process Diagnostic Engine"
-                st.caption(f"Diagnostic Provenance: `{src_label}`")
+                # Check if visual requested
+                if any(w in q_lower for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"]) and HAS_FIGURE_FACTORY:
+                    try:
+                        logger.info(
+                            "[Trajectory Debugging] Forensic visual requested. Query='%s', Asset='%s'",
+                            query_to_process, selected_asset
+                        )
+                        if not df_telemetry.empty:
+                            df_win = df_telemetry.tail(60).copy()
+                            meta = {
+                                "timestamp": latest_dict.get("timestamp", ""),
+                                "fault": diag.get("primary_fault", "Operational Telemetry"),
+                                "health_score": diag.get("health_score", 95.0)
+                            }
+                            prof = {}
+                            if HAS_MODELS:
+                                try:
+                                    eng = WellDiagnosticEngine()
+                                    prof = eng.registry.get_well_profile(selected_asset)
+                                except Exception:
+                                    pass
+                            msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
+                    except Exception as fig_err:
+                        logger.error(f"[Trajectory Debugging] Error rendering inline chat figure: {fig_err}")
 
-                # Executive Description & Root Cause
-                st.markdown(f"**Fault Description:**\n{diagnosis.get('description', 'Operating nominal.')}")
-
-                # Root cause drivers
-                drivers = diagnosis.get("root_cause_drivers", [])
-                if drivers:
-                    st.markdown("**Root-Cause Drivers:**")
-                    for d_name, d_val in drivers:
-                        st.markdown(f"- **{d_name}**: `{d_val}`")
-
-                # Action Box
-                act_text = diagnosis.get("action_advisory") or "Maintain current parameters; continue standard monitoring."
-                st.markdown(f"""
-                <div class="action-box">
-                    <span style="font-weight: 600; color: #58a6ff;">👉 Recommended Operator Action:</span><br>
-                    {act_text}
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Latest LLM Advisory if one was generated
-                adv = st.session_state.latest_advisory
-                if adv and getattr(adv, "assessment", None):
-                    st.markdown("---")
-                    st.markdown("#### 🤖 LLM Multi-Objective Advisory")
-                    st.markdown(f"**Objective ID:** `{adv.objective_id}` | **Confidence:** `{adv.confidence:.2f}`")
-                    st.info(f"**Assessment:** {adv.assessment}")
-                    if getattr(adv, "diagnosis", None):
-                        st.markdown(f"**Diagnosis Hypothesis:** {adv.diagnosis}")
-                    if getattr(adv, "recommendation", None):
-                        st.success(f"**Action:** {adv.recommendation}")
-                    if getattr(adv, "risk", None):
-                        st.warning(f"**Risk Horizon:** {adv.risk}")
-
-        # ── Right: Interactive Operator Chat ──────────────────────────────────
-        with col_chat:
-            st.markdown("#### 💬 Operator Chat with Agent Jane")
-
-            # Render Chat History
-            chat_container = st.container(height=420)
-            with chat_container:
-                for msg in st.session_state.chat_messages:
-                    with st.chat_message(msg["role"]):
-                        st.markdown(msg["content"])
-                        if msg.get("figure") is not None:
-                            st.plotly_chart(msg["figure"], use_container_width=True)
-
-            # Check if a queued quick query was triggered
-            query_to_process = None
-            if "_queued_query" in st.session_state and st.session_state._queued_query:
-                query_to_process = st.session_state._queued_query
-                del st.session_state["_queued_query"]
-
-            # Render HITL Clarification Alert Banner if active
-            pending = st.session_state.pending_clarification
-            if pending.get("active") and pending.get("question"):
-                st.markdown(f"""
-                <div class="clarif-box">
-                    <strong>⚠️ Human-in-the-Loop Clarification Required:</strong><br>
-                    {pending['question']}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Interactive Suggestion Chips
-                st.markdown("*Select well context to resume LangGraph execution:*")
-                btn_cols = st.columns(min(len(assets[:4]), 4))
-                for idx, a_opt in enumerate(assets[:4]):
-                    if btn_cols[idx].button(f"👉 {a_opt}", key=f"chip_{a_opt}"):
-                        query_to_process = a_opt
-
-            # Chat Input Form
-            user_input = st.chat_input("Type an operational query (e.g. 'Evaluate thermal stress and vibration on FS-031')...")
-            if user_input:
-                query_to_process = user_input
-
-            if query_to_process:
-                st.session_state.chat_messages.append({"role": "user", "content": query_to_process})
-                with st.spinner(f"Agent Jane analyzing {selected_asset} and executing supervisor graph..."):
-                    adv, is_c = execute_agent_query(query_to_process, selected_asset, st.session_state.session_id)
-                    st.session_state.latest_advisory = adv
-                    
-                    # Compute and set diagnosis as part of the query response
-                    diag = fetch_well_diagnosis(selected_asset, latest_dict)
-                    st.session_state.latest_diagnosis = diag
-
-                    q_lower = query_to_process.lower()
-                    is_info_only = any(w in q_lower for w in ["what is an esp", "define esp", "explain concept", "tell me about esp", "who are you"])
-                    msg_fig = None
-
-                    if is_info_only:
-                        resp_text = adv.assessment if (adv and getattr(adv, "assessment", None)) else "ESP (Electrical Submersible Pump) artificial lift technology utilizes a downhole multistage centrifugal pump driven by a 3-phase induction motor."
-                    else:
-                        resp_text = format_progressive_disclosure(adv, diag, selected_asset)
-
-                        # Check if user asked for a chart, plot, trend, tipping timeline, or evidence visual
-                        if any(w in q_lower for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"]) and HAS_FIGURE_FACTORY:
-                            try:
-                                logger.info(
-                                    "[Trajectory Debugging] Forensic visual requested. Query='%s', Resolved_Asset='%s', Resolved_TS='%s', Available_Samples=%d",
-                                    query_to_process, selected_asset, latest_dict.get("timestamp"), len(df_telemetry)
-                                )
-                                if not df_telemetry.empty:
-                                    df_win = df_telemetry.tail(60).copy()
-                                    meta = {
-                                        "timestamp": latest_dict.get("timestamp", ""),
-                                        "fault": diag.get("primary_fault", "Operational Telemetry"),
-                                        "health_score": diag.get("health_score", 95.0)
-                                    }
-                                    prof = {}
-                                    if HAS_MODELS:
-                                        try:
-                                            eng = WellDiagnosticEngine()
-                                            prof = eng.registry.get_well_profile(selected_asset)
-                                        except Exception:
-                                            pass
-                                    msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
-                            except Exception as fig_err:
-                                logger.error(f"[Trajectory Debugging] Error rendering inline chat figure: {fig_err}")
-
-                    chat_payload = {"role": "assistant", "content": resp_text}
-                    if msg_fig is not None:
-                        chat_payload["figure"] = msg_fig
-                    st.session_state.chat_messages.append(chat_payload)
-                st.rerun()
-
-    # =========================================================================
-    # TAB 2: Telemetry & Dynamic Visualizations (Plotly)
-    # =========================================================================
-    with tab_viz:
-        st.markdown("#### 📈 Synchronized Multi-Parameter SCADA Trends")
-        if df_telemetry.empty:
-            st.warning(f"No telemetry data points available for well {selected_asset}.")
-        else:
-            # 4-Row Synchronized Subplots
-            fig = make_subplots(
-                rows=4, cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0.05,
-                subplot_titles=(
-                    "1. Hydraulics: Intake & Discharge Pressures (PSI)",
-                    "2. Electrical: Motor Current (A) & Drive Frequency (Hz)",
-                    "3. Thermal: Motor Internal & Intake Temperatures (°C)",
-                    "4. Mechanical: Radial Vibration (G) & VFD Status"
-                )
-            )
-
-            x_axis = df_telemetry["Report_DateTime"] if "Report_DateTime" in df_telemetry else df_telemetry.index
-
-            # Row 1: Hydraulics
-            if "Inp bar/psi" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Inp bar/psi"], name="Intake Pressure (PSI)", line=dict(color="#00bcd4", width=1.8)), row=1, col=1)
-            if "Disch pr. Bar/psi" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Disch pr. Bar/psi"], name="Discharge Pressure (PSI)", line=dict(color="#ff9800", width=1.8)), row=1, col=1)
-
-            # Row 2: Electrical
-            if "VSD Amps/Load" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["VSD Amps/Load"], name="Motor Current (A)", line=dict(color="#4caf50", width=1.8)), row=2, col=1)
-            if "Frequency" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Frequency"], name="Frequency (Hz)", line=dict(color="#9c27b0", width=1.5, dash="dot")), row=2, col=1)
-
-            # Row 3: Thermal
-            if "Motor temp °C" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Motor temp °C"], name="Motor Temp (°C)", line=dict(color="#f44336", width=2)), row=3, col=1)
-            if "Int temp °C" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Int temp °C"], name="Intake Temp (°C)", line=dict(color="#2196f3", width=1.5)), row=3, col=1)
-
-            # Row 4: Vibration
-            if "Vibration G's-Vx" in df_telemetry:
-                fig.add_trace(go.Scatter(x=x_axis, y=df_telemetry["Vibration G's-Vx"], name="Vibration (G)", line=dict(color="#e91e63", width=1.8)), row=4, col=1)
-
-            fig.update_layout(
-                height=700,
-                template="plotly_dark",
-                margin=dict(l=20, r=20, t=40, b=20),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Operating Envelope & H-Q Curve Row
-            c_env, c_hq = st.columns(2)
-            with c_env:
-                st.markdown("##### 🛡️ Operating Envelope (ΔP Head vs Intake)")
-                if "Inp bar/psi" in df_telemetry and "ΔP Head (PSI)" in df_telemetry:
-                    fig_env = go.Figure()
-                    fig_env.add_trace(go.Scatter(
-                        x=df_telemetry["Inp bar/psi"],
-                        y=df_telemetry["ΔP Head (PSI)"],
-                        mode="markers+lines",
-                        name="Operating Path",
-                        marker=dict(size=6, color="#00bcd4")
-                    ))
-                    fig_env.update_layout(
-                        template="plotly_dark",
-                        xaxis_title="Intake Pressure (PSI)",
-                        yaxis_title="Head ΔP (PSI)",
-                        height=350,
-                        margin=dict(l=20, r=20, t=20, b=20)
-                    )
-                    st.plotly_chart(fig_env, use_container_width=True)
-
-            with c_hq:
-                st.markdown("##### 📊 Pump Performance Curve (H-Q & BEP)")
-                fig_hq = go.Figure()
-                q_vals = np.linspace(200, 2000, 50)
-                h_vals = 5200 - 0.0008 * (q_vals - 400)**2
-                fig_hq.add_trace(go.Scatter(x=q_vals, y=h_vals, name="Rated H-Q Curve", line=dict(color="#58a6ff", width=2)))
-                # Current Operating Point
-                flow_pt = df_telemetry["Flow_BPD"].iloc[-1] if "Flow_BPD" in df_telemetry else 735.0
-                head_pt = df_telemetry["ΔP Head (PSI)"].iloc[-1] * 2.31 if "ΔP Head (PSI)" in df_telemetry else 3800.0
-                fig_hq.add_trace(go.Scatter(
-                    x=[flow_pt], y=[head_pt],
-                    mode="markers",
-                    name="Current Operating Point",
-                    marker=dict(size=12, color="#f85149", symbol="diamond")
-                ))
-                fig_hq.update_layout(
-                    template="plotly_dark",
-                    xaxis_title="Flow Rate (BPD)",
-                    yaxis_title="Total Dynamic Head (ft)",
-                    height=350,
-                    margin=dict(l=20, r=20, t=20, b=20)
-                )
-                st.plotly_chart(fig_hq, use_container_width=True)
-
-    # =========================================================================
-    # TAB 3: Evidence Pack & Audit Trail (§3.1 Authority Ranked)
-    # =========================================================================
-    with tab_evidence:
-        st.markdown("#### 📌 Canonical Evidence Citations (§3.1 Authority Ranked)")
-        st.caption("Each evidence item is anchored to an immutable database record, deterministic formula, or authoritative OEM manual.")
-
-        adv = st.session_state.latest_advisory
-        diagnosis = st.session_state.latest_diagnosis
-        evidence_list = []
-
-        # If LLM advisory produced evidence items
-        if adv and getattr(adv, "evidence", None):
-            for e in adv.evidence:
-                evidence_list.append({
-                    "Authority": e.source_type,
-                    "Source ID": e.source_id,
-                    "Observation": e.observation,
-                    "Timestamp": e.timestamp,
-                    "Deep-Link": e.source_deep_link or "In-Process"
-                })
-        elif diagnosis and diagnosis.get("_source") != "unavailable" and latest_dict:
-            # Baseline live evidence synthesis (guarded by real telemetry existence)
-            st.info("ℹ️ **Telemetry-Derived Evidence Only**: Showing live SCADA measurements for active well. Specifications (Level A), OEM (Level B), and Causal Failure Graphs (Level E) require an Agent Jane advisory run.")
-            now_str = datetime.datetime.utcnow().isoformat() + "Z"
-            dyn = diagnosis.get("key_dynamics", {})
-            
-            # Intake Pressure
-            inp_val = latest_dict.get("Inp bar/psi")
-            if inp_val is not None and inp_val != 0.0:
-                evidence_list.append({
-                    "Authority": "LEVEL_D_SCADA",
-                    "Source ID": f"esp:telemetry:{selected_asset}:intake_pressure",
-                    "Observation": f"Intake Pressure measured at {float(inp_val):.1f} PSI (Live SCADA)",
-                    "Timestamp": str(latest_dict.get("Report_DateTime", now_str)),
-                    "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"
-                })
-            # Motor Temp
-            mt_val = latest_dict.get("Motor temp °C")
-            if mt_val is not None and mt_val != 0.0:
-                evidence_list.append({
-                    "Authority": "LEVEL_D_SCADA",
-                    "Source ID": f"esp:telemetry:{selected_asset}:motor_temp",
-                    "Observation": f"Motor Temp measured at {float(mt_val):.1f} °C (Live SCADA)",
-                    "Timestamp": str(latest_dict.get("Report_DateTime", now_str)),
-                    "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"
-                })
-            # Dynamic Head Delta P
-            dp_val = dyn.get("delta_p")
-            if dp_val is not None:
-                evidence_list.append({
-                    "Authority": "LEVEL_C_ENGINEERING",
-                    "Source ID": "esp:engineering:delta_p",
-                    "Observation": f"Dynamic Head ΔP calculated at {float(dp_val):.1f} PSI",
-                    "Timestamp": now_str,
-                    "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/delta_p"
-                })
-            # Torque Proxy
-            tq_val = dyn.get("torque_proxy")
-            if tq_val is not None:
-                evidence_list.append({
-                    "Authority": "LEVEL_C_ENGINEERING",
-                    "Source ID": "esp:engineering:torque_proxy",
-                    "Observation": f"Torque Proxy evaluated at {float(tq_val):.2f} A/Hz",
-                    "Timestamp": now_str,
-                    "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/torque_proxy"
-                })
-
-        if evidence_list:
-            df_evid = pd.DataFrame(evidence_list)
-            st.dataframe(df_evid, use_container_width=True, hide_index=True)
-        else:
-            st.info(f"📋 **Evidence Pack Standby:** Awaiting diagnostic run for **{selected_asset}**. Submit an operational query in Tab 1 to generate §3.1 authority-ranked evidence citations.")
-
-        st.divider()
-        st.markdown("#### ⚡ Real-Time LLM Inference Telemetry")
-        llm_meta = _parse_llm_provenance(st.session_state.latest_advisory)
-        t_col1, t_col2, t_col3, t_col4 = st.columns(4)
-        t_col1.metric("Active Model", llm_meta["model"])
-        t_col2.metric("LLM Status", llm_meta["status"])
-        t_col3.metric("Generation Latency", llm_meta["latency"])
-        t_col4.metric("Total Tokens", llm_meta["tokens"])
-
-    # =========================================================================
-    # TAB 4: Fleet Health & Database Explorer
-    # =========================================================================
-    with tab_fleet:
-        st.markdown("#### 🗄️ Fleet Health Summary")
-        fleet_data = []
-        for w in assets[:15]:
-            d_temp = fetch_well_diagnosis(w)
-            src = d_temp.get("_source", "unavailable")
-            if src == "backend_api":
-                src_label = "📡 Live API"
-            elif src == "in_process":
-                src_label = "⚙️ In-Process"
-            else:
-                src_label = "⚪ No Live Data"
-
-            h_score_val = d_temp.get("health_score")
-            score_str = f"{h_score_val:.1f}" if h_score_val is not None else "—"
-
-            fleet_data.append({
-                "Well ID": w,
-                "Data Source": src_label,
-                "Health Score": score_str,
-                "Status": d_temp.get("status", "⚪ NO LIVE DATA"),
-                "Primary Fault": d_temp.get("primary_fault", "No diagnosis available"),
-                "Time-to-Trip": d_temp.get("est_time_to_trip", "—"),
-                "Recommended Action": d_temp.get("action_advisory", "Awaiting telemetry stream")
-            })
-        st.dataframe(pd.DataFrame(fleet_data), use_container_width=True, hide_index=True)
-
-        st.divider()
-        st.markdown(f"#### 📋 Raw SCADA Telemetry Ledger ({selected_asset})")
-        if not df_telemetry.empty:
-            st.dataframe(df_telemetry.tail(50), use_container_width=True)
-            csv_data = df_telemetry.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label=f"📥 Download {selected_asset} Telemetry (CSV)",
-                data=csv_data,
-                file_name=f"telemetry_{selected_asset}.csv",
-                mime="text/csv"
-            )
+            chat_payload = {"role": "assistant", "content": resp_text}
+            if msg_fig is not None:
+                chat_payload["figure"] = msg_fig
+            st.session_state.chat_messages.append(chat_payload)
+        st.rerun()
 
 
 if __name__ == "__main__":
