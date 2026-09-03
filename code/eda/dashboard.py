@@ -11,6 +11,7 @@ import sys
 import glob
 import re
 import datetime
+import sqlite3
 from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
 import pandas as pd
@@ -30,6 +31,7 @@ st.set_page_config(
 # Ensure parent directory (containing models package) and current directory are in sys.path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+root_dir = os.path.abspath(os.path.join(parent_dir, ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 if current_dir not in sys.path:
@@ -43,43 +45,66 @@ except Exception as e:
     print(f"Warning: Could not import models package: {e}")
 
 CATEGORIZED_DIR = r"C:\Users\admin.DESKTOP-17T37DJ\Desktop\cced\categorized_wells"
+UNLABELLED_DB_PATH = os.path.abspath(os.path.join(root_dir, "cced_esp", "data", "unlabelled.db"))
+if not os.path.exists(UNLABELLED_DB_PATH):
+    UNLABELLED_DB_PATH = os.path.abspath(os.path.join(parent_dir, "..", "cced_esp", "data", "unlabelled.db"))
 
 
 @st.cache_resource
 def get_diagnostic_engine():
     """Initializes and caches the WellDiagnosticEngine."""
     if HAS_MODELS:
-        return WellDiagnosticEngine(categorized_dir=CATEGORIZED_DIR)
+        cat_dir = CATEGORIZED_DIR if os.path.exists(CATEGORIZED_DIR) else None
+        return WellDiagnosticEngine(categorized_dir=cat_dir)
     return None
 
 
 @st.cache_data(show_spinner=False)
 def discover_all_wells(base_dir: str) -> Dict[str, List[Dict[str, str]]]:
     """
-    Scans categorized directory and returns all available wells organized by family cluster.
+    Scans categorized directory or unlabelled.db and returns all available wells organized by family cluster.
     """
     wells_by_cluster = {}
-    csv_files = glob.glob(os.path.join(base_dir, "**", "*.csv"), recursive=True)
-    
-    for f in csv_files:
-        if "Wells_Summary_Index" in f:
-            continue
-        fname = os.path.splitext(os.path.basename(f))[0]
-        well_id = fname.replace("_", "-")
-        
-        # Determine cluster folder
-        parent_folder = os.path.basename(os.path.dirname(f))
-        m = re.match(r'^([A-Za-z]+)', well_id)
-        cluster = parent_folder if parent_folder and parent_folder.upper() in ["FS", "FNW", "FWS", "ULFA"] else (m.group(1).upper() if m else "OTHER")
-        
-        if cluster not in wells_by_cluster:
-            wells_by_cluster[cluster] = []
-        
-        wells_by_cluster[cluster].append({
-            "well_id": well_id,
-            "path": f,
-            "filename": os.path.basename(f)
-        })
+    if os.path.exists(base_dir):
+        csv_files = glob.glob(os.path.join(base_dir, "**", "*.csv"), recursive=True)
+        for f in csv_files:
+            if "Wells_Summary_Index" in f:
+                continue
+            fname = os.path.splitext(os.path.basename(f))[0]
+            well_id = fname.replace("_", "-")
+            
+            # Determine cluster folder
+            parent_folder = os.path.basename(os.path.dirname(f))
+            m = re.match(r'^([A-Za-z]+)', well_id)
+            cluster = parent_folder if parent_folder and parent_folder.upper() in ["FS", "FNW", "FWS", "ULFA"] else (m.group(1).upper() if m else "OTHER")
+            
+            if cluster not in wells_by_cluster:
+                wells_by_cluster[cluster] = []
+            
+            wells_by_cluster[cluster].append({
+                "well_id": well_id,
+                "path": f,
+                "filename": os.path.basename(f)
+            })
+
+    # Fallback to local unlabelled.db if base_dir is missing or empty
+    if not wells_by_cluster and os.path.exists(UNLABELLED_DB_PATH):
+        try:
+            conn = sqlite3.connect(UNLABELLED_DB_PATH)
+            df_w = pd.read_sql_query("SELECT DISTINCT well_id FROM opg_well_telemetry ORDER BY well_id", conn)
+            conn.close()
+            for well_id in df_w["well_id"].dropna().tolist():
+                m = re.match(r'^([A-Za-z]+)', well_id)
+                cluster = m.group(1).upper() if m else "OTHER"
+                if cluster not in wells_by_cluster:
+                    wells_by_cluster[cluster] = []
+                wells_by_cluster[cluster].append({
+                    "well_id": well_id,
+                    "path": f"sqlite://{well_id}",
+                    "filename": f"{well_id}.db"
+                })
+        except Exception as e:
+            print(f"Warning querying unlabelled.db for wells: {e}")
         
     for k in wells_by_cluster:
         wells_by_cluster[k].sort(key=lambda x: x["well_id"])
@@ -89,22 +114,57 @@ def discover_all_wells(base_dir: str) -> Dict[str, List[Dict[str, str]]]:
 
 @st.cache_data(show_spinner=False)
 def load_well_dataset(file_path: str) -> pd.DataFrame:
-    """Loads a well dataset from disk, parses datetime, and cleans columns."""
-    if not os.path.exists(file_path):
+    """Loads a well dataset from disk or unlabelled.db, parses datetime, and cleans columns."""
+    df = pd.DataFrame()
+
+    if file_path.startswith("sqlite://") or (not os.path.exists(file_path) and os.path.exists(UNLABELLED_DB_PATH)):
+        well_id = file_path.replace("sqlite://", "") if file_path.startswith("sqlite://") else os.path.splitext(os.path.basename(file_path))[0].replace("_", "-")
+        try:
+            conn = sqlite3.connect(UNLABELLED_DB_PATH)
+            query = """
+                SELECT timestamp AS Report_DateTime,
+                       intake_pressure_psi AS [Inp bar/psi],
+                       discharge_pressure_psi AS [Disch pr. Bar/psi],
+                       motor_temperature_c AS [Motor temp °C],
+                       intake_temperature_c AS [Int temp °C],
+                       motor_current_a AS [VSD Amps/Load],
+                       motor_voltage_v AS [Volt],
+                       frequency_hz AS Frequency,
+                       vibration_g AS [Vibration G's-Vx],
+                       vfd_status AS [VFD STS],
+                       leak_current_ct AS [Leak Current Ct],
+                       dhg_current AS [DHG Current],
+                       whp_psi AS [WHP (PSI)],
+                       flp_psi AS [FLP (PSI)],
+                       annulus_pressure_psi AS [AP (PSI)],
+                       flow_rate_bpd AS Flow_BPD
+                FROM opg_well_telemetry
+                WHERE well_id = ?
+                ORDER BY timestamp ASC
+                LIMIT 10000
+            """
+            df = pd.read_sql_query(query, conn, params=(well_id,))
+            conn.close()
+        except Exception as e:
+            print(f"Error loading well {well_id} from unlabelled.db: {e}")
+            return pd.DataFrame()
+    elif os.path.exists(file_path):
+        df = pd.read_csv(file_path, low_memory=False)
+        # Standardize column names
+        col_map = {}
+        for c in df.columns:
+            if c.startswith("norm_"):
+                col_map[c] = c
+            else:
+                col_map[c] = clean_col_key(c)
+        df.rename(columns=col_map, inplace=True)
+        df = df.loc[:, ~df.columns.duplicated()].copy()
+    else:
         return pd.DataFrame()
-    
-    df = pd.read_csv(file_path, low_memory=False)
-    
-    # Standardize column names
-    col_map = {}
-    for c in df.columns:
-        if c.startswith("norm_"):
-            col_map[c] = c
-        else:
-            col_map[c] = clean_col_key(c)
-    df.rename(columns=col_map, inplace=True)
-    df = df.loc[:, ~df.columns.duplicated()].copy()
-    
+
+    if df.empty:
+        return df
+
     # Parse timestamp
     if "Report_DateTime" in df.columns:
         df["Report_DateTime"] = pd.to_datetime(df["Report_DateTime"], errors="coerce")
@@ -141,6 +201,24 @@ def load_well_dataset(file_path: str) -> pd.DataFrame:
     if "Motor temp °C" in df.columns and "Int temp °C" in df.columns:
         df["Thermal Elevation (°C)"] = df["Motor temp °C"] - df["Int temp °C"]
         
+    # Dynamically generate norm_* features if missing
+    if not any(c.startswith("norm_") for c in df.columns):
+        engine = get_diagnostic_engine()
+        if engine:
+            well_target = file_path.replace("sqlite://", "") if file_path.startswith("sqlite://") else "FS-031"
+            norm_records = []
+            for _, r in df.iterrows():
+                try:
+                    n_res = engine.normalizer.normalize_live_telemetry(well_target, r.to_dict())
+                    norm_dict = {f"norm_{clean_col_key(k)}": float(v) for k, v in n_res.get("normalized", {}).items()}
+                    norm_records.append(norm_dict)
+                except Exception:
+                    norm_records.append({})
+            if norm_records:
+                df_norm = pd.DataFrame(norm_records)
+                for col in df_norm.columns:
+                    df[col] = df_norm[col].values
+
     return df
 
 
@@ -298,7 +376,9 @@ def scan_fleet_for_fault_history(target_fault: str, max_wells: int = 73) -> pd.D
     if not HAS_MODELS:
         return pd.DataFrame()
 
-    engine = WellDiagnosticEngine(categorized_dir=CATEGORIZED_DIR)
+    engine = get_diagnostic_engine()
+    if not engine:
+        return pd.DataFrame()
     wells_dict = discover_all_wells(CATEGORIZED_DIR)
     
     all_wells = []
@@ -310,15 +390,9 @@ def scan_fleet_for_fault_history(target_fault: str, max_wells: int = 73) -> pd.D
 
     for cluster, well_id, fpath in all_wells[:max_wells]:
         try:
-            df = pd.read_csv(fpath, low_memory=False)
-            col_map = {}
-            for c in df.columns:
-                if not c.startswith("norm_"):
-                    col_map[c] = clean_col_key(c)
-            df.rename(columns=col_map, inplace=True)
-
-            if "Report_DateTime" not in df.columns and "File_DateTime" in df.columns:
-                df["Report_DateTime"] = df["File_DateTime"]
+            df = load_well_dataset(fpath)
+            if df.empty:
+                continue
 
             # Sample every Nth row to keep search fast across 3.35M rows
             sample_step = max(1, len(df) // 40)
