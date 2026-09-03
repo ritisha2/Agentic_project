@@ -313,8 +313,21 @@ def fetch_well_diagnosis(well_id: str, latest_telemetry: Optional[Dict[str, Any]
         if r.status_code == 200:
             data = r.json()
             if isinstance(data, dict):
-                data["_source"] = "backend_api"
-                return data
+                diag_sub = data.get("diagnostic", {})
+                dyn_sub = data.get("dynamics", {})
+                return {
+                    "_source": "backend_api",
+                    "well_id": data.get("well_id", well_id),
+                    "health_score": diag_sub.get("health_score", data.get("health_score")),
+                    "status": diag_sub.get("status", data.get("status", "🟢 NORMAL")),
+                    "primary_fault": diag_sub.get("primary_fault", data.get("primary_fault", "Normal Operation")),
+                    "confidence": diag_sub.get("confidence", data.get("confidence", "95.0%")),
+                    "description": diag_sub.get("description", data.get("description", "All operational parameters within envelope.")),
+                    "est_time_to_trip": diag_sub.get("est_time_to_trip", data.get("est_time_to_trip", "N/A")),
+                    "action_advisory": diag_sub.get("action_advisory", data.get("action_advisory", "Maintain standard monitoring.")),
+                    "key_dynamics": dyn_sub or data.get("key_dynamics", {}),
+                    "root_cause_drivers": diag_sub.get("root_cause_drivers", data.get("root_cause_drivers", []))
+                }
     except Exception:
         pass
 
