@@ -566,11 +566,11 @@ def main():
     st.sidebar.divider()
     st.sidebar.subheader("⚙️ Plotting Performance")
     total_pts = len(df_filtered)
-    default_res = "1 Hour" if total_pts > 10000 else "Raw (All Points)"
+    default_res = "15 Minutes" if total_pts > 800 else "Raw (All Points)"
     resample_rule = st.sidebar.selectbox(
         "Time Resolution",
-        ["Raw (All Points)", "15 Minutes", "1 Hour", "4 Hours", "1 Day"],
-        index=["Raw (All Points)", "15 Minutes", "1 Hour", "4 Hours", "1 Day"].index(default_res)
+        ["15 Minutes", "1 Hour", "4 Hours", "1 Day", "Raw (All Points)"],
+        index=["15 Minutes", "1 Hour", "4 Hours", "1 Day", "Raw (All Points)"].index(default_res)
     )
     
     df_plot = resample_dataframe(df_filtered, resample_rule)
