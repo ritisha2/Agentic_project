@@ -20,3 +20,6 @@ redis>=5.0.0
 mcp>=1.2.0
 # LLM structured-output repair: robust JSON parsing for small local models' malformed JSON
 json-repair>=0.30.0
+# Interactive Dashboard & Plotting (Agent Streamlit)
+streamlit>=1.35.0
+plotly>=5.20.0
