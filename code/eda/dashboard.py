@@ -140,7 +140,7 @@ def load_well_dataset(file_path: str) -> pd.DataFrame:
                        COALESCE(flow_rate_bpd, 745.0) AS Flow_BPD
                 FROM opg_well_telemetry
                 WHERE well_id = ?
-                ORDER BY timestamp ASC
+                ORDER BY id DESC
                 LIMIT 10000
             """
             df = pd.read_sql_query(query, conn, params=(well_id,))
