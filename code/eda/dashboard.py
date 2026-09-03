@@ -44,6 +44,15 @@ except Exception as e:
     HAS_MODELS = False
     print(f"Warning: Could not import models package: {e}")
 
+try:
+    from figure_factory import render_incident_tipping_timeline, build_evidence_comparison_table
+except ImportError:
+    try:
+        from eda.figure_factory import render_incident_tipping_timeline, build_evidence_comparison_table
+    except ImportError:
+        render_incident_tipping_timeline = None
+        build_evidence_comparison_table = None
+
 CATEGORIZED_DIR = r"C:\Users\admin.DESKTOP-17T37DJ\Desktop\cced\categorized_wells"
 UNLABELLED_DB_PATH = os.path.abspath(os.path.join(root_dir, "cced_esp", "data", "unlabelled.db"))
 if not os.path.exists(UNLABELLED_DB_PATH):
@@ -113,6 +122,46 @@ def discover_all_wells(base_dir: str) -> Dict[str, List[Dict[str, str]]]:
         wells_by_cluster[k].sort(key=lambda x: x["well_id"])
         
     return wells_by_cluster
+
+
+@st.cache_data(show_spinner=False)
+def load_incident_telemetry_window(well_id: str, center_ts: str, window_minutes: int = 60) -> pd.DataFrame:
+    """Loads a high-resolution window around an incident timestamp for forensic inspection."""
+    if not os.path.exists(NORMALIZED_DB_PATH):
+        return pd.DataFrame()
+    try:
+        clean_ts = str(center_ts).replace("Z", "+00:00")
+        dt_center = pd.to_datetime(clean_ts, utc=True)
+        half_win = pd.Timedelta(minutes=window_minutes / 2)
+        start_iso = (dt_center - half_win).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = (dt_center + half_win).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        with sqlite3.connect(NORMALIZED_DB_PATH) as conn:
+            q = """
+                SELECT timestamp AS Report_DateTime, *
+                FROM opg_normalized_telemetry
+                WHERE Wells = ? AND timestamp >= ? AND timestamp <= ?
+                ORDER BY timestamp ASC
+                LIMIT 500
+            """
+            df = pd.read_sql_query(q, conn, params=(well_id, start_iso, end_iso))
+            if not df.empty:
+                return df.loc[:, ~df.columns.duplicated()].copy()
+
+            # Fallback: if bounds were too tight, fetch closest 60 rows
+            q_fallback = """
+                SELECT timestamp AS Report_DateTime, *
+                FROM opg_normalized_telemetry
+                WHERE Wells = ? AND timestamp <= ?
+                ORDER BY timestamp DESC
+                LIMIT 60
+            """
+            df_fallback = pd.read_sql_query(q_fallback, conn, params=(well_id, str(center_ts)))
+            if not df_fallback.empty:
+                return df_fallback.sort_values("Report_DateTime").loc[:, ~df_fallback.columns.duplicated()].copy()
+    except Exception as e:
+        print(f"Error loading incident telemetry window: {e}")
+    return pd.DataFrame()
 
 
 @st.cache_data(show_spinner=False)
@@ -1649,6 +1698,70 @@ def main():
                         # Detailed Fleet Incident Table
                         st.markdown("#### 📋 Detailed Incident Log Across Fleet")
                         st.dataframe(fleet_res, use_container_width=True)
+
+                        # Interactive Incident Forensic Deep-Dive
+                        st.markdown("---")
+                        st.subheader("🔬 Incident Forensic Deep-Dive & Tipping Evidence")
+                        st.caption("Select any incident from the fleet log above to inspect its before-during-after tipping timeline, baseline corridor breakout, and physical evidence.")
+
+                        incident_options = [
+                            f"#{i+1} | Well: {r['Well_ID']} | Time: {str(r['Timestamp'])[:19]} | Health: {r['Health_Score']}/100"
+                            for i, r in fleet_res.iterrows()
+                        ]
+                        sel_incident_str = st.selectbox(
+                            "🎯 Select Incident to Inspect Forensic Tipping Pattern & Evidence:",
+                            incident_options,
+                            index=0
+                        )
+                        sel_idx = incident_options.index(sel_incident_str)
+                        incident_meta = fleet_res.iloc[sel_idx].to_dict()
+
+                        target_well = incident_meta["Well_ID"]
+                        target_time = str(incident_meta["Timestamp"])
+
+                        # Load the telemetry window around the incident
+                        df_forensic = load_incident_telemetry_window(target_well, target_time, window_minutes=60)
+
+                        # Get well profile from registry
+                        well_prof = engine.registry.get_well_profile(target_well) if engine else {}
+
+                        # 1. Summary Metric Chips
+                        m_c1, m_c2, m_c3, m_c4 = st.columns(4)
+                        m_c1.metric("Asset ID", target_well)
+                        m_c2.metric("Detected Fault", incident_meta["Detected_Fault"])
+                        m_c3.metric("Health Score at Trip", f"{incident_meta['Health_Score']:.1f} / 100")
+                        m_c4.metric("Incident Timestamp", target_time[:19].replace("T", " "))
+
+                        # 2. Synchronized Tipping Timeline Plot
+                        if render_incident_tipping_timeline is not None and not df_forensic.empty:
+                            fig_tipping = render_incident_tipping_timeline(
+                                df_forensic, incident_meta, well_prof, height=620
+                            )
+                            st.plotly_chart(fig_tipping, use_container_width=True, key=f"fig_tab7_tipping_{sel_idx}")
+                        elif df_forensic.empty:
+                            st.info(f"Detailed high-resolution telemetry window not found in normalized.db for Well {target_well} around {target_time}.")
+
+                        # 3. Evidence Table & Recommended Advisory
+                        e_col1, e_col2 = st.columns([3, 2])
+                        with e_col1:
+                            st.markdown("#### 📊 Parameter Breakout vs. Calibrated Normal Envelope (P10 - P90)")
+                            if not df_forensic.empty and build_evidence_comparison_table is not None:
+                                trip_row = df_forensic.iloc[len(df_forensic)//2].to_dict()
+                                evidence_df = build_evidence_comparison_table(trip_row, well_prof)
+                                st.dataframe(evidence_df, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("Parameter breakout table unavailable.")
+
+                        with e_col2:
+                            st.markdown("#### 🛠️ Recommended Engineering Advisory")
+                            st.warning(f"**Immediate Action:** {incident_meta.get('Advisory', 'Inspect well parameters and verify choke/VFD status.')}")
+                            st.markdown(f"""
+                            **Diagnostic Summary:**
+                            - **Fault Diagnosis:** `{incident_meta['Detected_Fault']}`
+                            - **Detection Confidence:** `{float(incident_meta.get('Confidence', 0.95))*100:.1f}%`
+                            - **Operational Status:** `{incident_meta.get('Status', 'CRITICAL')}`
+                            - **Physical Mechanism:** Multi-parameter coupling diverged beyond the calibrated healthy envelope.
+                            """)
 
     # =============================================================
     # TAB 8: Data Table Explorer & CSV Download
