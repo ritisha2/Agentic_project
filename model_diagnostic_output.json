@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "asset_id": "FS-031",
+    "well_id": "FS-031",
+    "telemetry_record_id": 2685765,
+    "telemetry_timestamp": "2026-09-02T14:31:10.381638Z",
+    "pipeline_evaluated_at": "2026-09-03T01:27:54Z",
+    "source_api": "http://localhost:8000/api/v1/telemetry/unlabelled?asset_id=FS-031&limit=5",
+    "source_database": "unlabelled.db",
+    "broker_id": "CCED-ML-TEST-01"
+  },
+  "raw_telemetry_from_api": {
+    "intake_pressure_psi": 237.2768,
+    "intake_temperature_c": 78.8899,
+    "motor_temperature_c": 78.8899,
+    "discharge_pressure_psi": 1895.2812,
+    "vibration_g": 0.1798,
+    "leak_current_ct": 0.0,
+    "motor_voltage_v": 1009.1329,
+    "motor_current_a": 18.9408,
+    "frequency_hz": 46.1892,
+    "dhg_current": 0.0,
+    "whp_psi": 0.0,
+    "flp_psi": 0.0,
+    "annulus_pressure_psi": 0.0,
+    "vfd_status": 1
+  },
+  "standardized_14_parameters": {
+    "Inp bar/psi": 237.2768,
+    "Disch pr. Bar/psi": 1895.2812,
+    "Frequency": 46.1892,
+    "VSD Amps/Load": 18.9408,
+    "Volt": 1009.1329,
+    "Vibration G's-Vx": 0.1798,
+    "Motor temp \u00b0C": 78.8899,
+    "Int temp \u00b0C": 57.39,
+    "VFD STS": 1,
+    "Leak Current Ct": 9.9,
+    "DHG Current": 21.02273,
+    "WHP (PSI)": 1.0,
+    "FLP (PSI)": 1.0,
+    "AP (PSI)": 1.0,
+    "Flow_BPD": 735.0,
+    "V_Imb_pct": 0.6,
+    "I_Imb_pct": 1.0
+  },
+  "diagnostic_evaluation": {
+    "health_index": 94.3,
+    "status": "\ud83d\udfe2 NORMAL",
+    "primary_fault_diagnosis": "Normal Operation",
+    "confidence": "95.0%",
+    "fault_description": "All electrical, thermal, mechanical, and hydraulic parameters within healthy baseline envelope.",
+    "estimated_time_to_trip": "N/A (Stable Operation)",
+    "recommended_operator_action": "Maintain current operating parameters; continue standard monitoring.",
+    "key_dynamics": {
+      "delta_p": 1658.0,
+      "torque_proxy": 0.41,
+      "power_proxy_kva": 33.11,
+      "thermal_elevation": 21.5,
+      "thermal_rate_hr": 0.0,
+      "pressure_ratio": 7.99
+    },
+    "primary_root_cause_drivers": [
+      [
+        "All Sensors",
+        "Within normal calibrated boundaries"
+      ]
+    ]
+  },
+  "anomaly_detection": {
+    "is_anomaly": true,
+    "raw_decision_score": -0.2497,
+    "anomaly_probability": 0.9239
+  }
+}
