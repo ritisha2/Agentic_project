@@ -11,6 +11,7 @@ and React operations center:
 """
 
 import os
+import re
 import sys
 import json
 import time
@@ -299,17 +300,21 @@ def _clean_telemetry_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ── Authoritative Diagnostics Fetcher (Bug 4 Verified) ─────────────────────────
+# ── Authoritative Diagnostics Fetcher (Bug 4 & Fix 2 Verified) ────────────────
 def fetch_well_diagnosis(well_id: str, latest_telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Hits GET /api/vfd/diagnostics/{well_id} as the single authoritative source of truth.
     Falls back to in-process WellDiagnosticEngine only when backend is offline.
+    Zero-Mock: Never fabricates 92.5 / NORMAL when data is unavailable.
     """
     # 1. Authoritative Backend Service Read
     try:
         r = requests.get(f"{CORE_API_URL}/api/vfd/diagnostics/{well_id}", timeout=1.2)
         if r.status_code == 200:
-            return r.json()
+            data = r.json()
+            if isinstance(data, dict):
+                data["_source"] = "backend_api"
+                return data
     except Exception:
         pass
 
@@ -323,6 +328,7 @@ def fetch_well_diagnosis(well_id: str, latest_telemetry: Optional[Dict[str, Any]
             d = eval_res.get("diagnostic", {})
             dyn = eval_res.get("dynamics", {})
             return {
+                "_source": "in_process",
                 "well_id": well_id,
                 "health_score": d.get("health_score", 90.0),
                 "status": d.get("status", "🟢 NORMAL"),
@@ -337,19 +343,75 @@ def fetch_well_diagnosis(well_id: str, latest_telemetry: Optional[Dict[str, Any]
         except Exception as e:
             pass
 
-    # Safe default
+    # Honest Unavailable Empty (Zero Mock: No fake 92.5)
     return {
+        "_source": "unavailable",
         "well_id": well_id,
-        "health_score": 92.5,
-        "status": "🟢 NORMAL",
-        "primary_fault": "Normal Operation",
-        "confidence": "95.0%",
-        "description": "Baseline parameters within calibrated operating envelope.",
-        "est_time_to_trip": "N/A (Stable Operation)",
-        "action_advisory": "Continue standard supervisory telemetry monitoring.",
-        "key_dynamics": {"delta_p": 1650.0, "torque_proxy": 0.41, "power_proxy_kva": 32.5, "thermal_elevation": 21.0},
-        "root_cause_drivers": [("All Sensors", "Within normal limits")]
+        "health_score": None,
+        "status": "⚪ NO LIVE DATA",
+        "primary_fault": "No diagnosis available",
+        "confidence": "—",
+        "description": "Telemetry stream offline or well not yet evaluated by diagnostic service.",
+        "est_time_to_trip": "—",
+        "action_advisory": "Awaiting active telemetry stream or manual well inspection.",
+        "key_dynamics": {},
+        "root_cause_drivers": []
     }
+
+
+# ── LLM Execution Provenance Parser (Fix 1 Verified) ──────────────────────────
+def _parse_llm_provenance(advisory: Any) -> Dict[str, Any]:
+    """
+    Extracts real model name, latency, token count, and engine status from advisory.provenance.
+    Returns honest placeholders if no LLM call has executed.
+    """
+    empty = {
+        "status": "No LLM call yet",
+        "model": "—",
+        "latency": "—",
+        "tokens": "—",
+        "engine": "—",
+        "is_mock": False
+    }
+    if not advisory:
+        return empty
+
+    provenance = getattr(advisory, "provenance", None)
+    if not provenance or not isinstance(provenance, list):
+        return empty
+
+    for entry in provenance:
+        if isinstance(entry, str) and entry.startswith("LLM Engine:"):
+            is_mock = ("OFFLINE" in entry or "MOCK" in entry)
+            status = "Offline / Mock" if is_mock else "Online (Live)"
+
+            # Engine & Model extraction: e.g. "llama.cpp CPU / Qwen2.5-Coder-3B-Instruct"
+            m_eng = re.search(r"LLM Engine:\s*([^\(]+)\(([^)]+)\)", entry)
+            if m_eng:
+                engine_label = m_eng.group(2).strip()
+            elif is_mock:
+                engine_label = "Mock Fallback"
+            else:
+                engine_label = "llama.cpp"
+
+            # Latency extraction: latency=(\d+)ms
+            m_lat = re.search(r"latency=(\d+)ms", entry)
+            latency_val = f"{m_lat.group(1)} ms" if m_lat else ("(probe only)" if "probe only" in entry else "—")
+
+            # Tokens extraction: tokens=(\d+)
+            m_tok = re.search(r"tokens=(\d+)", entry)
+            tokens_val = f"{m_tok.group(1)}" if m_tok else "—"
+
+            return {
+                "status": status,
+                "model": engine_label,
+                "latency": latency_val,
+                "tokens": tokens_val,
+                "engine": engine_label,
+                "is_mock": is_mock
+            }
+
+    return empty
 
 
 # ── LangGraph Agent Execution with HITL Clarification (Bug 3 Verified) ────────
@@ -477,22 +539,28 @@ def main():
     header_col1, header_col2, header_col3 = st.columns([3, 1, 1])
     with header_col1:
         st.subheader(f"Well Asset: {selected_asset}")
-        if diagnosis:
+        if diagnosis and diagnosis.get("health_score") is not None:
             status_val = diagnosis.get("status", "🟢 NORMAL")
             badge_class = "status-badge-normal" if "NORMAL" in status_val else ("status-badge-critical" if "CRITICAL" in status_val else "status-badge-risk")
+            src_tag = "📡 Live Backend (/api/vfd/diagnostics)" if diagnosis.get("_source") == "backend_api" else "⚙️ In-Process Diagnostic Engine"
             st.markdown(f"Status: <span class='{badge_class}'>{status_val}</span> &nbsp;|&nbsp; Primary Fault: **{diagnosis.get('primary_fault', 'Normal')}**", unsafe_allow_html=True)
+            st.caption(f"Provenance: `{src_tag}`")
+        elif diagnosis and diagnosis.get("_source") == "unavailable":
+            st.markdown("Status: <span style='color: #8b949e; background: rgba(139,148,158,0.15); border: 1px solid #8b949e; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.88rem;'>⚪ NO LIVE DATA</span> &nbsp;|&nbsp; Primary Fault: *None Available*", unsafe_allow_html=True)
+            st.caption("⚠️ No live diagnosis or telemetry records available for this well.")
         else:
             st.markdown("Status: <span style='color: #8b949e; background: rgba(139,148,158,0.15); border: 1px solid #8b949e; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.88rem;'>⚪ STANDBY</span> &nbsp;|&nbsp; Primary Fault: *Awaiting Agent Query*", unsafe_allow_html=True)
+            st.caption("Awaiting operator prompt to trigger evaluation.")
 
     with header_col2:
-        if diagnosis:
+        if diagnosis and diagnosis.get("health_score") is not None:
             h_score = diagnosis.get("health_score", 90.0)
             st.metric("Health Index", f"{h_score:.1f} / 100", delta=f"{h_score - 100:.1f}" if h_score < 100 else "0.0")
         else:
             st.metric("Health Index", "— / 100")
 
     with header_col3:
-        if diagnosis:
+        if diagnosis and diagnosis.get("health_score") is not None:
             ttt = diagnosis.get("est_time_to_trip", "N/A")
             st.metric("Est. Time-to-Trip", ttt)
         else:
@@ -534,14 +602,28 @@ def main():
                     if st.button(f"🌡️ Check Thermal & VFD", key=f"qp2_{selected_asset}", use_container_width=True):
                         st.session_state._queued_query = f"Check thermal stress, motor temp, and VFD load for {selected_asset}"
                         st.rerun()
+            elif diagnosis.get("_source") == "unavailable":
+                st.warning(
+                    f"⚠️ **Diagnosis Unavailable for {selected_asset}**\n\n"
+                    f"Neither the backend API (`/api/vfd/diagnostics/{selected_asset}`) nor local telemetry returned records for this asset.\n\n"
+                    f"Ensure backend services are running or select another well with active telemetry."
+                )
             else:
                 # Key Dynamics KPI row
                 dyn = diagnosis.get("key_dynamics", {})
                 kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
-                kpi_c1.metric("Head ΔP", f"{dyn.get('delta_p', 0.0):.0f} PSI")
-                kpi_c2.metric("Torque", f"{dyn.get('torque_proxy', 0.0):.2f} A/Hz")
-                kpi_c3.metric("Power", f"{dyn.get('power_proxy_kva', 0.0):.1f} kVA")
-                kpi_c4.metric("ΔT Elevation", f"{dyn.get('thermal_elevation', 0.0):.1f} °C")
+                dp_val = dyn.get('delta_p')
+                tq_val = dyn.get('torque_proxy')
+                pw_val = dyn.get('power_proxy_kva')
+                te_val = dyn.get('thermal_elevation')
+                kpi_c1.metric("Head ΔP", f"{dp_val:.0f} PSI" if dp_val is not None else "—")
+                kpi_c2.metric("Torque", f"{tq_val:.2f} A/Hz" if tq_val is not None else "—")
+                kpi_c3.metric("Power", f"{pw_val:.1f} kVA" if pw_val is not None else "—")
+                kpi_c4.metric("ΔT Elevation", f"{te_val:.1f} °C" if te_val is not None else "—")
+
+                # Diagnostic Source Caption
+                src_label = "📡 Live Backend (/api/vfd/diagnostics)" if diagnosis.get("_source") == "backend_api" else "⚙️ In-Process Diagnostic Engine"
+                st.caption(f"Diagnostic Provenance: `{src_label}`")
 
                 # Executive Description & Root Cause
                 st.markdown(f"**Fault Description:**\n{diagnosis.get('description', 'Operating nominal.')}")
@@ -752,19 +834,52 @@ def main():
                     "Timestamp": e.timestamp,
                     "Deep-Link": e.source_deep_link or "In-Process"
                 })
-        elif diagnosis:
-            # Baseline live evidence synthesis
+        elif diagnosis and diagnosis.get("_source") != "unavailable" and latest_dict:
+            # Baseline live evidence synthesis (guarded by real telemetry existence)
+            st.info("ℹ️ **Telemetry-Derived Evidence Only**: Showing live SCADA measurements for active well. Specifications (Level A), OEM (Level B), and Causal Failure Graphs (Level E) require an Agent Jane advisory run.")
             now_str = datetime.datetime.utcnow().isoformat() + "Z"
             dyn = diagnosis.get("key_dynamics", {})
-            latest_safe = latest_dict or {}
-            evidence_list = [
-                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:intake_pressure", "Observation": f"Intake Pressure measured at {latest_safe.get('Inp bar/psi', 237.0):.1f} PSI", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
-                {"Authority": "LEVEL_D_SCADA", "Source ID": f"esp:telemetry:{selected_asset}:motor_temp", "Observation": f"Motor Temp measured at {latest_safe.get('Motor temp °C', 78.9):.1f} °C", "Timestamp": now_str, "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"},
-                {"Authority": "LEVEL_C_ENGINEERING", "Source ID": "esp:engineering:delta_p", "Observation": f"Dynamic Head ΔP calculated at {dyn.get('delta_p', 1658.0):.1f} PSI", "Timestamp": now_str, "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/delta_p"},
-                {"Authority": "LEVEL_C_ENGINEERING", "Source ID": "esp:engineering:torque_proxy", "Observation": f"Torque Proxy evaluated at {dyn.get('torque_proxy', 0.41):.2f} A/Hz", "Timestamp": now_str, "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/torque_proxy"},
-                {"Authority": "LEVEL_B_ML_MODEL", "Source ID": "FaultClassificationEngine", "Observation": f"13-Fault diagnostic evaluated '{diagnosis.get('primary_fault')}' (Confidence: {diagnosis.get('confidence')})", "Timestamp": now_str, "Deep-Link": "models/fault_classifier.py"},
-                {"Authority": "LEVEL_A_SPEC", "Source ID": "AssetContextService", "Observation": f"Installed equipment envelope calibrated against 73-well registry profile for {selected_asset}", "Timestamp": now_str, "Deep-Link": "code/models/well_calibration_registry.json"}
-            ]
+            
+            # Intake Pressure
+            inp_val = latest_dict.get("Inp bar/psi")
+            if inp_val is not None and inp_val != 0.0:
+                evidence_list.append({
+                    "Authority": "LEVEL_D_SCADA",
+                    "Source ID": f"esp:telemetry:{selected_asset}:intake_pressure",
+                    "Observation": f"Intake Pressure measured at {float(inp_val):.1f} PSI (Live SCADA)",
+                    "Timestamp": str(latest_dict.get("Report_DateTime", now_str)),
+                    "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"
+                })
+            # Motor Temp
+            mt_val = latest_dict.get("Motor temp °C")
+            if mt_val is not None and mt_val != 0.0:
+                evidence_list.append({
+                    "Authority": "LEVEL_D_SCADA",
+                    "Source ID": f"esp:telemetry:{selected_asset}:motor_temp",
+                    "Observation": f"Motor Temp measured at {float(mt_val):.1f} °C (Live SCADA)",
+                    "Timestamp": str(latest_dict.get("Report_DateTime", now_str)),
+                    "Deep-Link": f"file:///{UNLABELLED_DB_PATH}?well={selected_asset}"
+                })
+            # Dynamic Head Delta P
+            dp_val = dyn.get("delta_p")
+            if dp_val is not None:
+                evidence_list.append({
+                    "Authority": "LEVEL_C_ENGINEERING",
+                    "Source ID": "esp:engineering:delta_p",
+                    "Observation": f"Dynamic Head ΔP calculated at {float(dp_val):.1f} PSI",
+                    "Timestamp": now_str,
+                    "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/delta_p"
+                })
+            # Torque Proxy
+            tq_val = dyn.get("torque_proxy")
+            if tq_val is not None:
+                evidence_list.append({
+                    "Authority": "LEVEL_C_ENGINEERING",
+                    "Source ID": "esp:engineering:torque_proxy",
+                    "Observation": f"Torque Proxy evaluated at {float(tq_val):.2f} A/Hz",
+                    "Timestamp": now_str,
+                    "Deep-Link": f"http://localhost:8000/api/v1/engineering/{selected_asset}/torque_proxy"
+                })
 
         if evidence_list:
             df_evid = pd.DataFrame(evidence_list)
@@ -774,11 +889,12 @@ def main():
 
         st.divider()
         st.markdown("#### ⚡ Real-Time LLM Inference Telemetry")
+        llm_meta = _parse_llm_provenance(st.session_state.latest_advisory)
         t_col1, t_col2, t_col3, t_col4 = st.columns(4)
-        t_col1.metric("Active Model", "Qwen2.5-Coder-3B")
-        t_col2.metric("Inference Engine", "CUDA 12.4 (RTX 3050)")
-        t_col3.metric("Avg Generation Latency", "1.32 s")
-        t_col4.metric("Offline Mock Fallback", "Disabled (Real LLM)")
+        t_col1.metric("Active Model", llm_meta["model"])
+        t_col2.metric("LLM Status", llm_meta["status"])
+        t_col3.metric("Generation Latency", llm_meta["latency"])
+        t_col4.metric("Total Tokens", llm_meta["tokens"])
 
     # =========================================================================
     # TAB 4: Fleet Health & Database Explorer
@@ -788,13 +904,25 @@ def main():
         fleet_data = []
         for w in assets[:15]:
             d_temp = fetch_well_diagnosis(w)
+            src = d_temp.get("_source", "unavailable")
+            if src == "backend_api":
+                src_label = "📡 Live API"
+            elif src == "in_process":
+                src_label = "⚙️ In-Process"
+            else:
+                src_label = "⚪ No Live Data"
+
+            h_score_val = d_temp.get("health_score")
+            score_str = f"{h_score_val:.1f}" if h_score_val is not None else "—"
+
             fleet_data.append({
                 "Well ID": w,
-                "Health Score": f"{d_temp.get('health_score', 90):.1f}",
-                "Status": d_temp.get("status", "🟢 NORMAL"),
-                "Primary Fault": d_temp.get("primary_fault", "Normal Operation"),
-                "Time-to-Trip": d_temp.get("est_time_to_trip", "N/A"),
-                "Recommended Action": d_temp.get("action_advisory", "Standard monitoring")
+                "Data Source": src_label,
+                "Health Score": score_str,
+                "Status": d_temp.get("status", "⚪ NO LIVE DATA"),
+                "Primary Fault": d_temp.get("primary_fault", "No diagnosis available"),
+                "Time-to-Trip": d_temp.get("est_time_to_trip", "—"),
+                "Recommended Action": d_temp.get("action_advisory", "Awaiting telemetry stream")
             })
         st.dataframe(pd.DataFrame(fleet_data), use_container_width=True, hide_index=True)
 
