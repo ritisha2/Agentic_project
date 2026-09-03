@@ -116,6 +116,27 @@ def test_empty_and_low_sample_guard():
     assert "< 5 samples" in fig_tiny.layout.annotations[0].text
 
 
+def test_offline_standby_suppression():
+    """Assertion 5: Unpowered parked well (VFD STS=0, Amps=0) must classify as STANDBY with zero false alarms."""
+    eng = WellDiagnosticEngine()
+    parked_raw = {
+        "VFD STS": 0.0,
+        "VSD Amps/Load": 0.0,
+        "Volt": 0.0,
+        "Frequency": 0.0,
+        "Inp bar/psi": 900.0,
+        "Disch pr. Bar/psi": 903.0,
+        "Motor temp °C": 80.0,
+        "Vibration G's-Vx": 0.1
+    }
+    res = eng.evaluate_live_telemetry("FS-014", parked_raw, verbose=False)
+    diag = res["diagnostic"]
+    assert "STANDBY" in diag["status"], f"Expected STANDBY status, got: {diag['status']}"
+    assert diag["primary_fault"] == "Well Offline / Standby"
+    assert diag["confidence"] == "100.0%"
+    assert "parked" in diag["description"].lower() or "standby" in diag["description"].lower()
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main(["-v", __file__]))

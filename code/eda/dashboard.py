@@ -604,12 +604,19 @@ def main():
     else:
         uptime_pct = 100.0
 
+    is_parked_asset = (uptime_pct == 0.0 and amps_med < 0.5)
+    uptime_label = "0.0% (STANDBY)" if is_parked_asset else f"{uptime_pct:.1f}%"
+    current_label = "0.0 A (UNPOWERED)" if is_parked_asset else f"{amps_med:.1f} A"
+
     kpi1.metric("Intake Pressure", f"{inp_med:.1f} PSI", help="Median intake pressure")
     kpi2.metric("Discharge Pressure", f"{disch_med:.1f} PSI", help="Median discharge pressure")
-    kpi3.metric("Motor Current", f"{amps_med:.1f} A", help="Median operating amperage")
+    kpi3.metric("Motor Current", current_label, help="Median operating amperage")
     kpi4.metric("Motor Temp", f"{mtemp_med:.1f} °C", help="Median motor internal temperature")
     kpi5.metric("Peak Vibration", f"{vib_max:.2f} G", help="Maximum radial vibration observed")
-    kpi6.metric("Active Uptime", f"{uptime_pct:.1f}%", help="Percentage of time VFD status = running")
+    kpi6.metric("Active Uptime", uptime_label, help="Percentage of time VFD status = running")
+
+    if is_parked_asset:
+        st.info("⚪ **Operational State: STANDBY / OFFLINE** | ESP VFD drive is stopped and motor is unpowered. Telemetry reflects static hydrostatic conditions.")
 
     st.divider()
 
@@ -1539,6 +1546,16 @@ def main():
                     df_sample["Primary_Fault"] = fault_labels
                     df_sample["Status"] = statuses
 
+                    # Determine marker colors based on operating state
+                    marker_colors = []
+                    for _, r in df_sample.iterrows():
+                        if "STANDBY" in str(r.get("Status", "")):
+                            marker_colors.append("#9e9e9e")  # neutral grey for parked
+                        elif r["Health_Score"] < 50:
+                            marker_colors.append("#f44336")  # critical red for active failure
+                        else:
+                            marker_colors.append("#4caf50")  # healthy green
+
                     # Plot Health Score Timeline
                     health_fig = go.Figure()
                     health_fig.add_trace(go.Scatter(
@@ -1547,22 +1564,31 @@ def main():
                         mode="lines+markers",
                         name="Health Index (0-100)",
                         line=dict(color="#4caf50", width=2),
-                        marker=dict(size=6, color=np.where(df_sample["Health_Score"] < 50, "#f44336", "#4caf50"))
+                        marker=dict(size=6, color=marker_colors)
                     ))
                     health_fig.add_hline(y=80, line_dash="dash", line_color="green", annotation_text="Normal Threshold (80)")
                     health_fig.add_hline(y=40, line_dash="dash", line_color="red", annotation_text="Critical Threshold (40)")
+
+                    has_standby = any("STANDBY" in str(s) for s in statuses)
+                    if has_standby:
+                        health_fig.add_hline(y=0, line_dash="dot", line_color="#9e9e9e", annotation_text="Standby Floor (0)")
+
                     health_fig.update_layout(
                         title=f"Health Index Trajectory for {selected_well_id}",
-                        yaxis=dict(title="Health Index (0 - 100)", range=[0, 105]),
+                        yaxis=dict(title="Health Index (0 - 100)", range=[-5, 105]),
                         height=400
                     )
                     st.plotly_chart(health_fig, use_container_width=True, key="fig_tab4_health")
 
-                    # Display Detected Fault Events
-                    faults_detected = df_sample[df_sample["Primary_Fault"] != "Normal Operation"]
-                    if not faults_detected.empty:
-                        st.markdown(f"#### ⚠️ Detected Fault Incidents ({len(faults_detected)} points)")
-                        st.dataframe(faults_detected[["Report_DateTime", "Health_Score", "Primary_Fault", "Status", "Inp bar/psi", "Disch pr. Bar/psi", "VSD Amps/Load", "Motor temp °C"]], use_container_width=True)
+                    # Separate active running faults from planned standby
+                    active_faults = df_sample[~df_sample["Primary_Fault"].isin(["Normal Operation", "Well Offline / Standby"])]
+                    standby_rows = df_sample[df_sample["Primary_Fault"] == "Well Offline / Standby"]
+
+                    if not active_faults.empty:
+                        st.markdown(f"#### ⚠️ Detected Active Fault Incidents ({len(active_faults)} points)")
+                        st.dataframe(active_faults[["Report_DateTime", "Health_Score", "Primary_Fault", "Status", "Inp bar/psi", "Disch pr. Bar/psi", "VSD Amps/Load", "Motor temp °C"]], use_container_width=True)
+                    elif not standby_rows.empty:
+                        st.info(f"⚪ **Asset Operating State: STANDBY / OFFLINE** — All {len(standby_rows)} evaluated intervals confirmed VFD unpowered (0.0 A). Zero running anomalies active.")
                     else:
                         st.success("✅ No critical fault conditions detected. Well operated within healthy baseline envelope.")
 

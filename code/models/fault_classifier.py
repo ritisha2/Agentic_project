@@ -85,6 +85,11 @@ FAULT_DEFINITIONS = {
         "severity": "WATCHLIST",
         "description": "Sensor output flatlined, stuck, or drifted to non-physical range.",
         "action": "Recalibrate downhole gauge telemetry or replace surface pressure/temperature transmitter."
+    },
+    "Well Offline / Standby": {
+        "severity": "STANDBY",
+        "description": "ESP VFD drive is stopped and motor is unpowered (0.0 A). Equipment is in scheduled or planned standby.",
+        "action": "Asset parked. Verify production schedule and wellhead valves before initiating restart."
     }
 }
 
@@ -122,6 +127,30 @@ class FaultClassificationEngine:
         flp = raw_data.get("FLP (PSI)", 50.0)
         ap = raw_data.get("AP (PSI)", 10.0)
         vfd_sts = raw_data.get("VFD STS", 1.0)
+
+        # Operational State Gate: Standby / Offline Equipment vs Active Running Faults
+        # If VFD is stopped (STS <= 0.1) and motor is unpowered (amps < 1.0), well is parked, NOT failing!
+        try:
+            vfd_float = float(vfd_sts)
+            amps_float = float(amps)
+        except (ValueError, TypeError):
+            vfd_float = 1.0
+            amps_float = 50.0
+
+        if vfd_float <= 0.1 and amps_float < 1.0:
+            return {
+                "primary_fault": "Well Offline / Standby",
+                "confidence": "100.0%",
+                "confidence_val": 1.0,
+                "health_score": 0.0,
+                "status": "⚪ STANDBY",
+                "alert_level": "⚪ STANDBY",
+                "est_time_to_trip": "N/A (Equipment Parked)",
+                "description": "ESP VFD drive is stopped and motor is unpowered (0.0 A). Equipment is in scheduled or planned standby.",
+                "action_advisory": "Asset parked. Verify production schedule and wellhead valves before initiating restart.",
+                "root_cause_drivers": [("VFD Status", "0 (Stopped)"), ("Motor Amps", f"{amps_float:.2f} A (Unpowered)")],
+                "all_scores": {"Well Offline / Standby": "100.0%"}
+            }
 
         # Dynamics
         delta_p = dynamics.get("delta_p", 900.0)
