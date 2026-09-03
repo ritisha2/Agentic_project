@@ -48,6 +48,9 @@ CATEGORIZED_DIR = r"C:\Users\admin.DESKTOP-17T37DJ\Desktop\cced\categorized_well
 UNLABELLED_DB_PATH = os.path.abspath(os.path.join(root_dir, "cced_esp", "data", "unlabelled.db"))
 if not os.path.exists(UNLABELLED_DB_PATH):
     UNLABELLED_DB_PATH = os.path.abspath(os.path.join(parent_dir, "..", "cced_esp", "data", "unlabelled.db"))
+NORMALIZED_DB_PATH = os.path.abspath(os.path.join(root_dir, "cced_esp", "data", "normalized.db"))
+if not os.path.exists(NORMALIZED_DB_PATH):
+    NORMALIZED_DB_PATH = os.path.abspath(os.path.join(parent_dir, "..", "cced_esp", "data", "normalized.db"))
 
 
 @st.cache_resource
@@ -117,37 +120,57 @@ def load_well_dataset(file_path: str) -> pd.DataFrame:
     """Loads a well dataset from disk or unlabelled.db, parses datetime, and cleans columns."""
     df = pd.DataFrame()
 
-    if file_path.startswith("sqlite://") or (not os.path.exists(file_path) and os.path.exists(UNLABELLED_DB_PATH)):
+    if file_path.startswith("sqlite://") or (not os.path.exists(file_path) and (os.path.exists(NORMALIZED_DB_PATH) or os.path.exists(UNLABELLED_DB_PATH))):
         well_id = file_path.replace("sqlite://", "") if file_path.startswith("sqlite://") else os.path.splitext(os.path.basename(file_path))[0].replace("_", "-")
-        try:
-            conn = sqlite3.connect(UNLABELLED_DB_PATH)
-            query = """
-                SELECT timestamp AS Report_DateTime,
-                       COALESCE(intake_pressure_psi, 237.0) AS [Inp bar/psi],
-                       COALESCE(discharge_pressure_psi, pressure_psi, 1895.0) AS [Disch pr. Bar/psi],
-                       COALESCE(motor_temperature_c, temperature_c, 78.9) AS [Motor temp °C],
-                       COALESCE(intake_temperature_c, 52.0) AS [Int temp °C],
-                       COALESCE(motor_current_a, 18.9) AS [VSD Amps/Load],
-                       COALESCE(motor_voltage_v, 1009.0) AS [Volt],
-                       COALESCE(frequency_hz, 46.2) AS Frequency,
-                       COALESCE(vibration_g, 0.18) AS [Vibration G's-Vx],
-                       COALESCE(vfd_status, 1) AS [VFD STS],
-                       COALESCE(leak_current_ct, 0.0) AS [Leak Current Ct],
-                       COALESCE(dhg_current, 0.0) AS [DHG Current],
-                       COALESCE(whp_psi, 255.0) AS [WHP (PSI)],
-                       COALESCE(flp_psi, 249.0) AS [FLP (PSI)],
-                       COALESCE(annulus_pressure_psi, 0.0) AS [AP (PSI)],
-                       COALESCE(flow_rate_bpd, 745.0) AS Flow_BPD
-                FROM opg_well_telemetry
-                WHERE well_id = ?
-                ORDER BY id DESC
-                LIMIT 10000
-            """
-            df = pd.read_sql_query(query, conn, params=(well_id,))
-            conn.close()
-        except Exception as e:
-            print(f"Error loading well {well_id} from unlabelled.db: {e}")
-            return pd.DataFrame()
+        # 1. Try pre-computed normalized.db feature store
+        if os.path.exists(NORMALIZED_DB_PATH):
+            try:
+                conn_norm = sqlite3.connect(NORMALIZED_DB_PATH)
+                q_norm = """
+                    SELECT timestamp AS Report_DateTime, *
+                    FROM opg_normalized_telemetry
+                    WHERE Wells = ?
+                    ORDER BY id DESC
+                    LIMIT 10000
+                """
+                df = pd.read_sql_query(q_norm, conn_norm, params=(well_id,))
+                conn_norm.close()
+                if not df.empty:
+                    df = df.loc[:, ~df.columns.duplicated()].copy()
+            except Exception as e:
+                df = pd.DataFrame()
+
+        # 2. Fallback to unlabelled.db if normalized.db not built or empty for this well
+        if df.empty and os.path.exists(UNLABELLED_DB_PATH):
+            try:
+                conn = sqlite3.connect(UNLABELLED_DB_PATH)
+                query = """
+                    SELECT timestamp AS Report_DateTime,
+                           COALESCE(intake_pressure_psi, 237.0) AS [Inp bar/psi],
+                           COALESCE(discharge_pressure_psi, pressure_psi, 1895.0) AS [Disch pr. Bar/psi],
+                           COALESCE(motor_temperature_c, temperature_c, 78.9) AS [Motor temp °C],
+                           COALESCE(intake_temperature_c, 52.0) AS [Int temp °C],
+                           COALESCE(motor_current_a, 18.9) AS [VSD Amps/Load],
+                           COALESCE(motor_voltage_v, 1009.0) AS [Volt],
+                           COALESCE(frequency_hz, 46.2) AS Frequency,
+                           COALESCE(vibration_g, 0.18) AS [Vibration G's-Vx],
+                           COALESCE(vfd_status, 1) AS [VFD STS],
+                           COALESCE(leak_current_ct, 0.0) AS [Leak Current Ct],
+                           COALESCE(dhg_current, 0.0) AS [DHG Current],
+                           COALESCE(whp_psi, 255.0) AS [WHP (PSI)],
+                           COALESCE(flp_psi, 249.0) AS [FLP (PSI)],
+                           COALESCE(annulus_pressure_psi, 0.0) AS [AP (PSI)],
+                           COALESCE(flow_rate_bpd, 745.0) AS Flow_BPD
+                    FROM opg_well_telemetry
+                    WHERE well_id = ?
+                    ORDER BY id DESC
+                    LIMIT 10000
+                """
+                df = pd.read_sql_query(query, conn, params=(well_id,))
+                conn.close()
+            except Exception as e:
+                print(f"Error loading well {well_id} from unlabelled.db: {e}")
+                return pd.DataFrame()
     elif os.path.exists(file_path):
         df = pd.read_csv(file_path, low_memory=False)
         # Standardize column names
