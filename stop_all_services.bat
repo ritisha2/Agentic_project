@@ -18,8 +18,8 @@ if %ERRORLEVEL% EQU 0 (
     echo [INFO] Docker not active.
 )
 
-:: 2. Terminate background servers (port 8000, port 8090, port 8080)
-echo [2/2] Terminating background servers on ports 8000, 8090, and 8080 (llama-server)...
+:: 2. Terminate background servers (ports 8000, 8080, 8090, 8501, 8502)
+echo [2/2] Terminating servers on ports 8000, 8080, 8090, 8501 (ML EDA), 8502 (Agent UI)...
 taskkill /F /IM llama-server.exe >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
@@ -30,16 +30,17 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8090" ^| findstr "LISTENING
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8080" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000" ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8501" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5173" ^| findstr "LISTENING"') do (
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8502" ^| findstr "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 
 echo.
 echo ===============================================================================
 echo   ALL SERVICES STOPPED SUCCESSFULLY.
+echo   - Ports 8000, 8080, 8090, 8501, 8502 released.
 echo ===============================================================================
 echo.
 pause

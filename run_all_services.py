@@ -121,6 +121,16 @@ def get_full_health_matrix() -> Dict[str, Dict[str, Any]]:
         "uri": f"file:///{hist_db.as_posix()}",
     }
 
+    norm_db = CCED_ESP_DIR / "data" / "normalized.db"
+    ok, msg = check_sqlite_db(norm_db)
+    results["Normalized DB (42-Col SQLite)"] = {
+        "tier": "Tier 1 (File)",
+        "live": ok,
+        "type": "SQLite",
+        "detail": msg,
+        "uri": f"file:///{norm_db.as_posix()}",
+    }
+
     events_db = ESP_AGENT_DIR / "esp_events.db"
     ok, msg = check_sqlite_db(events_db)
     results["Event Store (SQLite)"] = {
@@ -230,6 +240,24 @@ def get_full_health_matrix() -> Dict[str, Dict[str, Any]]:
         "type": "FastAPI :8090",
         "detail": gateway_msg if gateway_ok else ("Port 8090 open" if check_tcp_port("127.0.0.1", 8090) else "Port 8090 closed (run run_agent_server.py)"),
         "uri": "http://127.0.0.1:8090" if gateway_ok else "OFFLINE",
+    }
+
+    eda_live = check_tcp_port("localhost", 8501)
+    results["ML Analytics Dashboard"] = {
+        "tier": "Tier 3 (Streamlit)",
+        "live": eda_live,
+        "type": "Streamlit :8501",
+        "detail": "Port 8501 open" if eda_live else "Port 8501 closed (run code/eda/dashboard.py)",
+        "uri": "http://localhost:8501" if eda_live else "OFFLINE",
+    }
+
+    agent_live = check_tcp_port("localhost", 8502)
+    results["Agent Streamlit UI"] = {
+        "tier": "Tier 3 (Streamlit)",
+        "live": agent_live,
+        "type": "Streamlit :8502",
+        "detail": "Port 8502 open" if agent_live else "Port 8502 closed (run agent_streamlit.py)",
+        "uri": "http://localhost:8502" if agent_live else "OFFLINE",
     }
 
     return results
