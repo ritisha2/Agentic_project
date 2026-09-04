@@ -4,7 +4,11 @@
   "title": "Standard Operating Procedure & Manual Lookup",
   "description": "Retrieve governing API RP guidelines, OEM manuals, or standard operating procedures.",
   "strategic_objectives": ["O6"],
-  "intent_classes": ["procedure", "manual", "sop", "standard", "api rp", "how to fix", "troubleshooting"],
+  "intent_classes": [
+    "procedure", "manual", "sop", "standard", "api rp", "how to fix", "troubleshooting",
+    "tripping limits", "tripping limit", "operating limits", "operating limit", "limits", "limit",
+    "thresholds", "threshold", "operating thresholds", "operating threshold", "alert limits", "alert limit", "alarm limits", "alarm limit"
+  ],
   "required_asset_context": ["pump_model"],
   "required_signals": [],
   "required_evidence": ["knowledge_citations"],

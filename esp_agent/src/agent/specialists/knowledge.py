@@ -36,6 +36,25 @@ def create_knowledge_graph():
         inp = state["input"]
         query_text = inp.get("task", "ESP intake pressure drawdown procedure")
 
+        # 1. Deterministic Procedure Knowledge (Authority Rank 1, <1ms)
+        try:
+            from src.services.procedure_knowledge import procedure_knowledge_service
+            adv_info = procedure_knowledge_service.format_advisory_text(query_text, inp.get("asset_id", ""))
+            if adv_info.get("citations"):
+                citations = [
+                    {
+                        "doc_id": c["document_id"],
+                        "title": c.get("section", "Operating Limits"),
+                        "authority_rank": 1 if c.get("authority_level") == "A" else 2,
+                        "text": adv_info["assessment"][:200]
+                    }
+                    for c in adv_info["citations"]
+                ]
+                evidence = [f"esp:kb:{c['document_id']}" for c in adv_info["citations"]]
+                return {"citations": citations, "evidence_refs": evidence}
+        except Exception:
+            pass
+
         try:
             res_dict = retrieval_service.hybrid_retrieve(query=query_text, top_k=3)
             raw_citations = res_dict.get("vector_matches", []) or res_dict.get("fault_matches", [])

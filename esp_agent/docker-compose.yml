@@ -39,6 +39,14 @@ services:
     ports:
       - "6379:6379"
 
+  advait_mock:
+    build: ../data/advait/advait_api_mock_service
+    container_name: esp_advait_mock
+    ports:
+      - "8010:8000"
+    volumes:
+      - ../data/advait/advait_api_mock_service/data:/app/data:ro
+
 volumes:
   qdrant_data:
   neo4j_data:

@@ -46,9 +46,10 @@ ESP_AGENT_DIR = ROOT_DIR / "esp_agent"
 CCED_ESP_DIR = ROOT_DIR / "cced_esp"
 CODE_DIR = ROOT_DIR / "code"
 
-for p in [str(ROOT_DIR), str(ESP_AGENT_DIR), str(CODE_DIR), str(CCED_ESP_DIR)]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
+for p in [str(ROOT_DIR), str(CODE_DIR), str(CCED_ESP_DIR), str(ESP_AGENT_DIR)]:
+    if p in sys.path:
+        sys.path.remove(p)
+    sys.path.insert(0, p)
 
 UNLABELLED_DB_PATH = CCED_ESP_DIR / "data" / "unlabelled.db"
 NORMALIZED_DB_PATH = CCED_ESP_DIR / "data" / "normalized.db"
@@ -440,9 +441,10 @@ def format_progressive_disclosure(
     diag: Dict[str, Any],
     well_id: str
 ) -> str:
-    """Formats diagnostic response into the 5-step engineering progressive disclosure structure."""
+    """Formats diagnostic response into the 5-step modal diagnostic disclosure structure."""
     status = diag.get("status", "🟢 NORMAL")
-    score = diag.get("health_score") or 95.0
+    score = diag.get("health_score")
+    score_str = f"{score:.1f} / 100" if score is not None else "N/A"
     fault = diag.get("primary_fault", "Normal Operation")
     dyn = diag.get("key_dynamics") or diag.get("dynamics") or {}
     delta_p = dyn.get("delta_p", 0.0)
@@ -450,43 +452,130 @@ def format_progressive_disclosure(
     dt_slope = dyn.get("thermal_rate_hr", 0.0)
     drivers = diag.get("root_cause_drivers", [])
 
-    obs_str = f"Evaluated Well `{well_id}`. Real-time Operating Status is **{status}** with Health Score **{score:.1f} / 100**."
-    if delta_p:
-        obs_str += f" Differential Head is **{delta_p:.1f} PSI**, Torque Proxy is **{torque:.3f} A/Hz**."
+    # STEP 1: Current Condition & Trend
+    step1_lines = [
+        f"Evaluated Well `{well_id}`. Real-time Operating Status is **{status}** with Health Score **{score_str}**."
+    ]
+    trend_val = getattr(advisory, "trend", None)
+    if trend_val:
+        step1_lines.append(f"**Operational Trend:** {trend_val}")
+    elif dt_slope or delta_p or torque:
+        step1_lines.append(
+            f"**Key Dynamics:** Differential Head: **{delta_p:.1f} PSI** | "
+            f"Torque Proxy: **{torque:.3f} A/Hz** | "
+            f"Thermal Rate: **{dt_slope:+.2f}°C/hr**"
+        )
+    assessment = getattr(advisory, "assessment", None)
+    if assessment and assessment != trend_val:
+        step1_lines.append(f"{assessment}")
 
-    ev_items = [f"- **Primary Diagnostic Classification:** `{fault}`"]
-    if drivers:
-        for d in drivers[:3]:
+    step1_str = "\n\n".join(step1_lines)
+
+    # STEP 2: Engineering Comparison (Expected vs. Actual)
+    exp_vs_act = getattr(advisory, "expected_vs_actual", [])
+    if exp_vs_act and isinstance(exp_vs_act, list) and len(exp_vs_act) > 0:
+        table_rows = [
+            "| Parameter | Actual Value | Calibrated Envelope (P10–P90) | Deviation | Status |",
+            "| :--- | :--- | :--- | :--- | :--- |"
+        ]
+        for row in exp_vs_act:
+            p_name = row.get("parameter", "Unknown")
+            c_val = row.get("current_value", "—")
+            nom = row.get("nominal_corridor", "—")
+            dev = row.get("deviation_pct", "0.0%")
+            st_val = row.get("status", "In Corridor")
+            st_badge = "🟢 " if st_val in ("In Corridor", "In Range") else ("🔴 " if "Above" in st_val or "Below" in st_val else "⚠️ ")
+            table_rows.append(f"| **{p_name}** | `{c_val}` | {nom} | `{dev}` | {st_badge}{st_val} |")
+        step2_str = "\n".join(table_rows)
+    else:
+        step2_str = (
+            f"* **Pump Operating Head:** `{delta_p:.1f} PSI`\n"
+            f"* **Torque Proxy:** `{torque:.3f} A/Hz`\n"
+            f"* **Thermal Slope:** `{dt_slope:+.2f}°C/hr`\n"
+            f"* **Baseline Envelope:** All parameters compared against well-specific calibrated P10–P90 operational boundaries."
+        )
+
+    # STEP 3: Deviation Detected
+    step3_lines = []
+    if drivers and isinstance(drivers, list):
+        for d in drivers[:4]:
             if isinstance(d, (list, tuple)) and len(d) >= 2:
-                ev_items.append(f"- **{d[0]}:** `{d[1]}`")
-    ev_str = "\n".join(ev_items)
-
-    derivation = getattr(advisory, "assessment", None) or getattr(advisory, "diagnosis", None)
-    if not derivation:
-        if "Normal" in fault:
-            derivation = f"All 14 SCADA telemetry parameters fall strictly within the well's calibrated P10-P90 normal baseline envelope. Thermal elevation rate is stable at {dt_slope:.1f}°C/hr."
+                step3_lines.append(f"- ⚠️ **{d[0]}:** `{d[1]}`")
+            elif isinstance(d, str):
+                step3_lines.append(f"- ⚠️ {d}")
+    if not step3_lines:
+        if "Normal" in fault or "NORMAL" in status:
+            step3_lines.append("- ✅ **Operating Point Stability:** Telemetry operates within the calibrated continuous envelope.")
+            step3_lines.append(f"- ✅ **Thermal Equilibrium:** Motor winding heating rate is nominal at `{dt_slope:+.2f}°C/hr`.")
         else:
-            derivation = f"Multi-parameter coupling diverged from baseline: {fault} pattern detected through simultaneous hydraulic and electrical anomalies."
+            step3_lines.append(f"- ⚠️ **Anomaly Detected:** Multi-parameter divergence indicates `{fault}` signature.")
+            if delta_p:
+                step3_lines.append(f"- ⚠️ **Hydraulic Lift:** Differential Head shifted to `{delta_p:.1f} PSI`.")
+    step3_str = "\n".join(step3_lines)
 
-    confidence = getattr(advisory, "confidence", None) or 0.95
-    conf_str = f"**{confidence*100:.1f}%** based on multi-parameter coupling rules and Isolation Forest baseline distance."
+    # STEP 4: Likely Explanations (Ranked Hypotheses with Evidence)
+    ranked_hyps = getattr(advisory, "ranked_hypotheses", [])
+    step4_lines = []
+    if ranked_hyps and isinstance(ranked_hyps, list) and len(ranked_hyps) > 0:
+        for idx, h in enumerate(ranked_hyps, 1):
+            cause = h.get("cause") or h.get("hypothesis") or "Diagnostic Anomaly"
+            conf = h.get("confidence", 0.85)
+            conf_pct = f"{conf * 100:.0f}%" if isinstance(conf, (int, float)) and conf <= 1.0 else f"{conf}%"
+            reasoning = h.get("reasoning") or h.get("description") or ""
+            step4_lines.append(f"#### {idx}. {cause} (Confidence: {conf_pct})")
+            if reasoning:
+                step4_lines.append(f"*{reasoning}*")
+            supp = h.get("supporting_evidence", [])
+            if supp and isinstance(supp, list):
+                for s in supp:
+                    step4_lines.append(f"- {s}")
+    else:
+        conf_val = getattr(advisory, "confidence", 0.95)
+        conf_pct = f"{conf_val * 100:.1f}%" if isinstance(conf_val, (int, float)) and conf_val <= 1.0 else f"{conf_val}%"
+        diag_desc = getattr(advisory, "diagnosis", None) or diag.get("description") or f"{fault} pattern detected."
+        step4_lines.append(f"#### 1. {fault} (Primary Hypothesis — Confidence: {conf_pct})")
+        step4_lines.append(f"*{diag_desc}*")
+        ev_list = getattr(advisory, "evidence", [])
+        if ev_list and isinstance(ev_list, list):
+            for ev in ev_list[:3]:
+                obs = getattr(ev, "observation", str(ev))
+                step4_lines.append(f"- {obs}")
+    step4_str = "\n\n".join(step4_lines)
 
-    recommendation = getattr(advisory, "recommendation", None) or diag.get("action_advisory") or "Maintain nominal VFD operating envelope and continue automated surveillance."
+    # STEP 5: Recommended Operational Action & Verification
+    recommendation = (
+        getattr(advisory, "recommendation", None)
+        or diag.get("action_advisory")
+        or "Maintain nominal VFD operating envelope and continue automated surveillance."
+    )
+    expected_impact = getattr(advisory, "expected_impact", None) or "Preserve equipment integrity and avoid unplanned trips."
+    verifications = getattr(advisory, "verification", [])
 
-    return f"""### 🔍 Observation
-{obs_str}
+    step5_lines = [
+        f"👉 **Operational Recommendation:** {recommendation}",
+        f"📈 **Expected Impact:** {expected_impact}"
+    ]
+    if verifications and isinstance(verifications, list) and len(verifications) > 0:
+        step5_lines.append("**Operator Verification Steps:**")
+        for v in verifications:
+            step5_lines.append(f"- [ ] {v}")
 
-### 📊 Telemetry & Model Evidence
-{ev_str}
+    step5_str = "\n\n".join(step5_lines)
 
-### 🧠 Engineering Derivation
-{derivation}
+    return f"""### 🔍 STEP 1: Current Condition & Trend
+{step1_str}
 
-### 🎯 Confidence & Uncertainty
-Confidence: {conf_str}
+### 📐 STEP 2: Engineering Comparison (Expected vs. Actual)
+{step2_str}
 
-### 👉 Recommended Next Step
-{recommendation}
+### ⚠️ STEP 3: Deviation Detected
+{step3_str}
+
+### 🧠 STEP 4: Likely Explanations (Ranked Hypotheses with Evidence)
+{step4_str}
+
+### 🛠️ STEP 5: Recommended Operational Action & Verification
+{step5_str}
 """
 
 
@@ -546,14 +635,131 @@ def _parse_llm_provenance(advisory: Any) -> Dict[str, Any]:
 
 
 # ── LangGraph Agent Execution with HITL Clarification (Bug 3 Verified) ────────
-def execute_agent_query(user_query: str, asset_id: str, session_id: str) -> Tuple[Any, bool]:
+def execute_agent_query(
+    user_query: str,
+    asset_id: str,
+    session_id: str,
+    answering_mode: str = "🤖 Auto (Agentic Copilot)"
+) -> Tuple[Any, bool]:
     """
-    Executes an agent inquiry respecting the run() vs resume() LangGraph lifecycle.
+    Executes an agent inquiry respecting the selected answering mode.
     Returns (advisory_deck, is_clarification).
     """
     if not HAS_AGENT:
         return None, False
 
+    # 1. Direct LLM Mode (Fast pure conversational AI, no tool execution)
+    if "Direct LLM" in answering_mode:
+        from src.llm import LLMAdapter
+        llm = LLMAdapter()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Agent Jane, an intelligent AI assistant. "
+                    "Answer the user helpfully, accurately, and concisely without fabricating real-time telemetry numbers."
+                )
+            },
+            {"role": "user", "content": user_query}
+        ]
+        try:
+            resp = llm.gateway.chat(messages=messages, max_tokens=500, temperature=0.3)
+            txt = resp.content.strip()
+        except Exception as ex:
+            txt = f"Direct LLM query encountered an error: {ex}"
+
+        adv = StandardAdvisoryPayload(
+            advisory_id=f"ADV-LLM-{uuid.uuid4().hex[:6]}",
+            asset_id=asset_id,
+            objective_id="DIRECT_LLM",
+            timestamp=datetime.utcnow().isoformat(),
+            assessment=txt,
+            evidence=[],
+            diagnosis="Direct Conversational AI Response",
+            confidence=1.0,
+            risk="None",
+            recommendation="Direct response provided via local LLM.",
+            expected_impact="Informational assistance",
+            provenance=["Direct LLM Mode (Bypassed Agent Orchestration)"]
+        )
+        return adv, False
+
+    # 2. Asset Specs & Telemetry Mode
+    if "Asset Specs" in answering_mode:
+        from src.adapters.asset_service import AssetService
+        svc = AssetService()
+        asset_ctx = svc.get_asset(asset_id)
+        df_t = fetch_telemetry_history(asset_id, limit=5)
+        latest_t = df_t.iloc[-1].to_dict() if not df_t.empty else {}
+
+        txt = f"### 🛢️ Asset Nameplate & Registry Record: `{asset_id}`\n\n"
+        txt += f"- **Pump Model:** `{asset_ctx.pump_model}`\n"
+        txt += f"- **Motor Rating:** `{asset_ctx.motor_rating_hp} HP` (@ `{asset_ctx.nameplate_current_amps} A` nameplate current)\n"
+        txt += f"- **Best Efficiency Point (BEP):** `{asset_ctx.be_point_bpd} BPD`\n"
+        txt += f"- **Installation Depth:** `{asset_ctx.installation_depth_ft} ft`\n"
+        h = asset_ctx.hierarchy or {}
+        txt += f"- **Field Hierarchy:** `{h.get('customer', 'CCED')}` | `{h.get('block', 'BLOCK 3')}` | Station: `{h.get('station', 'FARHA')}`\n\n"
+
+        if latest_t:
+            txt += "### 📡 Latest Telemetry Measurements\n\n"
+            txt += f"- **Intake Pressure:** `{latest_t.get('intake_pressure_psi', latest_t.get('intake_pressure', 'N/A'))} psi`\n"
+            txt += f"- **Discharge Pressure:** `{latest_t.get('pressure_psi', latest_t.get('discharge_pressure', 'N/A'))} psi`\n"
+            txt += f"- **Motor Temp:** `{latest_t.get('temperature_c', latest_t.get('motor_temperature', 'N/A'))} °C`\n"
+            txt += f"- **Frequency:** `{latest_t.get('frequency_hz', latest_t.get('frequency', 'N/A'))} Hz`\n"
+            txt += f"- **Motor Current:** `{latest_t.get('motor_current_a', latest_t.get('drive_current_average', 'N/A'))} A`\n"
+        else:
+            txt += "*Live telemetry snapshot currently unavailable for this asset.*\n"
+
+        adv = StandardAdvisoryPayload(
+            advisory_id=f"ADV-ASSET-{uuid.uuid4().hex[:6]}",
+            asset_id=asset_id,
+            objective_id="ASSET_TELEMETRY",
+            timestamp=datetime.utcnow().isoformat(),
+            assessment=txt,
+            evidence=[],
+            diagnosis=f"Asset hardware specs & telemetry for {asset_id}",
+            confidence=1.0,
+            risk="None",
+            recommendation="Use these parameters for operational surveillance",
+            expected_impact="Asset record verified",
+            provenance=["Asset Registry (Advait 73-well seed) + SQLite Telemetry"]
+        )
+        return adv, False
+
+    # 3. Knowledge Base & SOPs Mode
+    if "Knowledge Base" in answering_mode:
+        import yaml
+        alerts_path = os.path.join(PROJECT_ROOT, "esp-knowledge", "deterministic", "alerts", "seed_alerts.yaml")
+        txt = "### 📚 Knowledge Base: SOPs, Operating Limits & Alert Playbooks\n\n"
+        if os.path.exists(alerts_path):
+            with open(alerts_path, "r", encoding="utf-8") as f:
+                ydata = yaml.safe_load(f)
+            txt += "#### ⚠️ Governing Alert Thresholds & Tripping Limits\n\n"
+            for a in ydata.get("alerts", [])[:5]:
+                trig = a.get("trigger", {})
+                txt += f"- **{a.get('name')}** (`{a.get('severity')}`): Metric `{trig.get('canonical_metric')}` {trig.get('operator')} **{trig.get('threshold')} {trig.get('unit')}**\n"
+                txt += f"  - *Resolution:* {a.get('resolution_condition', 'N/A')}\n"
+                txt += f"  - *Allowed Action:* {', '.join(a.get('allowed_next_steps', [])[:2])}\n"
+        else:
+            txt += "*Alert playbooks YAML not found at expected path.*\n"
+
+        adv = StandardAdvisoryPayload(
+            advisory_id=f"ADV-KB-{uuid.uuid4().hex[:6]}",
+            asset_id=asset_id,
+            objective_id="KB_LOOKUP",
+            timestamp=datetime.utcnow().isoformat(),
+            assessment=txt,
+            evidence=[],
+            diagnosis="Knowledge Base Lookup",
+            confidence=1.0,
+            risk="None",
+            recommendation="Review cited operating standards before executing operational changes",
+            expected_impact="Policy compliance verified",
+            provenance=["Deterministic Knowledge Base (YAML Playbooks)"]
+        )
+        return adv, False
+
+    # 4. Standard Agentic Path (Auto or Forensic Diagnostic)
     adapter = UserEntryAdapter()
 
     # Check if we have an active paused clarification in this session
@@ -688,23 +894,35 @@ def main():
     # State Pill
     if diagnosis and diagnosis.get("status"):
         stat = diagnosis["status"]
+        score = diagnosis.get("health_score")
         if "STANDBY" in stat:
             st.caption(f"Active Asset: **{selected_asset}** | Status: `⚪ STANDBY / OFFLINE` (VFD Unpowered)")
         elif "CRITICAL" in stat:
             st.caption(f"Active Asset: **{selected_asset}** | Status: `🔴 CRITICAL` ({diagnosis.get('primary_fault', 'Fault Detected')})")
+        elif "NO LIVE DATA" in stat:
+            st.caption(f"Active Asset: **{selected_asset}** | Status: `⚪ NO LIVE DATA` (Offline or Awaiting Telemetry)")
         else:
-            st.caption(f"Active Asset: **{selected_asset}** | Status: `🟢 NORMAL` (Health: {diagnosis.get('health_score', 95):.1f}/100)")
+            score_str = f"{score:.1f}/100" if score is not None else "N/A"
+            st.caption(f"Active Asset: **{selected_asset}** | Status: `{stat}` (Health: {score_str})")
     else:
         st.caption(f"Active Asset: **{selected_asset}** | Status: `🟢 CONNECTED` — Awaiting operator inquiry")
 
     st.divider()
 
     # ── Chat Stream (Full Width) ──────────────────────────────────────────────
-    for msg in st.session_state.chat_messages:
+    for msg_idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if msg.get("figure") is not None:
                 st.plotly_chart(msg["figure"], use_container_width=True)
+            if msg.get("follow_ups"):
+                st.markdown("##### 💡 Suggested Follow-Up Inquiries:")
+                f_cols = st.columns(min(len(msg["follow_ups"]), 3))
+                for f_idx, f_text in enumerate(msg["follow_ups"]):
+                    col_target = f_cols[f_idx % len(f_cols)]
+                    if col_target.button(f"👉 {f_text}", key=f"fu_{msg_idx}_{f_idx}", use_container_width=True):
+                        st.session_state._queued_query = f_text
+                        st.rerun()
 
     # ── Check Queued Quick Query ──────────────────────────────────────────────
     query_to_process = None
@@ -736,28 +954,43 @@ def main():
             diag = fetch_well_diagnosis(selected_asset, latest_dict)
             st.session_state.latest_diagnosis = diag
 
-            q_lower = query_to_process.lower()
-            is_info_only = any(w in q_lower for w in ["what is an esp", "define esp", "explain concept", "tell me about esp", "who are you"])
+            obj_id = getattr(adv, "objective_id", "")
+            # 5-step modal diagnostic disclosure ONLY triggers for deep diagnostic objectives
+            DIAGNOSTIC_OBJECTIVES = {
+                "OP02_PRODUCTION_DECLINE_RCA",
+                "OP03_FAULT_DIAGNOSIS",
+                "OP04_HEALTH_ASSESSMENT",
+                "OP05_EARLY_WARNING",
+            }
             msg_fig = None
 
-            if is_info_only:
-                resp_text = adv.assessment if (adv and getattr(adv, "assessment", None)) else "ESP (Electrical Submersible Pump) artificial lift technology utilizes a downhole multistage centrifugal pump driven by a 3-phase induction motor."
-            else:
+            if obj_id in DIAGNOSTIC_OBJECTIVES:
                 resp_text = format_progressive_disclosure(adv, diag, selected_asset)
+            else:
+                resp_text = (
+                    getattr(adv, "assessment", None)
+                    or getattr(adv, "recommendation", None)
+                    or "Analysis complete."
+                )
 
-                # Check if visual requested
-                if any(w in q_lower for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"]) and HAS_FIGURE_FACTORY:
+                # Check if visual requested or OP14 operational history
+                q_low = query_to_process.lower()
+                if (obj_id == "OP14_OPERATIONAL_HISTORY" or any(w in q_low for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"])) and HAS_FIGURE_FACTORY:
                     try:
                         logger.info(
-                            "[Trajectory Debugging] Forensic visual requested. Query='%s', Asset='%s'",
-                            query_to_process, selected_asset
+                            "[Trajectory Debugging] History/Forensic visual active. Objective='%s', Query='%s', Asset='%s'",
+                            obj_id, query_to_process, selected_asset
                         )
-                        if not df_telemetry.empty:
-                            df_win = df_telemetry.tail(60).copy()
+                        df_win = df_telemetry.tail(60).copy() if not df_telemetry.empty else pd.DataFrame()
+                        if df_win.empty:
+                            from src.services.history_analytics import history_analytics
+                            df_win = history_analytics.fetch_history_dataframe(selected_asset, limit=60)
+
+                        if not df_win.empty:
                             meta = {
                                 "timestamp": latest_dict.get("timestamp", ""),
-                                "fault": diag.get("primary_fault", "Operational Telemetry"),
-                                "health_score": diag.get("health_score", 95.0)
+                                "fault": diag.get("primary_fault", "Operational History"),
+                                "health_score": diag.get("health_score") or 95.0
                             }
                             prof = {}
                             if HAS_MODELS:
@@ -767,12 +1000,15 @@ def main():
                                 except Exception:
                                     pass
                             msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
-                    except Exception as fig_err:
-                        logger.error(f"[Trajectory Debugging] Error rendering inline chat figure: {fig_err}")
+                    except Exception as ef:
+                        logger.warning(f"Error rendering forensic visual: {ef}")
 
             chat_payload = {"role": "assistant", "content": resp_text}
             if msg_fig is not None:
                 chat_payload["figure"] = msg_fig
+            follow_ups = getattr(adv, "follow_up_prompts", [])
+            if follow_ups and isinstance(follow_ups, list):
+                chat_payload["follow_ups"] = follow_ups
             st.session_state.chat_messages.append(chat_payload)
         st.rerun()
 

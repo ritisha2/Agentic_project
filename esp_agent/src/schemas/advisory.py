@@ -37,6 +37,12 @@ class StandardAdvisoryPayload(BaseModel):
     recommended_action: Optional[Dict[str, Any]] = Field(default=None)
     confidence_score: Optional[float] = Field(default=None)
 
+    # Phase 4: 5-Step Modal Diagnostic Response Fields
+    trend: Optional[str] = Field(default=None, description="Established telemetry trend / slope")
+    expected_vs_actual: List[Dict[str, Any]] = Field(default_factory=list, description="P10-P90 baseline comparison table")
+    ranked_hypotheses: List[Dict[str, Any]] = Field(default_factory=list, description="Ranked diagnostic hypotheses")
+    follow_up_prompts: List[str] = Field(default_factory=list, description="Interactive follow-up inquiries for operator")
+
     def model_post_init(self, __context: Any) -> None:
         if self.confidence_score is None:
             self.confidence_score = self.confidence

@@ -6,6 +6,12 @@
   "scope": "fleet",
   "strategic_objectives": ["O2", "O4"],
   "intent_classes": [
+    "rank all wells by health",
+    "rank wells by health",
+    "rank by health",
+    "rank all wells",
+    "rank wells",
+    "wells by health",
     "rank fleet maintenance urgency",
     "fleet maintenance priority",
     "rank maintenance urgency",

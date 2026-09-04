@@ -43,17 +43,22 @@ class IntentRouter:
     Returns RouteResult (objective_id, confidence, path, is_ambiguous).
     """
 
-    # ── B4.T2: Generalised greeting bucket ───────────────────────────────────
-    # _GREETING_EXACT: full-message social openers only.
+    # ── B4.T2: Generalised greeting & conversational bucket ──────────────────
+    # _GREETING_EXACT: full-message social openers and courtesy tokens.
     # _GREETING_PREFIX: patterns that are ALWAYS social openers regardless of suffix.
     # Deliberately excludes "morning,", "afternoon,", "evening," — time-of-day words
     # followed by a request ("morning, can you check...") are operational, not small-talk.
     _GREETING_EXACT = {
-        "hi", "hello", "hey", "who are you", "what can you do",
+        "hi", "hello", "helo", "hey", "who are you", "what can you do",
         "help", "role", "identity", "good morning", "good afternoon",
-        "good evening", "morning", "afternoon", "evening"
+        "good evening", "morning", "afternoon", "evening",
+        "thanks", "thank you", "thx", "ok", "okay", "got it", "cool",
+        "bye", "goodbye", "nice", "great", "sure", "understood", "cheers"
     }
-    _GREETING_PREFIX = ("hi ", "hello ", "hey ")
+    _GREETING_PREFIX = (
+        "hi ", "hello ", "helo ", "hey ", "thanks ", "thank you ", "thx ",
+        "good morning ", "good afternoon ", "good evening "
+    )
 
     def __init__(self, registry: Optional[ObjectiveRegistry] = None):
         self.registry = registry or ObjectiveRegistry()
@@ -93,7 +98,7 @@ class IntentRouter:
                     "You are an ESP pump monitoring assistant.\n"
                     "Classify the operator query into exactly ONE of the objective IDs below.\n"
                     "If the query asks to check status, inspect health, or diagnose a problem on a well, choose OP01_CURRENT_STATUS or OP03_FAULT_DIAGNOSIS.\n"
-                    "If the query is casual slang, greeting, general banter, or non-technical conversation, choose OP07_GENERAL_INQUIRY.\n"
+                    "If the query is casual slang, greeting, general banter, acronym definition, conceptual overview (e.g. 'tell me about electric submersible pumps'), choose OP07_GENERAL_INQUIRY.\n"
                     "Reply with only the objective_id, nothing else.\n\n"
                     f"Objectives:\n{obj_list}"
                 ),
@@ -105,21 +110,27 @@ class IntentRouter:
             resp = gw.chat(messages=messages, max_tokens=20, temperature=0.0)
             raw = (resp.content or "").strip().upper()
             # Validate the returned id exists in registry
+            matched_obj = None
             for obj in objectives:
                 if obj.objective_id in raw:
-                    logger.info(
-                        "IntentRouter Path LLM: '%s' → %s", user_query[:40], obj.objective_id
-                    )
-                    return RouteResult(obj.objective_id, 0.75, "Path_LLM_Fallback", False)
+                    matched_obj = obj.objective_id
+                    break
 
-            # Option A: If the LLM replied conversationally without emitting an exact objective ID,
-            # treat it as general inquiry / conversational small talk rather than failing silently.
-            if raw:
+            if not matched_obj and raw:
+                # Conversational response defaulting to OP07
+                matched_obj = "OP07_GENERAL_INQUIRY"
+
+            if matched_obj:
+                q_low = user_query.lower().strip()
+                is_vague = any(q_low == v or q_low.startswith(v + " ") for v in (
+                    "check it", "inspect it", "look at it", "something is wrong", "what about it", "fix it"
+                ))
+                conf = 0.60 if is_vague else 0.75
                 logger.info(
-                    "IntentRouter Path LLM: Conversational response ('%s') on '%s' → defaulting to OP07_GENERAL_INQUIRY",
-                    raw[:40], user_query[:40]
+                    "IntentRouter Path LLM: '%s' → %s (conf=%.2f, ambiguous=%s)",
+                    user_query[:40], matched_obj, conf, is_vague
                 )
-                return RouteResult("OP07_GENERAL_INQUIRY", 0.75, "Path_LLM_Fallback", False)
+                return RouteResult(matched_obj, conf, "Path_LLM_Fallback", is_vague)
         except Exception as ex:
             logger.warning("IntentRouter: LLM fallback call failed (%s)", ex)
         return None
@@ -175,7 +186,7 @@ class IntentRouter:
         # repeated letters and strip trailing punctuation before matching, so they land in OP07
         # instead of falling through to the ambiguous/clarification path.
         q_clean = q_lower.rstrip("!?. ,")
-        q_collapsed = re.sub(r"([a-z])\1{2,}", r"\1", q_clean)
+        q_collapsed = re.sub(r"([a-z])\1+", r"\1", q_clean)
         if (
             q_clean in self._GREETING_EXACT
             or q_collapsed in self._GREETING_EXACT
@@ -212,10 +223,13 @@ class IntentRouter:
 
         rules.sort(key=lambda r: (r[4], len(r[0].split()), len(r[0])), reverse=True)
 
+        # Asset-normalized query representation so "why did FS-031 stop" matches "why did it stop"
+        q_norm_asset = re.sub(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", "it", q_lower)
+
         for kw, obj_id, conf, path_lbl, _ in rules:
             kw_lower = kw.lower()
             pattern = r"\b" + re.escape(kw_lower) + r"\b"
-            if re.search(pattern, q_lower):
+            if re.search(pattern, q_lower) or re.search(pattern, q_norm_asset):
                 logger.info("IntentRouter %s: Keyword '%s' -> %s", path_lbl, kw, obj_id)
                 return RouteResult(obj_id, conf, path_lbl, False)
 
@@ -236,12 +250,12 @@ class IntentRouter:
             "should", "about", "into", "over", "some", "take", "look", "things",
             "morning", "afternoon", "evening", "please", "check", "tell", "show",
             "well", "wells", "asset", "assets", "pump", "pumps", "okay", "good",
-            "fsws", "well"
+            "fsws", "well", "esp", "esps"
         }
         query_tokens = set(re.findall(r"\b[a-z]{3,}\b", q_lower)) - STOP_WORDS
 
         best_score = 0.0
-        best_obj_id = "OP03_FAULT_DIAGNOSIS"
+        best_obj_id = "OP07_GENERAL_INQUIRY"
 
         for obj in objectives:
             if obj.objective_id in HARD_REFUSAL_IDS or obj.objective_id == "OP07_GENERAL_INQUIRY":
@@ -270,21 +284,31 @@ class IntentRouter:
         semantic_confidence = min(0.85, 0.5 + best_score)
 
         # ── B2.T1/T2: Ambiguity signal — compute before LLM hop ──────────────
-        # Mark ambiguous when confidence is below threshold AND no known well
-        # (either from session memory or named explicitly in query) anchors the query.
-        has_known_well = bool(
-            (conversation_context and conversation_context.get("last_well"))
-            or has_specific_asset
+        # Mark ambiguous when confidence is below threshold AND no specific asset was explicitly named.
+        # An asset in conversation memory (last_well) should NOT suppress ambiguity for vague queries.
+        # General inquiries (OP07) are non-operational and should never trigger asset ambiguity.
+        is_ambiguous = (
+            semantic_confidence < _AMBIGUITY_CONFIDENCE_THRESHOLD
+            and not has_specific_asset
+            and best_obj_id not in ("OP07_GENERAL_INQUIRY", "OP00_OPERATIONAL_CONTROL")
         )
-        is_ambiguous = (semantic_confidence < _AMBIGUITY_CONFIDENCE_THRESHOLD and not has_known_well)
 
         # ── B4.T3: Short-circuit — only call LLM fallback when semantic is weak ──
         if semantic_confidence < _LLM_FALLBACK_THRESHOLD:
             llm_result = self._llm_classify(user_query)
             if llm_result is not None:
                 # LLM resolved intent but asset ambiguity is independent: if the
-                # query had no well context and low semantic confidence, the operator
-                # still hasn't told us WHICH asset — so preserve is_ambiguous.
+                # query had no well context, the operator still hasn't told us WHICH asset.
+                resolved_obj = llm_result.objective_id
+                resolved_def = self.registry.get(resolved_obj)
+                requires_asset = (resolved_def is None or resolved_def.scope == "single")
+                if requires_asset and resolved_obj not in ("OP07_GENERAL_INQUIRY", "OP00_OPERATIONAL_CONTROL"):
+                    has_known_well = bool(
+                        (conversation_context and conversation_context.get("last_well"))
+                        or has_specific_asset
+                    )
+                    if not has_known_well:
+                        is_ambiguous = True
                 return RouteResult(llm_result.objective_id, llm_result.confidence,
                                    llm_result.path, is_ambiguous)
 

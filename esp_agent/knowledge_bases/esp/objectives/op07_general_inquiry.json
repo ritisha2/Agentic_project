@@ -4,7 +4,11 @@
   "title": "General Inquiry & Conversational Assistance",
   "description": "Handle greetings, identity/capability questions, and general non-diagnostic conversational queries. No telemetry, specialists, or evidence required; responds directly via advisory synthesis.",
   "strategic_objectives": [],
-  "intent_classes": ["hi", "hello", "hey", "who are you", "what can you do", "help", "role", "identity", "greeting", "what can you help me with", "capabilities for esp", "how do you analyze"],
+  "intent_classes": [
+    "hi", "hello", "hey", "who are you", "what can you do", "help", "role", "identity", "greeting",
+    "what can you help me with", "capabilities for esp", "how do you analyze",
+    "what is an esp", "what is esp", "define esp", "explain esp", "tell me about esp", "tell me about electric submersible pumps", "how does esp work", "what does esp stand for"
+  ],
   "required_asset_context": [],
   "required_signals": [],
   "required_evidence": [],

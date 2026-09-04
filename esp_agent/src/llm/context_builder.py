@@ -54,6 +54,7 @@ class CompactContextBuilder:
         self,
         asset_id: str,
         objective_id: str,
+        asset_context: Optional[Dict[str, Any]] = None,
         telemetry: Optional[Dict[str, Any]] = None,
         engineering: Optional[Dict[str, Any]] = None,
         model_outputs: Optional[Dict[str, Any]] = None,
@@ -73,6 +74,17 @@ class CompactContextBuilder:
             "asset_id": asset_id,
             "objective": objective_id,
         }
+
+        # --- Asset Hardware & Installation Context ---
+        if asset_context:
+            compact["asset_nameplate"] = {
+                "pump_model": asset_context.get("pump_model") or "Not specified",
+                "motor_rating_hp": asset_context.get("motor_rating_hp") or "Not specified",
+                "nameplate_current_amps": asset_context.get("nameplate_current_amps") or "Not specified",
+                "installation_depth_ft": asset_context.get("installation_depth_ft") or "Not specified",
+                "be_point_bpd": asset_context.get("be_point_bpd") or "Not specified",
+                "status": asset_context.get("status", "ACTIVE"),
+            }
 
         # --- Telemetry Summary ---
         if telemetry:
@@ -172,6 +184,7 @@ class CompactContextBuilder:
         return self.build(
             asset_id=state.get("request", {}).get("asset_id", "UNKNOWN"),
             objective_id=state.get("run", {}).get("objective_id", "UNKNOWN"),
+            asset_context=ctx.get("asset"),
             telemetry=ctx.get("telemetry"),
             engineering=ctx.get("engineering"),
             model_outputs=ctx.get("models"),

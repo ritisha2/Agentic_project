@@ -10,9 +10,16 @@ from typing import Dict, List, Optional
 
 from src.schemas.objective import ObjectiveDefinition
 
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_OBJECTIVES_DIR = "knowledge_bases/esp/objectives"
+_ESP_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_CANDIDATE_OBJECTIVES_DIR = _ESP_AGENT_ROOT / "knowledge_bases" / "esp" / "objectives"
+DEFAULT_OBJECTIVES_DIR = str(_CANDIDATE_OBJECTIVES_DIR) if _CANDIDATE_OBJECTIVES_DIR.exists() else "knowledge_bases/esp/objectives"
+
+_CANDIDATE_MAPPING_PATH = _ESP_AGENT_ROOT / "knowledge_bases" / "esp" / "events" / "event_objective_mapping.yaml"
+DEFAULT_EVENT_MAPPINGS_PATH = str(_CANDIDATE_MAPPING_PATH) if _CANDIDATE_MAPPING_PATH.exists() else "knowledge_bases/esp/events/event_objective_mapping.yaml"
 
 class ObjectiveRegistry:
     """
@@ -24,7 +31,7 @@ class ObjectiveRegistry:
         self._registry: Dict[str, ObjectiveDefinition] = {}
         self._event_mappings: Dict[str, str] = {}
         self.load_objectives()
-        self.load_event_mappings()
+        self.load_event_mappings(DEFAULT_EVENT_MAPPINGS_PATH)
 
     def load_objectives(self):
         """Load and validate all JSON objective definitions from objectives_dir."""
