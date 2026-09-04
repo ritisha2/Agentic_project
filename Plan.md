@@ -1,247 +1,213 @@
-# Plan — Conversational Wrapping of the ESP APM Backend
+# ESP Agentic Platform — Implementation Plan
 
-**Goal:** Turn the ESP APM agent (Agent Jane) from a single-shot "one query → one advisory" tool
-into a real multi-turn conversational operator assistant, where **every kind of intent is routed
-exactly to the correct objective** over live MQTT-fed data.
-
-**Status legend:** ☐ not started · ◐ in progress · ☑ done
+**Status of this document:** written after a full codebase + data audit on 2026-09-04. Supersedes any prior plan drafts in chat history. Every phase below is grounded in confirmed current-state findings (file paths, line numbers, row counts) — not assumptions.
 
 ---
 
-## Guiding principles (grounded in the live code + 2026 architecture research)
+## 0. Audit findings this plan is built on
 
-1. **Reuse, don't duplicate.** `CheckpointManager` (`esp_agent/src/agent/supervisor/checkpoint.py`)
-   already does `esp:checkpoint:{run_id}` with Redis TTL + in-memory fallback via
-   `RedisConnectionManager`. The conversation store **extends this same pattern** — no parallel
-   Redis client, no new SQLite table.
-2. **Memory is layered, not monolithic.** Research (O'Reilly *AI Agents Stack 2026*; the four-tier
-   memory model — working / episodic / semantic / procedural) converges on: a fast ephemeral
-   **session buffer** (Redis, TTL) for the live conversation, and an optional **long-term store**
-   for cross-session recall. We build the session tier now (Level A) and leave a clean seam for the
-   long-term tier (Level C) rather than pretending it exists.
-3. **The router must see the conversation.** `IntentRouter.route(user_query, event_code)` today has
-   **zero conversation context** — this is the single biggest structural gap. Injecting history into
-   the LLM narrative alone does *not* fix routing; the router itself must receive prior turn context.
-4. **Ambiguity is a first-class outcome.** `route()` must be able to say "I'm not sure" instead of
-   silently defaulting to `OP03_FAULT_DIAGNOSIS`. That signal is what lets the graph ask a question
-   back (HITL) instead of running a 30–70s graph on a guess.
-5. **HITL needs a checkpointer on the graph.** Per LangGraph docs, `interrupt()` / pause-resume only
-   works when the graph is compiled **with a checkpointer** and invoked with a stable `thread_id`.
-   The graph today compiles with **no checkpointer** — that must change before Level B clarification.
+### 0.1 Data layer (confirmed via direct SQL + `git log`)
 
----
+| Store | Size | Rows | Notes |
+|---|---|---|---|
+| `cced_esp/data/unlabelled.db` → `opg_well_telemetry` | 14.68 GB | 3,110,985 | Live MQTT historian. 34 columns incl. 9 native VFD params. 29 `well_id` / 44 `asset_id`. Span confirmed: **2026-08-31 06:10 → 2026-09-03 13:11 (~3 days)**, not 6 months. |
+| `cced_esp/data/labelled.db` → `opg_well_telemetry` | 12.98 GB | 3,110,985 | Mirror schema, parallel write. |
+| `cced_esp/data/normalized.db` → `opg_normalized_telemetry` | 1.19 GB | 3,110,985 | **New** precomputed feature store. Live triple-write from `mqtt_collector.py`. Now the primary read source for `dashboard.py` and the VFD cache pre-warm. |
+| `esp_events.db` (root + `esp_agent/`) | ~20 KB | — | Event store, unrelated to telemetry volume. |
 
-## Architecture map — what "complete backend wrapping" actually touches
+**OPEN QUESTION — must be answered before Phase 1:** the "six months of historical data" referenced in the meeting has not been located. It is not in `cced_esp/data/`, not in `code/models/categorized_wells` (path does not exist), and `data/advait` / `data/references` were not fully inventoried (session interrupted mid-audit). **Action: locate this dataset explicitly before Phase 1 starts** — do not assume the 3-day `unlabelled.db` window is it.
 
-```
-                    ┌─────────────────────────────────────────────────────────────┐
-  Browser tab       │  Frontend (cced_esp/frontend-react)                           │
-  X-Session-ID ────►│  AgentFloatingDock.jsx  — localStorage UUID, header on every  │
-  (localStorage)    │  request; renders clarification questions as agent turns      │
-                    └───────────────────────────┬─────────────────────────────────┘
-                                                 │  POST /api/ui/agent/run  (+ X-Session-ID)
-                                                 ▼
-                    ┌─────────────────────────────────────────────────────────────┐
-  BFF layer         │  bff_routes.py  — read X-Session-ID, resolve last_well,        │
-                    │  inject recent turns, detect ambiguity, append each exchange  │
-                    └───────────────────────────┬─────────────────────────────────┘
-                                                 ▼
-                    ┌─────────────────────────────────────────────────────────────┐
-  Entry adapter     │  UserEntryAdapter.run(user_query, asset_id, session_id, ...)   │
-                    │  — passes conversation_context into routing + graph           │
-                    └───────────────────────────┬─────────────────────────────────┘
-                                                 ▼
-      ┌──────────────────────────┬──────────────────────────────┬───────────────────┐
-      ▼                          ▼                              ▼                   ▼
-┌───────────────┐   ┌───────────────────────┐   ┌───────────────────┐   ┌──────────────────┐
-│ IntentRouter  │   │ ConversationStore     │   │ Supervisor graph  │   │ CheckpointManager│
-│ .route(...,   │◄──┤ (NEW)                 │   │ (LangGraph)       │   │ (existing Redis) │
-│  conv_ctx)    │   │ esp:conv:{session_id} │   │ + checkpointer    │   │ esp:checkpoint:* │
-│ + ambiguity   │   │ Redis TTL 7d          │   │ + clarification   │   └──────────────────┘
-│ + LLM fallback│   │ get_history/append/   │   │   node (interrupt)│
-└───────────────┘   │ get_last_well         │   └───────────────────┘
-                    └───────────────────────┘
-                              │ (shares RedisConnectionManager)
-                              ▼
-                    ┌───────────────────────┐
-                    │ Long-term memory tier │  ← Level C seam (episodic/semantic), not built yet
-                    │ (vector / summary)    │
-                    └───────────────────────┘
-```
+### 0.2 ML model layer (`code/models/`) — canonical, current
 
-**Live data path (already wired, unchanged by this plan):**
-`cced_esp` MQTT → `VFD WellDiagnosticEngine` → `/api/vfd/diagnostics/{well}` →
-`LiveDataBridge.get_vfd_diagnostic()` → `EvidenceCollector.collect_from_vfd_diagnostic()` →
-`ctx["vfd_diagnostic"]` → `CompactContextBuilder` → LLM.
+- `fault_classifier.py` (313 lines, committed `1741188`): **13 rule-based faults + Normal Operation + a 14th "Well Offline / Standby" gate.** The Standby gate is a hard `return` immediately after raw-value extraction, before any dynamics/scoring: if `VFD STS <= 0.1` and `amps < 1.0` → returns `primary_fault="Well Offline / Standby"`, health 0, confidence 100%, status `⚪ STANDBY`. This eliminates false-fault-flooding on idle/parked wells.
+- `anomaly_detector.py` + `diagnostic_engine.py`: **uncommitted local changes** (confirmed present via `git status`) replacing a synthetic-noise self-fit with per-well → per-family → global Isolation Forest baseline calibration (`fit_from_registry()`), fitted from real `well_calibration_registry.json` statistics. Confirmed independent of the Standby gate (anomaly scoring always runs; Standby only short-circuits the fault classifier).
+- **Not yet committed** — needs a commit once Phase 1 verification passes.
+- Legacy parallel system: `cced_esp/ml/` (5-model scaffold: rule_engine/fault_classifier/risk_predictor/rul_engine/anomaly_detector) was deleted as "deprecated," broke `unified_pipeline.py`/`decision_service.py`/`esp_routes.py` imports, and was restored as **source only** — trained `.joblib` artifacts were never restored. This pipeline now runs without crashing but its classifier/risk/RUL/anomaly stages operate on unloaded models. **This is a live latent bug**, independent of anything in this plan, and should be flagged to whoever owns `cced_esp/ml/`.
+
+### 0.3 Visualization layer — already exists, do not rebuild
+
+- `code/eda/figure_factory.py` (233 lines): genuinely pure (`data-in → go.Figure/DataFrame out`, no `st.*`/SQLite/HTTP). Two functions: `render_incident_tipping_timeline()` (3-row synchronized subplot with per-well dynamic normal-corridor bands + incident marker) and `build_evidence_comparison_table()` (trip-instant vs. baseline deviation table). Backed by a real anti-hardcoding test suite (`code/tests/test_figure_factory_forensics.py`, 5 tests, including a live end-to-end Standby regression test).
+- `code/eda/dashboard.py` (~1830 lines): real 8-tab Streamlit ML dashboard. Tab 7 ("Fleet Fault Finder") is the forensic deep-dive, wired to `figure_factory.py`, with a data-lineage badge and adaptive time-resolution defaulting. Reads `unlabelled.db` + `normalized.db`; **never reads `labelled.db`**.
+- **Implication:** the "dynamic visualization engine" work is now *extend the existing pure-function pattern and connect it to agent chat*, not build from zero.
+
+### 0.4 Streamlit agent app (`agent_streamlit.py`) — 781 lines, refactored twice since this session started
+
+- Single full-width conversational chat UI (old multi-tab dashboard layout removed).
+- Real additions: `BackendCircuitBreaker` (prevents UI-thread freezing on backend outage) and an O(1) `discover_active_assets()` registry cache (reads `well_calibration_registry.json` dict keys, never scans the multi-million-row telemetry table).
+- **Fixed since last audit:** the blanket `92.5/NORMAL` fabrication is gone — genuine unavailable states now return `"_source": "unavailable"`, `"⚪ NO LIVE DATA"`.
+- **Residual gap:** per-field silent defaults (e.g. `confidence = ... or 0.95`, boilerplate "Engineering Derivation" text) can still surface inside a response labeled as `_source: "backend_api"`/`"in_process"`, with no per-field honesty marker.
+- **Critical architecture gap:** it runs the LangGraph agent **in-process** (`UserEntryAdapter().run()`/`.resume()` called directly in the Streamlit process) — it does **not** call the BFF's `POST /api/ui/agent/stream` HTTP contract at all. This is the real "Streamlit ↔ backend sync" gap: two different runtime paths exist for the same agent, and they can drift.
+
+### 0.5 Knowledge base — split-brain (the most important finding)
+
+Two unrelated knowledge systems exist, and **production chat uses the one that was not fully audited in earlier sessions**:
+
+1. `esp_agent/knowledge_bases/esp/` — real content (objectives ×14, event mappings, mapping_config, telemetry fixture), but its `documents/` (4 files, thin), `graph/esp_graph.json` (real, ~12 entities, 6 causal edges), and `rules/diagnostic_rules.json` (9 threshold rules) are **only reachable through the legacy `DiagnosticAgentRuntime`/CLI path** (`src/api/cli.py`, `POST /diagnose`), not through production chat.
+2. `esp-knowledge/deterministic/` (8 files across faults/alerts/glossary/model_semantics/objectives/policies/units) + Postgres/pgvector (`knowledge_embeddings` table) — **this is what the production `knowledge` specialist (`RetrievalService.hybrid_retrieve()`) actually queries.** Whether Postgres/pgvector is actually running in this environment is unconfirmed (`psycopg2`/`redis` are installed; live connectivity not verified).
+
+**Net finding:** the production agent's actual knowledge grounding is thin (8 files) and disconnected from the richer causal graph and rules that exist elsewhere in the repo. This is the real blocker for "Knowledge base + Data + History fused" from the meeting — bigger than the funnel or the visualization gap.
+
+### 0.6 Backend (`cced_esp`, submodule, actively evolving)
+
+- VFD diagnostic cache now **pre-warms up to 50 wells proactively at startup** (background thread reading `normalized.db`), not purely MQTT-reactive. This is a positive change for the "evidence-tier funnel" design — status/history queries can now be served from a warm cache without waiting on live MQTT traffic.
+- Historian routes (`/api/v1/historian/...`) read `unlabelled.db` with dynamic-window anchoring (anchors to `MAX(timestamp)` in DB, not wall-clock `now()`).
+- `ml_telemetry_routes.py` (broker-authenticated bulk telemetry export, `/api/v1/telemetry/unlabelled[...]`) was **deleted with no replacement**. Flag before Phase 1 if any external ML/analytics consumer depends on it.
+- `archive/ccep_deprecated.zip` genuinely contains dead legacy frontends (vanilla-JS + old React app) — safe to ignore. It also transiently contained the `ml/` package described in 0.2 before restoration.
 
 ---
 
-# LEVEL A — Memory + Implicit Well (multi-turn for well-formed queries)
+## Guiding principles (unchanged from prior discussion, now grounded)
 
-**Outcome:** A follow-up like "what about it?" resolves to the last well discussed, history is
-injected into every LLM call, and the router can see prior turns. This is the agreed spec **plus**
-the router-context change the spec omitted.
-
-## Phase A1 — Conversation store (Redis, extends existing pattern)
-
-- ☐ **A1.T1** Create `esp_agent/src/memory/conversation_store.py`.
-  - `ConversationStore` reusing `RedisConnectionManager` from `checkpoint.py` (do **not** open a new
-    client). Key scheme `esp:conv:{session_id}`, value = JSON list of turns, TTL 7 days.
-  - Per-turn schema: `{role, content, timestamp, well_id, intent_detected}`.
-  - Methods:
-    - `append(session_id, role, content, well_id=None, intent=None)` — push turn, trim to last 20
-      stored (serve last 10), refresh TTL.
-    - `get_history(session_id, limit=10)` → most recent N turns (sliding window).
-    - `get_last_well(session_id)` → most recent non-null `well_id` (implicit-well resolver).
-    - `clear(session_id)`.
-  - In-memory dict fallback when Redis is down (mirror `CheckpointManager`'s degradation behavior).
-- ☐ **A1.T2** Unit-sanity (non-LLM): append 3 turns, assert `get_history` window + `get_last_well`.
-
-## Phase A2 — Router sees conversation context
-
-- ☐ **A2.T1** Extend `IntentRouter.route()` signature to
-  `route(user_query, event_code=None, conversation_context=None)`.
-  `conversation_context = {last_well, last_objective, recent_turns}`.
-- ☐ **A2.T2** Follow-up resolution: when the query is a bare follow-up ("why?", "is that bad?",
-  "what about it?") and `conversation_context.last_objective` exists, **carry forward the prior
-  objective** instead of dropping to Path B → `OP03`.
-- ☐ **A2.T3** Keep behavior fully backward-compatible when `conversation_context=None` (existing
-  single-shot callers unchanged).
-
-## Phase A3 — Entry adapter + BFF wiring
-
-- ☐ **A3.T1** `UserEntryAdapter.run()` — accept `session_id`; when `asset_id` is missing, resolve via
-  `ConversationStore.get_last_well(session_id)`; pass `conversation_context` into `route()` and thread
-  `recent_turns` into the graph state for the LLM narrative.
-- ☐ **A3.T2** `bff_routes.py` — read `X-Session-ID` header on `/api/ui/agent/run` and
-  `/api/ui/agent/stream`; inject last 10 turns; append the completed exchange (both user + agent
-  turns, with resolved `well_id` and `intent_detected`).
-- ☐ **A3.T3** History injection into the prompt: extend `CompactContextBuilder` (or the prompt
-  builder) with a compact `conversation_history` block (role + trimmed content only — no re-dumping
-  evidence), bounded to stay within the small-model token budget.
-
-## Phase A4 — Frontend session identity
-
-- ☐ **A4.T1** `AgentFloatingDock.jsx` — generate a UUID once per tab, persist in `localStorage`, send
-  as `X-Session-ID` on every agent request.
-- ☐ **A4.T2** Confirm both `run` and `stream` paths send the header.
-
-**Level A exit criteria:** "Status of FSWS-001-A?" → then "is that bad?" resolves to the same well
-and a coherent follow-up objective, with history visible in the prompt. Verified by a real 2-turn
-LLM run (user-run command, ~70s each).
+1. **On-prem only.** No cloud dependency. LLM is already local (Qwen via llama-server). Confirm Postgres/pgvector/Neo4j/Redis are all local instances, not managed cloud services, before Phase 4.
+2. **Routing is the foundation.** Intent + conversation context decide objective, tier, and depth before anything else runs.
+3. **Depth follows tier.** The full chain (*Observation → Trend → Expected model → Actual vs Expected → Contributing parameters → ML anomaly → Ranked hypotheses → Evidence → Confidence → Recommendation → Follow-up*) is the **full-diagnostic tier contract only**. Vague/simple queries get short, honest answers.
+4. **One backend contract.** `agent_streamlit.py` must become a client of the same NDJSON stream the React UI uses — not a second in-process runtime.
+5. **Fuse three real sources per answer**: Knowledge Base + Data (live/normalized) + History (unlabelled.db time range) — never generic LLM knowledge alone.
+6. **No duplicate code.** Extend `figure_factory.py`'s pure-function pattern; do not reimplement plotting inline elsewhere.
+7. **Clean as we go.** Commit the pending anomaly-detector fix; resolve the KB split-brain; don't leave two parallel knowledge systems live.
 
 ---
 
-# LEVEL B — Real conversation with a non-technical operator
+## Phase 0 — Close open questions & stabilize the base (no new features)
 
-**Outcome:** Vague/free-form language is either routed correctly by an LLM fallback, or the agent
-**asks a clarifying question** instead of guessing. Requires new graph wiring.
+**0.A — Locate the six-month dataset.**
+- Action: ask the user directly for the exact path/source of the six-month historical dataset (it is not in this workspace's known data directories).
+- Verify: dataset located, its schema/columns compared against `opg_well_telemetry`'s 34 columns, coverage/gaps profiled.
 
-## Phase B1 — Checkpointer on the graph (prerequisite for HITL)
+**0.B — Commit the pending model fix.**
+- Files: `code/models/anomaly_detector.py`, `code/models/diagnostic_engine.py`.
+- Action: run the existing forensics test suite (`code/tests/test_figure_factory_forensics.py`) plus a manual per-well/family/global calibration spot-check (already done earlier this session — normal wells read as inliers with probability 0.15–0.26, not the old fabricated ~90%); commit with a clear message.
+- Verify: `git status` clean on these two files; test suite passes.
 
-- ☐ **B1.T1** Compile the supervisor graph **with a checkpointer** and invoke with a stable
-  `thread_id` (= `session_id`). Per LangGraph, `interrupt()`/resume and cross-turn memory are
-  impossible without this. Reuse the existing Redis connection; do not add a second persistence
-  system.
-- ☐ **B1.T2** Verify a run can pause and resume against the same `thread_id`.
+**0.C — Resolve the KB split-brain.**
+- Files: `esp_agent/knowledge_bases/esp/` vs `esp-knowledge/deterministic/`.
+- Action: decide (with the user) which is canonical going forward. Likely: consolidate into one, migrate the richer causal graph (`esp_graph.json`) and `diagnostic_rules.json` into whichever path production chat actually uses.
+- Verify: `RetrievalService.hybrid_retrieve()` and the `knowledge` specialist draw from a single, documented KB location; no orphaned duplicate KB remains reachable only by dead code paths.
 
-## Phase B2 — Ambiguity scoring in the router
+**0.D — Flag the `cced_esp/ml/` unloaded-model bug and the deleted `ml_telemetry_routes` externally.**
+- Action: confirm with the user/ML team whether these are known/acceptable or need fixing; out of scope for this plan unless they say otherwise.
 
-- ☐ **B2.T1** `route()` returns a real **ambiguity signal** (e.g. `RouteResult{objective, confidence,
-  is_ambiguous, candidates}`) instead of always returning one objective. Stop the silent default to
-  `OP03_FAULT_DIAGNOSIS`.
-- ☐ **B2.T2** Define the trigger: `is_ambiguous = True` when confidence < threshold **and** no
-  implicit well is resolvable from memory.
+**0.E — Fix the Streamlit/BFF stream contract mismatch (prerequisite for Phase 6).**
+- Files: `esp_agent/src/api/rest/bff_routes.py`, `esp_agent/src/api/fastapi_app.py`.
+- Action: confirm `UIAdvisoryRunRequest.user_query` required-field behavior (422 root cause identified earlier); remove the double `/api/ui` mount in `fastapi_app.py`.
+- Verify: valid `POST /api/ui/agent/stream` → 200 NDJSON; missing `user_query` → clear 422; no `/api/ui/api/ui/...` route resolves.
 
-## Phase B3 — Clarification node (LangGraph interrupt / HITL)
+**0.F — Build the demo verification harness.**
+- Action: encode the meeting's five acceptance questions + a routing regression set as one scripted harness against the live NDJSON stream.
+- Verify: harness runs and records, per query: routed objective, tier, tool-calls made, evidence sources + KB mapping, viz spec emitted. This is the single regression gate for every later phase.
 
-- ☐ **B3.T1** Add a `clarification_node` early in the graph. When the router flags ambiguity and no
-  implicit well exists, `interrupt()` with a clarifying question ("Which well — FS-031, FS-010…?")
-  **before** the expensive evidence/LLM path runs.
-- ☐ **B3.T2** Resume contract: the operator's answer resumes the same `thread_id`; the answer updates
-  the well/objective and continues without replaying the whole graph.
-- ☐ **B3.T3** BFF + frontend: render the clarifying question as a normal agent turn; the next user
-  message resumes the paused run.
-
-## Phase B4 — LLM-assisted routing fallback (full 14-objective coverage)
-
-- ☐ **B4.T1** Add a lightweight LLM classifier fallback in the router: when keyword + semantic paths
-  are both low-confidence, ask the office-server LLM to map free-form operator language → exactly one
-  of the 14 objectives (constrained/enumerated output). Small prompt, cheap call.
-- ☐ **B4.T2** Generalize greeting/small-talk: replace hardcoded exact-string matching ("hi",
-  "hello") with an intent bucket that the LLM fallback can also land in ("morning, take a look at
-  things?").
-- ☐ **B4.T3** Cache/short-circuit: skip the LLM fallback when keyword/semantic already high-confidence
-  (keep latency down).
-
-**Level B exit criteria:** "morning, can you take a look at things?" with no well in context → agent
-asks which well rather than fault-diagnosing a random asset; a clear technical phrasing still routes
-in one shot with no extra LLM hop.
+**Phase 0 done when:** dataset location is known, the model fix is committed and tested, one KB is canonical, the stream contract works, and the harness runs end-to-end (even if most assertions fail — the point is it *runs*).
 
 ---
 
-# LEVEL C — Durability & long-term memory (seam, build when needed)
+## Phase 1 — History intelligence layer (turn raw data into usable history)
 
-**Outcome:** Cross-session recall and restart-safety. Not required for the conversational MVP; mapped
-so the Level A/B design leaves clean seams instead of dead ends.
+Goal: whatever historical dataset is confirmed in 0.A becomes queryable, quality-profiled, and analytics-ready — the substrate for every operational question ("why did it stop", "how many hours").
 
-## Phase C1 — Long-term memory tier
+**1.1 — Profile & data-quality report.**
+- Per-signal coverage, blank/missing periods, units, sampling gaps across the confirmed historical dataset.
+- Verify: written coverage report (signal × time-window completeness), explicit list of fields present only for limited periods.
 
-- ☐ **C1.T1** Episodic/semantic store keyed per well (not per session) — summarized history that
-  survives session expiry. Candidate: reuse existing vector infra (Qdrant `esp_kb`) with a separate
-  namespace, or a rolling per-well summary written on session close.
-- ☐ **C1.T2** Retrieval-into-prompt: surface "last time this well was discussed, the fault was X"
-  when a new session opens on a known well.
+**1.2 — Normalize & load into the history layer.**
+- Clean, unit-normalize, gap-tag; load into `opg_well_telemetry` (extending the existing schema) or a dedicated history table. Missing data flagged, never fabricated/zero-filled.
+- Verify: row counts + time span match source; missing periods are marked, not interpolated silently; spot-check queries by well + time window return expected ranges.
 
-## Phase C2 — Restart-safe long-running runs
+**1.3 — Operational analytics primitives.**
+- Derive, directly from history: run/stop **state segmentation** (using the same VFD-status + amps logic as the new Standby gate, for consistency), **runtime hours**, **downtime episodes** (start/end/duration), **production totals** (flow integrated over time), **stop events** with the pre-stop signal window.
+- Verify: for a known well+period, computed runtime/downtime/production reconcile against a manual spot-check on raw data.
 
-- ☐ **C2.T1** Confirm checkpointer TTLs and thread_id survive a backend restart; a paused
-  clarification can resume after a process bounce.
-
----
-
-# Cross-cutting: known gaps to close alongside (mapped, not silently skipped)
-
-- ☐ **X1 — Telemetry FALLBACK.** `TelemetryService` isn't reaching live `cced_esp` for the asset;
-  all telemetry fields fall back to hardcoded constants (135/350/2100/1450/62/50/1.2). VFD diagnosis
-  is correct, but the telemetry block the LLM sees is synthetic. Track and fix separately; note it in
-  advisories until fixed.
-- ☐ **X2 — Native VFD columns in DB.** Non-destructive `ALTER TABLE ADD COLUMN` for the 14 native VFD
-  params (agreed earlier; not yet executed). Do **not** delete `labelled.db`/`unlabelled.db`.
-- ☐ **X3 — Provenance/trace consistency.** Keep using `llm_adapter.last_trace` (not a re-probe) after
-  the earlier race fix; confirm no hardcoded model name regressions.
+**Phase 1 done when:** the demo questions ("how many hours", "how much production", "how much downtime") have a computed, correct, evidence-cited answer path — before any LLM/agent work touches them.
 
 ---
 
-# Sequencing recommendation
+## Phase 2 — Routing & intent understanding (foundation, highest leverage)
 
-1. **Finish Task 4 verification first** (TASK4-E2E-003 real LLM run) — Level A touches the same
-   `bff_routes` / `UserEntryAdapter` files, so confirm the VFD-context fix landed before layering
-   memory on top.
-2. **Level A end-to-end** (A1 → A4) — smallest change that delivers real multi-turn value.
-3. **Level B** only after A is verified live — B1 (checkpointer) is the gate for B3 (clarification).
-4. **Level C** when cross-session recall is actually requested.
+**2.0 — Fix the Path B silent-default misroute (confirmed bug, do this first).**
+- File: `esp_agent/src/agent/intent_router.py`, Path B (semantic/token-overlap) block inside `route()`.
+- Root cause (confirmed by reading the live code, not assumed): the semantic scorer seeds `best_obj_id = "OP03_FAULT_DIAGNOSIS"` before any match is attempted:
+  ```python
+  best_score = 0.0
+  best_obj_id = "OP03_FAULT_DIAGNOSIS"   # ← seeded default, not "no match"
+  ```
+  If the query has zero real keyword/title overlap with any objective, `best_score` stays `0.0` and `semantic_confidence` lands at exactly `0.5` — correctly below both the LLM-fallback threshold (`0.60`) and the ambiguity threshold (`0.65`), so today's safe cases (a truly empty-overlap, unanchored query) do get caught and routed to the LLM or clarification.
+  The actual failure mode is narrower: **one weak, accidental token overlap** (a single shared word against some objective's title `+0.2` or description `+0.1`) is enough to push `semantic_confidence` to `0.60` exactly. The LLM-skip check is `if semantic_confidence < _LLM_FALLBACK_THRESHOLD` (strict `<`), so `0.60` **skips the LLM entirely**. And if the query happens to name a well, or a well is already anchored in session (`conversation_context["last_well"]`), the ambiguity clarify is also suppressed regardless of match quality. Net effect: a genuinely-unmatched query can silently execute the full `OP03_FAULT_DIAGNOSIS` pipeline — the most expensive, most consequential objective — with no keyword actually matching it, no LLM confirmation, and no clarification.
+- Fix (two small, targeted changes, not a router rewrite):
+  1. Change the seed default from `"OP03_FAULT_DIAGNOSIS"` to `"OP07_GENERAL_INQUIRY"` (or `None`, forcing the LLM-fallback branch unconditionally when nothing scores above 0). "No real match" must never masquerade as "diagnose a fault."
+  2. Tighten the LLM-skip / ambiguity-bypass condition so a single low-value description-only overlap (`+0.1`) can't cross the `0.60` boundary on its own — e.g. require at least one real **title**-token match (`kw_matches`, not just `desc_matches`) before the score is allowed to skip the LLM check.
+- Verify (before/after, using the harness from 0.F):
+  - **Before:** construct a query with exactly one accidental shared token against `OP03_FAULT_DIAGNOSIS`'s title/description and a named well, e.g. one deliberately picked to land `semantic_confidence == 0.60` — confirm it currently skips both the LLM fallback and the ambiguity clarify and silently returns `OP03_FAULT_DIAGNOSIS`, `Path_B_Semantic`.
+  - **After:** the same query either routes to `OP07_GENERAL_INQUIRY` (if truly no real match) or triggers the LLM-fallback/clarification path — it must never silently land on a full-diagnostic objective without a real keyword, semantic, or LLM-confirmed signal.
+  - Regression: re-run every existing routing case from the earlier audit (greetings, "why" follow-up, event mapping, deterministic keyword matches) and confirm none of them change behavior — this fix only touches the zero/weak-match seed path.
+
+**2.1 — Context-aware intent resolution.** Extend `esp_agent/src/agent/intent_router.py` to genuinely use `conversation_context` (last_well, last_objective, recent_turns) in the semantic layer, not just the ~14 exact-match follow-up phrases.
+**2.2 — Slot/parameter extraction.** Parse quantities/references from follow-ups (`52 Hz`, `last week`, pronouns) into a `params` dict carried with the objective.
+**2.3 — New operational-history objective.** Add an objective (e.g. `OP14_OPERATIONAL_HISTORY`) routed to the Phase 1 analytics, distinct from the live fault-diagnosis objective — "why did it stop" is a history-reasoning question, not a live VFD diagnosis.
+**2.4 — Confidence-gated clarification.** Below-threshold, unanchored queries ask one crisp question instead of running the full pipeline.
+**2.5 — Routing regression suite.** ~30 labeled queries (greetings, procedure lookups, status, faults, decline, fleet, the 5 demo questions, follow-ups, ambiguous, **plus the 2.0 weak-overlap edge case**) with expected objective + tier + ambiguity flag; gate for every later phase.
+
+**Phase 2 done when:** the harness (0.F) shows correct routing for all demo questions + the regression set (including the 2.0 fix), and follow-ups carry extracted parameters. No query lacking a real keyword/semantic/LLM-confirmed match may silently resolve to `OP03_FAULT_DIAGNOSIS` or any other full-diagnostic objective.
 
 ---
 
-## File change inventory
+## Phase 3 — Evidence-tier funnel + tier-aware response anatomy
 
-| File | Level | Change |
-|------|-------|--------|
-| `esp_agent/src/memory/conversation_store.py` | A | **NEW** — Redis session store |
-| `esp_agent/src/agent/intent_router.py` | A, B | `conversation_context` param; ambiguity signal; LLM fallback |
-| `esp_agent/src/agent/supervisor/user_entry.py` | A | `session_id`, implicit-well resolve, pass context |
-| `esp_agent/src/api/rest/bff_routes.py` | A, B | `X-Session-ID`, inject history, append, render clarifications |
-| `esp_agent/src/llm/context_builder.py` | A | compact `conversation_history` block |
-| `esp_agent/src/agent/supervisor/graph.py` | B | compile with checkpointer; `clarification_node` (interrupt) |
-| `cced_esp/frontend-react/src/components/AgentFloatingDock.jsx` | A, B | session UUID + header; render clarifications |
-| `esp_agent/src/agent/supervisor/checkpoint.py` | A | (reuse only) `RedisConnectionManager` shared |
+**3.1 — `evidence_tier` on objectives.** Tiers: `T1_KB_ONLY` (OP06/OP07), `T2_SNAPSHOT` (OP01), `T3_FULL_DIAGNOSTIC` (OP02/03/04/05), `T_HIST` (new OP14, pulls Phase 1 analytics + KB), fleet stays its own branch.
+**3.2 — Gate context loading by tier.** In `esp_agent/src/agent/supervisor/graph.py` (`data_quality_gate_node`, `load_minimum_context_node`): T1 skips telemetry+model+VFD; T2 loads telemetry+engineering only; T3/T_HIST load everything relevant to their tier.
+**3.3 — Tier-aware response contract.** Extend `StandardAdvisoryPayload` (`esp_agent/src/schemas/advisory.py`) with `trend`, `expected_vs_actual`, `contributing_parameters`, `ml_anomaly`, `ranked_hypotheses` (full list), `uncertainties`, `follow_up_question`. Populate by tier — full chain only at T3/T_HIST.
+- Verify: audit trail proves tool-calls per tier; a T1 procedure lookup has zero model/telemetry calls; a T3/T_HIST query has every chain field populated from real evidence.
 
-## Research sources
-- O'Reilly — *The AI Agents Stack (2026 Edition)* (six-layer production agent model)
-- MindStudio / markaicode — layered memory: ephemeral Redis session buffer + long-term vector store
-- Four-tier agent memory model (working / episodic / semantic / procedural)
-- LangChain LangGraph docs — checkpointers + `thread_id` for cross-turn memory; `interrupt()` HITL
-- HITL engineering patterns — `thread_id` + checkpoint identity as the resumption contract
+**Phase 3 done when:** response depth measurably scales with objective tier, provable from both the audit trail and the payload shape.
 
-*Content from external sources was rephrased/summarized for licensing compliance.*
+---
+
+## Phase 4 — Operational history reasoning (the demo core)
+
+Fuse Data + History + KB to answer the meeting's acceptance questions correctly, with WHY.
+
+**4.1 — Answer computation** from Phase 1 primitives — hours/production/downtime are deterministic, exact, not LLM-estimated.
+**4.2 — "Why did it stop" reasoning** — take the pre-stop signal window (from 1.3), match against fault signatures (the 14-state classifier + the causal graph resolved in 0.C), produce a grounded cause with contributing parameters.
+**4.3 — Grounded explanation** — every answer returns the computed value + the exact history window/evidence used + the KB citation for any causal claim.
+- Verify: each of the five demo questions returns a technically correct value, cites the exact history window, and (for "why") cites the correct KB/causal source — checked against manual analysis on the confirmed dataset.
+
+---
+
+## Phase 5 — Fused evidence surface + KB-mapping verification
+
+**5.1 — Wire the dead collectors.** `esp_agent/src/services/evidence/collector.py::collect_from_historian()` and `collect_from_knowledge_graph()` are defined but never called by `context_builder.py::build_evidence_pack()` — wire them in.
+**5.2 — KB-mapping verification test.** The meeting's explicit validation point: `Query → Answer → Evidence → correct KB/source mapping`, not just `Query → Answer`. Build a test that every cited evidence item resolves to the real, correct KB document/section (post-0.C consolidation).
+- Verify: T3/T_HIST packs contain history + KB + causal items; mapping test passes for the demo questions with no dangling/mismatched citations.
+
+---
+
+## Phase 6 — Dynamic visualization & dashboard composition (extend, don't rebuild)
+
+**6.1 — Extend `figure_factory.py`'s pure-function pattern**, not `schemas/visualization.py`'s currently-hardcoded single chart. Add builders for the other spec types (pump curve, scenario/what-if, prediction, timeline) following the exact same signature style already proven by `render_incident_tipping_timeline()`.
+**6.2 — Deterministic selector** — objective/fault/params → which figure_factory function(s) to call. "Create a dashboard for FS-031" composes multiple real figures (trend + evidence table + incident timeline) into one view, all sourced from `normalized.db`/`unlabelled.db` like the existing Tab 7 pattern.
+**6.3 — Constrained LLM fallback** only for ambiguous cases — type + params only, Pydantic-validated, never executes LLM code.
+**6.4 — Wire into the BFF stream** (`esp_agent/src/api/rest/bff_routes.py`) replacing the currently-hardcoded `plotly_chart` block.
+- Verify: "create a dashboard" composes a real multi-panel view from that well's actual history; a procedure lookup emits no chart; the anti-hardcoding test pattern from `test_figure_factory_forensics.py` is replicated for every new builder.
+
+---
+
+## Phase 7 — Streamlit agent app ↔ backend sync (close the architecture gap)
+
+**7.1 — Switch from in-process to the BFF HTTP contract.** Replace `agent_streamlit.py`'s direct `UserEntryAdapter().run()`/`.resume()` calls with `POST /api/ui/agent/stream` + `X-Session-ID`, matching what the React UI uses. This eliminates the two-runtime-path drift risk identified in 0.4.
+**7.2 — Render the real event stream** — `status`, `text_delta`, tier-aware `advisory`, composed `generative_ui` dashboards (Phase 6), evidence-with-KB-source links, follow-up chips that resume the session.
+**7.3 — Close the remaining per-field honesty gap.** Remove silent per-field defaults (confidence `0.95`, boilerplate derivation text) identified in 0.4; either compute the real value or label it explicitly as unavailable, consistent with the already-fixed blanket-fabrication case.
+- Verify: the five demo questions run end-to-end in Streamlit via the BFF contract, showing correct answers, composed dashboards, KB-mapped evidence, and working follow-ups; with the backend down, every field shows an honest unavailable state — no silent defaults.
+
+---
+
+## Execution order
+
+**Phase 0 → Phase 1 ∥ Phase 2 (parallel) → Phase 3 → Phase 4 → Phase 5 → Phase 6 → Phase 7.**
+
+Phase 0 is mandatory and mostly non-code (locate dataset, commit pending fix, resolve KB split-brain, fix stream contract, build harness). Phases 1 and 2 can run in parallel since history-layer work and routing work touch different files. Every phase after 0 is gated by the harness built in 0.F — no phase is "done" until the harness shows it didn't regress the demo questions.
+
+## What changed from the prior (pre-audit) plan
+
+- Added **Phase 0 open questions** (dataset location, KB split-brain, pending uncommitted fix) that must close before feature work — none of these were visible without this audit.
+- **Phase 1 (history layer)** is now upstream of routing, because the demo questions are fundamentally history-analytics questions, not live-diagnosis questions.
+- **Visualization phase (6) is now "extend `figure_factory.py`"**, not "build from `schemas/visualization.py`" — the audit found a real, tested, pure-function pattern already in production that the prior plan didn't know about.
+- **Streamlit sync (7) is now a concrete architecture fix** (in-process → BFF HTTP contract) rather than a generic "sync" task — the audit found the exact mechanism of drift.
+- **KB consolidation (0.C) is new** — the prior plan assumed one KB; the audit found two, with production chat using the thinner, less-audited one.

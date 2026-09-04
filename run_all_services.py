@@ -260,6 +260,16 @@ def get_full_health_matrix() -> Dict[str, Dict[str, Any]]:
         "uri": "http://localhost:8502" if agent_live else "OFFLINE",
     }
 
+    advait_live = check_tcp_port("localhost", 8010)
+    advait_ok, advait_msg = check_http_url("http://localhost:8010/health") if advait_live else (False, "Port 8010 closed")
+    results["Advait Asset API Mock"] = {
+        "tier": "Tier 3 (API :8010)",
+        "live": advait_live,
+        "type": "FastAPI :8010",
+        "detail": advait_msg if advait_live else "Port 8010 closed (run datamodelservices.bat)",
+        "uri": "http://localhost:8010/api/v1" if advait_live else "FALLBACK: local JSON seed cache",
+    }
+
     return results
 
 

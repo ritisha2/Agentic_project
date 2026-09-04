@@ -50,6 +50,20 @@ class WellDiagnosticEngine:
         self.classifier = FaultClassificationEngine()
         self.anomaly_detector = MultivariateAnomalyDetector()
 
+        # Calibrate the Isolation Forest on a REAL baseline cloud reconstructed from the
+        # calibration registry's historical per-sensor statistics. Without this the model
+        # has no valid notion of "normal" and every genuine reading is misflagged as an
+        # outlier. If the registry is empty, the detector stays uncalibrated and reports
+        # so honestly (null anomaly score) rather than fabricating one.
+        try:
+            calibrated = self.anomaly_detector.fit_from_registry(self.registry)
+            if not calibrated:
+                print("[!] Anomaly detector could not calibrate from registry; "
+                      "anomaly scores will report as uncalibrated until fitted.")
+        except Exception as e:
+            print(f"[!] Anomaly detector calibration failed ({e}); "
+                  "anomaly scores will report as uncalibrated until fitted.")
+
     def evaluate_live_telemetry(
         self,
         well_id: str,
@@ -69,8 +83,8 @@ class WellDiagnosticEngine:
         norm_result = self.normalizer.normalize_live_telemetry(well_id, std_telemetry, std_prev)
         norm_vector = list(norm_result["normalized"].values())
 
-        # 2. ML Anomaly scoring
-        ml_anomaly = self.anomaly_detector.score_sample(norm_vector)
+        # 2. ML Anomaly scoring (scored against this well's own baseline model)
+        ml_anomaly = self.anomaly_detector.score_sample(norm_vector, well_id=well_id)
 
         # 3. Fault classification
         profile = self.registry.get_well_profile(well_id)
