@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # Mount BFF UI router for agent dock, workspace, and evidence stream
-app.include_router(bff_router, prefix="/api/ui")
+app.include_router(bff_router)
 
 # In-memory store for registered knowledge bases and execution runs
 REGISTERED_KNOWLEDGE_BASES: Dict[str, str] = {
