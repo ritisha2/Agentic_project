@@ -4,8 +4,6 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.agent.runtime import DiagnosticAgentRuntime
-from src.schemas.canonical import DiagnosticResult
 from src.api.rest.bff_routes import router as bff_router
 
 app = FastAPI(
@@ -64,15 +62,14 @@ def register_knowledge_base(req: RegisterKBRequest):
     return {"status": "success", "kb_id": req.kb_id, "kb_path": req.kb_path}
 
 
+from src.agent.supervisor.user_entry import UserEntryAdapter
+from src.schemas.advisory import StandardAdvisoryPayload
+
 @app.post("/diagnose")
 def run_diagnosis(req: DiagnoseRequest):
-    if req.kb_id not in REGISTERED_KNOWLEDGE_BASES:
-        raise HTTPException(status_code=404, detail=f"Knowledge base '{req.kb_id}' not found.")
-
-    kb_path = REGISTERED_KNOWLEDGE_BASES[req.kb_id]
     try:
-        runtime = DiagnosticAgentRuntime(kb_path=kb_path)
-        result: DiagnosticResult = runtime.run_diagnosis(
+        adapter = UserEntryAdapter()
+        adv = adapter.run(
             user_query=req.user_query,
             asset_id=req.asset_id
         )
@@ -82,7 +79,7 @@ def run_diagnosis(req: DiagnoseRequest):
             "user_query": req.user_query,
             "asset_id": req.asset_id,
             "kb_id": req.kb_id,
-            "result": result.model_dump(),
+            "result": adv.model_dump() if hasattr(adv, "model_dump") else dict(adv),
         }
         DIAGNOSTIC_RUNS[run_id] = run_record
         return run_record
@@ -90,22 +87,18 @@ def run_diagnosis(req: DiagnoseRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-from src.agent.objective_router import ObjectiveRouter
-from src.schemas.advisory import StandardAdvisoryPayload
-
 @app.post("/advisory", response_model=StandardAdvisoryPayload)
 def generate_advisory(req: DiagnoseRequest):
     """
     Generate Standard Advisory Response complying with Guidelines.pdf Appendix C.
-    Executes 9-Step Question-Handling Method via ObjectiveRouter.
+    Executes through UserEntryAdapter and LangGraph supervisor.
     """
     try:
-        router = ObjectiveRouter()
-        advisory: StandardAdvisoryPayload = router.route_and_execute(
+        adapter = UserEntryAdapter()
+        return adapter.run(
             user_query=req.user_query,
             asset_id=req.asset_id
         )
-        return advisory
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
