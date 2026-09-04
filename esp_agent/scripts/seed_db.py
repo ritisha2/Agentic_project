@@ -358,6 +358,60 @@ def seed_pump_curves(conn):
                 {"flow_bpd": 2100, "head_ft_per_stage": 33.5, "efficiency_pct": 58},
             ],
             "authority_level": "B"
+        },
+        {
+            "curve_id": "CURVE-ALNAS-362-S700-60HZ",
+            "pump_model": "Alnas 362 S700",
+            "manufacturer": "Alnas",
+            "stage_count": 242,
+            "frequency_hz": 60.0,
+            "ror_min_bpd": 440.0,
+            "ror_max_bpd": 880.0,
+            "bep_bpd": 692.0,
+            "curve_points": [
+                {"flow_bpd": 440, "head_ft_per_stage": 24.6, "efficiency_pct": 40},
+                {"flow_bpd": 565, "head_ft_per_stage": 23.0, "efficiency_pct": 48},
+                {"flow_bpd": 692, "head_ft_per_stage": 20.5, "efficiency_pct": 52},
+                {"flow_bpd": 786, "head_ft_per_stage": 18.0, "efficiency_pct": 50},
+                {"flow_bpd": 880, "head_ft_per_stage": 14.8, "efficiency_pct": 42}
+            ],
+            "authority_level": "C"
+        },
+        {
+            "curve_id": "CURVE-ALNAS-362-M3000-60HZ",
+            "pump_model": "Alnas 362 M3000",
+            "manufacturer": "Alnas",
+            "stage_count": 166,
+            "frequency_hz": 60.0,
+            "ror_min_bpd": 1887.0,
+            "ror_max_bpd": 3460.0,
+            "bep_bpd": 2768.0,
+            "curve_points": [
+                {"flow_bpd": 1887, "head_ft_per_stage": 36.1, "efficiency_pct": 48},
+                {"flow_bpd": 2200, "head_ft_per_stage": 33.5, "efficiency_pct": 55},
+                {"flow_bpd": 2768, "head_ft_per_stage": 29.85, "efficiency_pct": 62},
+                {"flow_bpd": 3145, "head_ft_per_stage": 26.2, "efficiency_pct": 58},
+                {"flow_bpd": 3460, "head_ft_per_stage": 21.3, "efficiency_pct": 49}
+            ],
+            "authority_level": "C"
+        },
+        {
+            "curve_id": "CURVE-ALNAS-362-M3800-60HZ",
+            "pump_model": "Alnas 362 M3800",
+            "manufacturer": "Alnas",
+            "stage_count": 155,
+            "frequency_hz": 60.0,
+            "ror_min_bpd": 2516.0,
+            "ror_max_bpd": 4717.0,
+            "bep_bpd": 3774.0,
+            "curve_points": [
+                {"flow_bpd": 2516, "head_ft_per_stage": 23.0, "efficiency_pct": 45},
+                {"flow_bpd": 3145, "head_ft_per_stage": 20.7, "efficiency_pct": 54},
+                {"flow_bpd": 3774, "head_ft_per_stage": 18.0, "efficiency_pct": 60},
+                {"flow_bpd": 4200, "head_ft_per_stage": 15.1, "efficiency_pct": 56},
+                {"flow_bpd": 4717, "head_ft_per_stage": 10.5, "efficiency_pct": 42}
+            ],
+            "authority_level": "C"
         }
     ]
 

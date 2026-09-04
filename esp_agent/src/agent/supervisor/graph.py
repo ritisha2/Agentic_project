@@ -889,11 +889,12 @@ def create_supervisor_graph():
 
         specialist_name = steps[active_step_idx]
 
+        user_query = state["request"].get("user_query") or f"Domain analysis for {specialist_name}"
         spec_input = {
             "run_id": state["run"]["run_id"],
             "objective_id": state["run"]["objective_id"],
             "asset_id": state["request"]["asset_id"],
-            "task": f"Domain analysis for {specialist_name}",
+            "task": user_query,
             "policy_context": {"telemetry": state["context"].get("telemetry")}
         }
 
@@ -1063,11 +1064,47 @@ def create_supervisor_graph():
         if obj_id == "OP06_PROCEDURE_LOOKUP":
             from src.services.procedure_knowledge import procedure_knowledge_service
             adv_info = procedure_knowledge_service.format_advisory_text(user_query, asset_id)
-            assessment = adv_info["assessment"]
-            diagnosis = adv_info["diagnosis"]
-            confidence = 0.98
-            recommendation = adv_info["recommendation"]
-            verification = adv_info["verification"]
+            kb_adv_info = adv_info
+
+            # Ingest citations into state evidence_refs
+            for c in adv_info.get("citations", []):
+                doc_id = c.get("document_id", "API_RP_11S")
+                sec = c.get("section", "Procedure")
+                ref_str = f"esp:kb:{doc_id}:{sec}"
+                if ref_str not in state["evidence_refs"]:
+                    state["evidence_refs"].append(ref_str)
+
+            # Attempt grounded LLM synthesis if LLM is online, fallback to deterministic SOP
+            if llm_adapter.gateway.is_available():
+                try:
+                    llm_res = llm_adapter.generate_advisory_from_compact_context(compact_ctx)
+                    if isinstance(llm_res, tuple):
+                        adv_schema = llm_res[0]
+                        llm_adv = adv_schema.model_dump() if hasattr(adv_schema, "model_dump") else (adv_schema if isinstance(adv_schema, dict) else {})
+                    elif hasattr(llm_res, "model_dump"):
+                        llm_adv = llm_res.model_dump()
+                    elif isinstance(llm_res, dict):
+                        llm_adv = llm_res
+                    else:
+                        llm_adv = {}
+                    assessment = llm_adv.get("assessment") or adv_info["assessment"]
+                    diagnosis = llm_adv.get("diagnosis") or adv_info["diagnosis"]
+                    recommendation = llm_adv.get("recommendation") or adv_info["recommendation"]
+                    verification = llm_adv.get("verification") or adv_info["verification"]
+                    confidence = float(llm_adv.get("confidence", 0.95))
+                except Exception as ex:
+                    logger.warning(f"OP06 LLM advisory synthesis fallback to template: {ex}")
+                    assessment = adv_info["assessment"]
+                    diagnosis = adv_info["diagnosis"]
+                    confidence = 0.98
+                    recommendation = adv_info["recommendation"]
+                    verification = adv_info["verification"]
+            else:
+                assessment = adv_info["assessment"]
+                diagnosis = adv_info["diagnosis"]
+                confidence = 0.98
+                recommendation = adv_info["recommendation"]
+                verification = adv_info["verification"]
         elif obj_id == "OP01_CURRENT_STATUS":
             tel = state["context"].get("telemetry", {})
             p_intake = tel.get("intake_pressure", "N/A")
@@ -1259,7 +1296,7 @@ def create_supervisor_graph():
         # live fault classification is the single highest-value evidence this agent can surface —
         # then fill remaining slots from the rest of the list in its existing order.
         all_refs = state["evidence_refs"]
-        priority_refs = [r for r in all_refs if str(r).startswith(("EVID-VFD-", "EVID-ML-", "esp:model:"))]
+        priority_refs = [r for r in all_refs if str(r).startswith(("EVID-VFD-", "EVID-ML-", "esp:model:", "esp:kb:", "EVID-KB-"))]
         remaining_refs = [r for r in all_refs if r not in priority_refs]
         capped_refs = (priority_refs + remaining_refs)[:8]
         evidence_items = [
@@ -1319,8 +1356,37 @@ def create_supervisor_graph():
         if dt_slope or delta_p or torque_p:
             trend_desc = f"Thermal slope: {dt_slope:+.2f}°C/hr | Differential Head: {delta_p:.1f} PSI | Torque proxy: {torque_p:.3f} A/Hz"
 
-        # Baseline deviations (Expected vs Actual)
-        deviations_list = state["context"].get("history_analytics", {}).get("deviations", [])
+        # Baseline deviations / Thresholds table (Expected vs Actual)
+        if obj_id == "OP06_PROCEDURE_LOOKUP" and 'kb_adv_info' in locals():
+            deviations_list = kb_adv_info.get("thresholds_table", [])
+            prohibited = kb_adv_info.get("prohibited_actions", [])
+            constraints_list = list(dict.fromkeys(state["safety_state"]["blocked_actions"] + prohibited))
+            follow_ups = [
+                "👉 Inspect full document excerpt in PDF manual",
+                "👉 Compare current telemetry against these warning limits",
+                "👉 Check connected failure modes in Knowledge Graph"
+            ]
+            provenance_list = [
+                kb_adv_info.get("governing_standard", "API RP 11S (Authority Level A)"),
+                "Supervisor Orchestrator v7.0 (LLM Phase 10)",
+                llm_provenance_flag,
+                *data_provenance_flags,
+                f"Run ID: {run_id}"
+            ]
+        else:
+            deviations_list = state["context"].get("history_analytics", {}).get("deviations", [])
+            constraints_list = state["safety_state"]["blocked_actions"]
+            follow_ups = [
+                "Would you like me to compare this with the last 7 days?",
+                "Show forensic tipping timeline and evidence",
+                "Check governing tripping limits and SOP"
+            ]
+            provenance_list = [
+                "Supervisor Orchestrator v7.0 (LLM Phase 10)",
+                llm_provenance_flag,
+                *data_provenance_flags,
+                f"Run ID: {run_id}"
+            ]
 
         # Ranked Hypotheses
         ranked_hyps = []
@@ -1329,18 +1395,35 @@ def create_supervisor_graph():
                 ranked_hyps.append(h.model_dump() if hasattr(h, "model_dump") else dict(h))
         elif _vfd_ctx and _vfd_ctx.get("diagnostic"):
             v_diag = _vfd_ctx["diagnostic"]
+            conf_raw = v_diag.get("confidence", 0.88)
+            try:
+                if isinstance(conf_raw, str):
+                    conf_val = float(conf_raw.replace("%", "").strip()) / (100.0 if "%" in conf_raw else 1.0)
+                else:
+                    conf_val = float(conf_raw)
+            except Exception:
+                conf_val = 0.88
             ranked_hyps.append({
                 "cause": v_diag.get("primary_fault", "Normal Operation"),
-                "confidence": float(v_diag.get("confidence", 0.88)),
+                "confidence": conf_val,
                 "reasoning": v_diag.get("description", "VFD multi-parameter anomaly pattern detected."),
                 "supporting_evidence": [str(d) for d in v_diag.get("root_cause_drivers", [])]
             })
 
-        follow_ups = [
-            "Would you like me to compare this with the last 7 days?",
-            "Show forensic tipping timeline and evidence",
-            "Check governing tripping limits and SOP"
-        ]
+        if isinstance(verification, str):
+            verification = [verification]
+        elif not isinstance(verification, list):
+            verification = list(verification) if verification else []
+
+        if isinstance(constraints_list, str):
+            constraints_list = [constraints_list]
+        elif not isinstance(constraints_list, list):
+            constraints_list = list(constraints_list) if constraints_list else []
+
+        if isinstance(provenance_list, str):
+            provenance_list = [provenance_list]
+        elif not isinstance(provenance_list, list):
+            provenance_list = list(provenance_list) if provenance_list else []
 
         advisory = StandardAdvisoryPayload(
             advisory_id=f"ADV-{run_id}",
@@ -1354,10 +1437,9 @@ def create_supervisor_graph():
             risk="Medium - Operational monitoring recommended",
             recommendation=recommendation,
             expected_impact="Ensure baseline liquid rate stability.",
-            constraints=state["safety_state"]["blocked_actions"],
+            constraints=constraints_list,
             verification=verification,
-            provenance=["Supervisor Orchestrator v7.0 (LLM Phase 10)", llm_provenance_flag,
-                        *data_provenance_flags, f"Run ID: {run_id}"],
+            provenance=provenance_list,
             trend=trend_desc,
             expected_vs_actual=deviations_list,
             ranked_hypotheses=ranked_hyps,

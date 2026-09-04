@@ -71,6 +71,46 @@
       "threshold": 10.0,
       "severity": "critical",
       "description": "Current phase imbalance exceeds critical threshold of 10%."
+    },
+    {
+      "rule_id": "RULE_BACKSPIN_LOCKOUT",
+      "metric_name": "time_since_trip_seconds",
+      "operator": "<",
+      "threshold": 1800.0,
+      "severity": "critical",
+      "description": "Post-trip restart lockout active; fluid column backspin equalizing window (< 1800s)."
+    },
+    {
+      "rule_id": "RULE_CHOKE_START_FLOATERS",
+      "metric_name": "wellhead_choke_position",
+      "operator": "==",
+      "threshold": 100.0,
+      "severity": "warning",
+      "description": "Floating pump startup with wide open choke detected; must pinch to 30% to seat impellers."
+    },
+    {
+      "rule_id": "RULE_UNDERLOAD_DEADHEAD",
+      "metric_name": "primary_electrical_load",
+      "operator": "<",
+      "threshold": 80.0,
+      "severity": "critical",
+      "description": "Underload protection triggered below 80% normal current; zero fluid flow deadheading risk."
+    },
+    {
+      "rule_id": "RULE_UPTHRUST_OVERLOAD",
+      "metric_name": "primary_electrical_load",
+      "operator": ">",
+      "threshold": 110.0,
+      "severity": "warning",
+      "description": "Undersized pump running in upthrust with motor overloaded exceeding 110% nameplate current."
+    },
+    {
+      "rule_id": "RULE_WATER_CUT_DERATE",
+      "metric_name": "motor_power_loading",
+      "operator": ">",
+      "threshold": 100.0,
+      "severity": "warning",
+      "description": "High water cut density overload detected; VSD frequency reduction required to derate power."
     }
   ]
 }

@@ -66,6 +66,7 @@ class CompactContextBuilder:
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         episodic_memory: Optional[Dict[str, Any]] = None,
         telemetry_status: Optional[Dict[str, Any]] = None,
+        knowledge: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Build a compact context dict from all available supervisor state components.
@@ -170,6 +171,19 @@ class CompactContextBuilder:
                 "prior_recommendation": episodic_memory.get("last_recommendation", "Continue monitoring"),
             }
 
+        # --- Knowledge Base Context (OP06 / Diagnostic Guidance) ---
+        if knowledge:
+            compact["governing_knowledge_limits"] = [
+                {
+                    "param": k.get("parameter", "Unknown"),
+                    "envelope": k.get("normal_envelope", "Nominal"),
+                    "warning": k.get("warning_threshold", "N/A"),
+                    "trip": k.get("tripping_limit", "N/A"),
+                    "standard": k.get("governing_standard", "API RP 11S")
+                }
+                for k in knowledge[:4]
+            ]
+
         logger.debug(
             f"CompactContextBuilder: built compact context for {asset_id}/{objective_id} "
             f"with keys: {list(compact.keys())}"
@@ -197,6 +211,7 @@ class CompactContextBuilder:
             conversation_history=ctx.get("history") or None,
             episodic_memory=ctx.get("episodic_memory") or None,
             telemetry_status=ctx.get("provenance", {}).get("telemetry") or None,
+            knowledge=ctx.get("knowledge") or None,
         )
 
 

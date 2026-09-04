@@ -1,0 +1,3155 @@
+{
+  "summary": {
+    "total_queries": 300,
+    "overall_correct": 190,
+    "overall_accuracy_pct": 63.33,
+    "objective_breakdown": {
+      "OP00_OPERATIONAL_CONTROL": {
+        "total": 20,
+        "correct": 7,
+        "accuracy_pct": 35.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 7,
+          "Path_LLM_Fallback": 10,
+          "Path_B_Semantic": 3
+        }
+      },
+      "OP01_CURRENT_STATUS": {
+        "total": 20,
+        "correct": 17,
+        "accuracy_pct": 85.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 9,
+          "Path_B_Semantic": 7,
+          "Path_LLM_Fallback": 4
+        }
+      },
+      "OP02_PRODUCTION_DECLINE_RCA": {
+        "total": 20,
+        "correct": 18,
+        "accuracy_pct": 90.0,
+        "path_distribution": {
+          "Path_A_Variant_current_state_rca": 7,
+          "Path_A_Deterministic": 3,
+          "Path_B_Semantic": 10
+        }
+      },
+      "OP03_FAULT_DIAGNOSIS": {
+        "total": 20,
+        "correct": 18,
+        "accuracy_pct": 90.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 17,
+          "Path_LLM_Fallback": 1,
+          "Path_B_Semantic": 2
+        }
+      },
+      "OP04_HEALTH_ASSESSMENT": {
+        "total": 20,
+        "correct": 18,
+        "accuracy_pct": 90.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 18,
+          "Path_LLM_Fallback": 2
+        }
+      },
+      "OP05_EARLY_WARNING": {
+        "total": 20,
+        "correct": 13,
+        "accuracy_pct": 65.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 11,
+          "Path_B_Semantic": 7,
+          "Path_LLM_Fallback": 2
+        }
+      },
+      "OP06_PROCEDURE_LOOKUP": {
+        "total": 20,
+        "correct": 20,
+        "accuracy_pct": 100.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 17,
+          "Path_B_Semantic": 3
+        }
+      },
+      "OP07_GENERAL_INQUIRY": {
+        "total": 20,
+        "correct": 13,
+        "accuracy_pct": 65.0,
+        "path_distribution": {
+          "Path_A_Greeting": 6,
+          "Path_LLM_Fallback": 6,
+          "Path_B_Semantic": 5,
+          "Path_A_Deterministic": 3
+        }
+      },
+      "OP08_FLEET_INVENTORY": {
+        "total": 20,
+        "correct": 13,
+        "accuracy_pct": 65.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 13,
+          "Path_B_Semantic": 6,
+          "Path_LLM_Fallback": 1
+        }
+      },
+      "OP09_FLEET_PRODUCTION_OPTIMIZATION": {
+        "total": 20,
+        "correct": 12,
+        "accuracy_pct": 60.0,
+        "path_distribution": {
+          "Path_B_Semantic": 13,
+          "Path_A_Deterministic": 7
+        }
+      },
+      "OP10_FLEET_DESIGN_SIZING": {
+        "total": 20,
+        "correct": 9,
+        "accuracy_pct": 45.0,
+        "path_distribution": {
+          "Path_B_Semantic": 14,
+          "Path_A_Deterministic": 4,
+          "Path_LLM_Fallback": 2
+        }
+      },
+      "OP11_FLEET_MAINTENANCE_PRIORITY": {
+        "total": 20,
+        "correct": 7,
+        "accuracy_pct": 35.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 6,
+          "Path_B_Semantic": 14
+        }
+      },
+      "OP12_FLEET_CASE_ANALYTICS": {
+        "total": 20,
+        "correct": 2,
+        "accuracy_pct": 10.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 6,
+          "Path_B_Semantic": 14
+        }
+      },
+      "OP13_FLEET_EXECUTIVE_REPORTING": {
+        "total": 20,
+        "correct": 8,
+        "accuracy_pct": 40.0,
+        "path_distribution": {
+          "Path_B_Semantic": 13,
+          "Path_A_Deterministic": 7
+        }
+      },
+      "OP14_OPERATIONAL_HISTORY": {
+        "total": 20,
+        "correct": 15,
+        "accuracy_pct": 75.0,
+        "path_distribution": {
+          "Path_A_Deterministic": 10,
+          "Path_B_Semantic": 10
+        }
+      }
+    }
+  },
+  "assignments": [
+    {
+      "id": "OP00-01",
+      "query": "Jane, turn off ESP FS-031 immediately",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-02",
+      "query": "Shut down pump FS-010 right now",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-03",
+      "query": "Increase frequency on FS-010 to 60Hz and open surface choke",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-04",
+      "query": "Restart the pump on well FS-031",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-05",
+      "query": "Stop well FS-022 immediately",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-06",
+      "query": "Change frequency setpoint on FS-015 to 55 Hz",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-07",
+      "query": "Speed up well FS-031 by 5 Hz",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-08",
+      "query": "Trip the breaker on FS-004 now",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-09",
+      "query": "Kill the well FS-031 pump remotely",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-10",
+      "query": "Adjust VSD speed on FS-010 to maximum rating",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-11",
+      "query": "Set drive to 65Hz on well FS-022",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-12",
+      "query": "Turn on well FS-015 right away",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-13",
+      "query": "Emergency stop pump FS-031",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP00-14",
+      "query": "Remote shutdown for FS-008",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-15",
+      "query": "Reboot drive on well FS-010",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-16",
+      "query": "Force trip the VFD on FS-031",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-17",
+      "query": "Ramp up frequency on well FS-004 by 10 Hz",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-18",
+      "query": "Lower pump speed to 30 Hz on FS-022",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-19",
+      "query": "Cut power to wellhead ESP on FS-015",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP00-20",
+      "query": "Shut down the motor on FS-031",
+      "expected_objective": "OP00_OPERATIONAL_CONTROL",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-01",
+      "query": "How is FS-031 performing right now?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-02",
+      "query": "Show me the current operating point and condition of FS-010",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-03",
+      "query": "Is well FS-031 operating close to its Best Efficiency Point (BEP)?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-04",
+      "query": "Show me the live telemetry snapshot for FS-022",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-05",
+      "query": "What is the motor temperature and frequency on FS-004?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-06",
+      "query": "Current operational state of FS-031",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-07",
+      "query": "Is FS-010 running or stopped?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-08",
+      "query": "What is the discharge pressure on FS-015 right now?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-09",
+      "query": "Give me the operating conditions for well FS-008",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP01-10",
+      "query": "Check current status of pump FS-031",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-11",
+      "query": "What is the intake pressure (PIP) reading on FS-010?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-12",
+      "query": "How much current is FS-022 pulling right now?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-13",
+      "query": "Current pump performance of FS-031",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-14",
+      "query": "What is the live operating frequency of FS-015?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP01-15",
+      "query": "Telemetry check for FS-010",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-16",
+      "query": "Is FS-031 running within normal operating corridor?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-17",
+      "query": "Current vibration levels on FS-022",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP01-18",
+      "query": "How is well FS-004 doing today?",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-19",
+      "query": "Give me the live sensor readings for FS-031",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP01-20",
+      "query": "Current status check for well FS-010",
+      "expected_objective": "OP01_CURRENT_STATUS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-01",
+      "query": "Why did production drop on FS-031 in the last six hours?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-02",
+      "query": "What caused the liquid rate decline on well FS-010 after 02:00?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-03",
+      "query": "FS-031 is producing significantly less liquid than yesterday, diagnose root cause",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP02-04",
+      "query": "Why is well FS-022 flowing below its BEP target?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP02-05",
+      "query": "Investigate production drop on FS-015",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-06",
+      "query": "Why did BPD drop on well FS-031 this morning?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-07",
+      "query": "FS-010 has experienced a sudden flow reduction, what is the cause?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-08",
+      "query": "Production decline analysis for FS-004",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-09",
+      "query": "Why is the liquid rate tapering off on FS-031?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-10",
+      "query": "Diagnose flow rate reduction on well FS-022",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-11",
+      "query": "What is driving the loss of fluid production on FS-010?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-12",
+      "query": "Why is well FS-015 producing less liquid than design?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-13",
+      "query": "Root cause analysis for low flow on FS-031",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-14",
+      "query": "Investigate unexpected barrel per day decrease on FS-008",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-15",
+      "query": "Why has liquid rate declined on FS-004?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-16",
+      "query": "Production drop investigation for well FS-031",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.96,
+      "path_used": "Path_A_Variant_current_state_rca",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-17",
+      "query": "What caused the flowline rate to fall on FS-010?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-18",
+      "query": "Well FS-022 flow is down 25%, identify the root cause",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-19",
+      "query": "Liquid production loss diagnosis for FS-015",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP02-20",
+      "query": "Why is FS-031 underperforming its historical production rate?",
+      "expected_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-01",
+      "query": "Diagnose the high motor temperature on FS-031",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-02",
+      "query": "Why is FS-010 exhibiting excessive radial vibration?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-03",
+      "query": "What fault is causing the electrical current imbalance on FS-022?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-04",
+      "query": "Diagnose abnormal behavior on well FS-015",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-05",
+      "query": "Is FS-031 experiencing gas interference or gas locking?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-06",
+      "query": "Identify the equipment fault causing erratic motor current on FS-004",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-07",
+      "query": "Diagnose suspected mechanical pump wear on FS-010",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-08",
+      "query": "Why is motor temperature spiking to 140C on FS-031?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-09",
+      "query": "Diagnose trip reason on well FS-022",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-10",
+      "query": "Is there electrical insulation degradation on FS-015 motor?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP03-11",
+      "query": "Diagnose high vibration and low discharge pressure on FS-008",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-12",
+      "query": "Rank the likely failure mode hypotheses for FS-031",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-13",
+      "query": "Identify root cause of VSD overcurrent fault on FS-010",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-14",
+      "query": "Diagnose downhole pump problem on FS-004",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-15",
+      "query": "What equipment failure is developing on FS-022?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-16",
+      "query": "Diagnose overheating issue on well FS-031",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-17",
+      "query": "Why did the drive trip on underload on FS-015?",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP03-18",
+      "query": "Investigate abnormal pressure differential across pump on FS-010",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-19",
+      "query": "Fault diagnosis for suspected sand erosion on FS-008",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP03-20",
+      "query": "Diagnose sudden motor temperature elevation on FS-004",
+      "expected_objective": "OP03_FAULT_DIAGNOSIS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-01",
+      "query": "What is the overall health index of FS-031?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-02",
+      "query": "Evaluate the operational health condition of well FS-010",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP04-03",
+      "query": "Give me a complete health assessment for FS-022",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-04",
+      "query": "What is the composite health score and degradation state of FS-015?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-05",
+      "query": "Health index evaluation for well FS-004",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-06",
+      "query": "Assess condition of electrical and mechanical components on FS-031",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP04-07",
+      "query": "How healthy is pump FS-008 compared to its commissioning baseline?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-08",
+      "query": "Provide an equipment health summary for FS-010",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-09",
+      "query": "Assess overall health status and remaining useful life for FS-022",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-10",
+      "query": "Evaluate asset health score for well FS-015",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-11",
+      "query": "What is the current health grade of FS-004?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-12",
+      "query": "Comprehensive condition assessment for well FS-031",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-13",
+      "query": "Assess the degradation status of FS-010",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-14",
+      "query": "What is the health rating for well FS-008?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-15",
+      "query": "Health score check for FS-022",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-16",
+      "query": "Evaluate pump health index on FS-015",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-17",
+      "query": "Is FS-031 in good mechanical health?",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-18",
+      "query": "Health condition appraisal for well FS-004",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-19",
+      "query": "Provide well health assessment for FS-010",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP04-20",
+      "query": "Composite health index and run-life check for FS-031",
+      "expected_objective": "OP04_HEALTH_ASSESSMENT",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-01",
+      "query": "Are there early warning signs of failure on FS-031?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-02",
+      "query": "Detect incipient anomalies on well FS-010 before trip occurs",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-03",
+      "query": "Check for subtle thermal or vibration drift on FS-022",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-04",
+      "query": "Are there early warning signatures of gas locking on FS-015?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-05",
+      "query": "Incipient fault detection for well FS-004",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-06",
+      "query": "Is FS-031 showing early indicators of motor insulation breakdown?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-07",
+      "query": "Detect early warning anomalies on wellhead FS-008",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-08",
+      "query": "Check for subtle degradation trends on FS-010",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-09",
+      "query": "Are there pre-trip warning patterns developing on FS-022?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-10",
+      "query": "Early warning scan for electrical stress on FS-015",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-11",
+      "query": "Detect early thermal runaway symptoms on FS-031",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-12",
+      "query": "Is well FS-004 showing precursors to mechanical seizure?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-13",
+      "query": "Check for incipient sand wear signatures on FS-010",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-14",
+      "query": "Early warning analysis for well FS-008",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-15",
+      "query": "Are there early warning signals on FS-022?",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-16",
+      "query": "Scan for developing anomalies on FS-015 before alarms trigger",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-17",
+      "query": "Detect incipient failure precursors on FS-031",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP05-18",
+      "query": "Early warning assessment for motor winding on FS-004",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-19",
+      "query": "Check for early signs of cavitation on FS-010",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP05-20",
+      "query": "Incipient degradation scan for well FS-031",
+      "expected_objective": "OP05_EARLY_WARNING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP06-01",
+      "query": "What is the standard operating procedure for ESP startup ramp?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-02",
+      "query": "Lookup CCED operating procedure for high motor temperature limits",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-03",
+      "query": "What are the governing tripping thresholds for radial vibration?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-04",
+      "query": "What is the approved procedure for clearing gas lock?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-05",
+      "query": "Lookup standard operating limits for intake pressure (PIP)",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-06",
+      "query": "What is the recommended frequency ramp rate per CCED SOP?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-07",
+      "query": "Find the procedure for restarting an ESP after an underload trip",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-08",
+      "query": "What does the SOP specify for maximum allowable motor current?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-09",
+      "query": "Lookup operating guidelines for VSD frequency adjustment",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-10",
+      "query": "What is the standard procedure for thermal well shutdown?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-11",
+      "query": "Find procedure for handling high sand production on an ESP",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-12",
+      "query": "What are the manufacturer recommended operating corridor limits?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-13",
+      "query": "Lookup SOP for routine well surveillance and data logging",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-14",
+      "query": "What procedure should be followed for suspected broken shaft?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-15",
+      "query": "Find guidelines for fluid SG calibration and TDH calculation",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": true
+    },
+    {
+      "id": "OP06-16",
+      "query": "What is the SOP for VFD drive current imbalance limits?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-17",
+      "query": "Lookup CCED standard for high casing pressure management",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-18",
+      "query": "What does the procedure say about minimum submergence pressure?",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-19",
+      "query": "Find standard operating procedure for ESP commissioning",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP06-20",
+      "query": "Lookup alert response protocol for motor temperature exceeding 135C",
+      "expected_objective": "OP06_PROCEDURE_LOOKUP",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-01",
+      "query": "Hello Jane, who are you and what can you do?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-02",
+      "query": "What is an Electric Submersible Pump (ESP)?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP07-03",
+      "query": "Explain what Total Dynamic Head (TDH) means in petroleum engineering",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-04",
+      "query": "What does PIP stand for?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-05",
+      "query": "Hi there!",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-06",
+      "query": "Good morning Jane",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-07",
+      "query": "Can you explain the difference between PIP and PDP?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-08",
+      "query": "What is Best Efficiency Point (BEP)?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP07-09",
+      "query": "Thanks Jane, that was very helpful",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-10",
+      "query": "What are the main components of an ESP assembly?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-11",
+      "query": "Explain how a Variable Speed Drive (VSD) works with downhole pumps",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP07-12",
+      "query": "What causes gas locking in submersible pumps?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP07-13",
+      "query": "Hello! Are you online?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-14",
+      "query": "Define run life for an oil well ESP",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP07-15",
+      "query": "What is the function of the downhole protector and seal section?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP07-16",
+      "query": "Thank you for the explanation",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-17",
+      "query": "What does water cut mean?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-18",
+      "query": "Explain radial vibration in centrifugal pumps",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP07-19",
+      "query": "Good afternoon!",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.98,
+      "path_used": "Path_A_Greeting",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP07-20",
+      "query": "Who developed you and what is your role?",
+      "expected_objective": "OP07_GENERAL_INQUIRY",
+      "assigned_objective": "OP07_GENERAL_INQUIRY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-01",
+      "query": "Provide a fleet inventory of all active ESP wells",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-02",
+      "query": "How many wells are currently running versus shut down across the field?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-03",
+      "query": "List all ESP assets operating in Block 3",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-04",
+      "query": "Fleet overview: how many pumps are currently installed and active?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-05",
+      "query": "Show total active well count and operational breakdown across the field",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-06",
+      "query": "Fleet inventory report for CCED Farha station",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-07",
+      "query": "How many total ESPs are in the field inventory?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-08",
+      "query": "Give me the fleet status breakdown of all wells",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-09",
+      "query": "List all running ESP units across all stations",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-10",
+      "query": "What is the total number of installed ESP pumps in the registry?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-11",
+      "query": "Fleet inventory summary of all producing assets",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-12",
+      "query": "How many wells in the field are currently in standby status?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-13",
+      "query": "List all wells in Block 3 with their current running state",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-14",
+      "query": "Fleet asset census and operating status overview",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP08-15",
+      "query": "Provide an inventory list of all ESP systems in the field",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-16",
+      "query": "How many wells are operating in Farha station?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-17",
+      "query": "Summarize fleet inventory and installation count",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-18",
+      "query": "Show all assets in the fleet and whether they are online",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-19",
+      "query": "Field-wide ESP well inventory breakdown",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP08-20",
+      "query": "How many producing wells do we have across the entire field?",
+      "expected_objective": "OP08_FLEET_INVENTORY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": true
+    },
+    {
+      "id": "OP09-01",
+      "query": "Which wells across the field have the highest production upside if frequency is optimized?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-02",
+      "query": "Rank all running wells by potential production gain",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-03",
+      "query": "Fleet production optimization recommendations",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-04",
+      "query": "Which ESPs can safely increase frequency to boost total field BPD?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP00_OPERATIONAL_CONTROL",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-05",
+      "query": "Optimize frequency settings across all operating wells in Block 3",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-06",
+      "query": "Identify underperforming wells with production boost capacity",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-07",
+      "query": "Fleet-wide frequency and choke optimization analysis",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-08",
+      "query": "Which wells in the field are candidates for production rate increases?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-09",
+      "query": "Rank fleet wells by optimization opportunity",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-10",
+      "query": "How can we maximize total oil production across the fleet safely?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-11",
+      "query": "Identify operating wells with unused motor capacity for frequency boost",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-12",
+      "query": "Fleet optimization: which wells are constrained below potential?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-13",
+      "query": "Evaluate fleet-wide production uplift opportunities",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-14",
+      "query": "Rank running wells for speed adjustments to maximize field output",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-15",
+      "query": "Which wells in Farha station have the most production optimization headroom?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-16",
+      "query": "Fleet production tuning recommendations across all assets",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-17",
+      "query": "Identify wells where frequency can be increased without exceeding motor limits",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-18",
+      "query": "Rank the fleet by incremental barrels per day opportunity",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP09-19",
+      "query": "Production optimization analysis for all active ESPs",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP09-20",
+      "query": "Which wells should we throttle up to meet field production targets?",
+      "expected_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-01",
+      "query": "Which wells across the fleet have mismatched or oversized pumps?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-02",
+      "query": "Identify pumps in the field operating severely outside their Best Efficiency Point",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-03",
+      "query": "Fleet design sizing: which ESPs are operating on the far left of BEP?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-04",
+      "query": "Screen the entire fleet for pump sizing and design mismatch",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-05",
+      "query": "Which wells have pumps that are undersized for current reservoir inflow?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-06",
+      "query": "Fleet BEP compliance check: rank wells by deviation from optimal sizing",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-07",
+      "query": "Identify ESPs operating in upthrust or downthrust due to pump mis-sizing",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-08",
+      "query": "Which assets in Block 3 need pump redesign or resizing during next workover?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-09",
+      "query": "Fleet-wide assessment of pump operating point versus BEP curve",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-10",
+      "query": "Find all pumps in the field operating at less than 70% BEP flow rate",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-11",
+      "query": "Which wells have oversized pumps operating in recirculation?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-12",
+      "query": "Evaluate fleet equipment sizing and pump model fit across all wells",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-13",
+      "query": "Identify wells where current production rate does not match pump curve design",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-14",
+      "query": "Fleet design sizing analysis for upcoming workover candidate selection",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-15",
+      "query": "Which pumps in the field are operating too close to upthrust limit?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-16",
+      "query": "Rank fleet assets by degree of design mis-sizing",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-17",
+      "query": "Which wells have motors that are significantly underloaded or oversized?",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.75,
+      "path_used": "Path_LLM_Fallback",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP10-18",
+      "query": "Fleet-wide pump selection and hydraulic sizing audit",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP10-19",
+      "query": "Identify all wells where pump capacity exceeds well inflow potential",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP10-20",
+      "query": "Screen fleet for pumps operating outside recommended hydraulic corridor",
+      "expected_objective": "OP10_FLEET_DESIGN_SIZING",
+      "assigned_objective": "OP10_FLEET_DESIGN_SIZING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-01",
+      "query": "Rank all fleet wells by 24-hour failure risk to prioritize maintenance",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-02",
+      "query": "Which 5 wells across the field need immediate preventative workover?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-03",
+      "query": "Fleet maintenance priority ranking for this week",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-04",
+      "query": "Which ESPs have the highest probability of tripping or failure?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-05",
+      "query": "Prioritize maintenance interventions across the entire well fleet",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-06",
+      "query": "Identify high-risk assets requiring immediate field engineering inspection",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP11-07",
+      "query": "Rank all wells in Block 3 by remaining run-life and failure urgency",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-08",
+      "query": "Which wells should our maintenance crew service first?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-09",
+      "query": "Fleet risk matrix: rank assets from most critical to least critical",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-10",
+      "query": "Which producing wells have the shortest estimated time to failure?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-11",
+      "query": "Fleet workover prioritization based on equipment degradation",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-12",
+      "query": "Identify all wells with high thermal or vibration risk needing maintenance",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-13",
+      "query": "Rank running ESPs by urgent intervention need",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-14",
+      "query": "Which wells in Farha station should be prioritized for electrical inspection?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP11-15",
+      "query": "Maintenance ranking: which assets present the greatest unmitigated trip risk?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-16",
+      "query": "Prioritize well inspections across the fleet based on predictive risk scores",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-17",
+      "query": "Which 3 pumps in the field are closest to end of life?",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP11-18",
+      "query": "Fleet maintenance schedule optimization based on failure probabilities",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP11-19",
+      "query": "Identify wells needing immediate surface or downhole maintenance attention",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP11-20",
+      "query": "Rank all fleet assets by urgency of mechanical and electrical maintenance",
+      "expected_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "assigned_objective": "OP11_FLEET_MAINTENANCE_PRIORITY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP12-01",
+      "query": "Have we seen this high-vibration trip pattern on other wells with the same pump model?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-02",
+      "query": "Search fleet historical cases for similar gas locking events",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-03",
+      "query": "Cross-well case analytics: find similar motor burnout incidents in the fleet",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP12-04",
+      "query": "Has this underload trip signature occurred on other wells in Block 3?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP12-05",
+      "query": "Find past cases of sand erosion with similar telemetry patterns across the fleet",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-06",
+      "query": "Compare current anomaly signature against historical fleet trip cases",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-07",
+      "query": "Are there previous incidents of broken shafts with identical current profiles?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-08",
+      "query": "Search case history for electrical faults matching FS-031's pattern",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-09",
+      "query": "Cross-asset case comparison: which wells had similar thermal degradation?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-10",
+      "query": "Find past occurrences of pump cavitation across all historical records",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP12-11",
+      "query": "Compare this well's behavior to historical failure cases in the same reservoir",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP12-12",
+      "query": "Have other pumps in the field experienced sudden discharge pressure drops like this?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.6,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": true,
+      "is_match": false
+    },
+    {
+      "id": "OP12-13",
+      "query": "Search fleet incident database for similar thrust bearing failures",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-14",
+      "query": "Identify historical cases that match the current telemetry trend",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.8,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-15",
+      "query": "Cross-well analytics: what were the root causes in past similar tripping incidents?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP02_PRODUCTION_DECLINE_RCA",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-16",
+      "query": "Has this specific fault signature been resolved successfully on other wells?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-17",
+      "query": "Find precedent cases across the fleet for motor winding insulation breakdown",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-18",
+      "query": "Compare this anomaly against historical well failure benchmarks",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP05_EARLY_WARNING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-19",
+      "query": "Search cross-asset archive for similar frequency-related vibration spikes",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP03_FAULT_DIAGNOSIS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP12-20",
+      "query": "What historical fleet cases match this combination of high temp and low current?",
+      "expected_objective": "OP12_FLEET_CASE_ANALYTICS",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-01",
+      "query": "Generate executive fleet summary report for ESP operations this month",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-02",
+      "query": "Summarize fleet-wide uptime, total production, and MTBF for executive review",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-03",
+      "query": "Provide an executive KPI overview for all ESP assets in Block 3",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.7,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-04",
+      "query": "Executive summary of field production, fleet health, and active trip count",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-05",
+      "query": "What is the average Mean Time Between Failures (MTBF) across the fleet?",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-06",
+      "query": "Generate high-level operational report for asset management leadership",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-07",
+      "query": "Summarize overall fleet reliability and performance metrics for the quarter",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-08",
+      "query": "Executive dashboard overview of total field barrels and pump operating status",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-09",
+      "query": "What is the fleet availability percentage across all installed ESPs?",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-10",
+      "query": "Provide an executive briefing on field-wide ESP health and deferred production",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-11",
+      "query": "Summarize key operational risks and fleet performance for management",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-12",
+      "query": "Executive KPI scorecard: field uptime, failure rate, and optimization potential",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-13",
+      "query": "Generate executive overview of fleet health scores and workover costs",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-14",
+      "query": "Provide high-level summary of total operating hours and trip statistics",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-15",
+      "query": "Executive briefing: top 5 reliability concerns across the well fleet",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP08_FLEET_INVENTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-16",
+      "query": "Summarize fleet production efficiency and equipment availability",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP09_FLEET_PRODUCTION_OPTIMIZATION",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-17",
+      "query": "Executive report on fleet run-life trends and replacement forecasts",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP13-18",
+      "query": "Provide high-level summary of field-wide operational status and health index",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP04_HEALTH_ASSESSMENT",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-19",
+      "query": "Executive KPI report for management: Block 3 ESP operational integrity",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP13-20",
+      "query": "Generate leadership report on fleet uptime, downtime causes, and production",
+      "expected_objective": "OP13_FLEET_EXECUTIVE_REPORTING",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-01",
+      "query": "Show me the operational telemetry history for well FS-031",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-02",
+      "query": "What were the runtime hours and downtime episodes for FS-010 over the past week?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-03",
+      "query": "Retrieve historical operational window and shutdown events for FS-022",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-04",
+      "query": "Show runtime and tripping timeline for well FS-015",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-05",
+      "query": "Display historical operating parameters and corridor deviations for FS-004",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-06",
+      "query": "How many hours did FS-031 operate continuously before its last shutdown?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-07",
+      "query": "Show retrospective telemetry history for well FS-008",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-08",
+      "query": "What was the operating frequency trend on FS-010 over the last 60 hours?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-09",
+      "query": "Historical operational analysis and uptime breakdown for FS-022",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-10",
+      "query": "Show downtime transitions and trip history for well FS-015",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-11",
+      "query": "Retrieve historical operating records from the database for FS-031",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP06_PROCEDURE_LOOKUP",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-12",
+      "query": "What were the average motor temperature and current on FS-004 last week?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-13",
+      "query": "Show me the operational history and running corridor for well FS-010",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-14",
+      "query": "How many downtime transitions occurred on FS-022 in the recorded window?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-15",
+      "query": "Retrieve telemetry trend history for well FS-008",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-16",
+      "query": "Show operational timeline and parameter deviations for FS-031",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-17",
+      "query": "What was the cumulative runtime for well FS-015 over the recorded period?",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.95,
+      "path_used": "Path_A_Deterministic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-18",
+      "query": "Display historical telemetry snapshot sequence for FS-004",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP01_CURRENT_STATUS",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": false
+    },
+    {
+      "id": "OP14-19",
+      "query": "Show me the retrospective operational summary for FS-010",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    },
+    {
+      "id": "OP14-20",
+      "query": "Historical operational log and parameter trend review for well FS-031",
+      "expected_objective": "OP14_OPERATIONAL_HISTORY",
+      "assigned_objective": "OP14_OPERATIONAL_HISTORY",
+      "confidence": 0.85,
+      "path_used": "Path_B_Semantic",
+      "is_ambiguous": false,
+      "is_match": true
+    }
+  ]
+}

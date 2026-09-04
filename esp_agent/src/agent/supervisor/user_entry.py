@@ -109,7 +109,13 @@ class UserEntryAdapter:
             user_query,
             conversation_context=conversation_context,
         )
-        obj_id, conf, path, is_ambiguous = route_result
+        obj_id, conf, path, is_ambiguous = route_result[0], route_result[1], route_result[2], route_result[3]
+        obj_def = self.intent_router.registry.get(obj_id)
+        if obj_def and obj_def.scope == "fleet":
+            resolved_asset_id = "FLEET"
+        elif obj_id == "CLARIFICATION":
+            resolved_asset_id = "UNKNOWN"
+
         logger.info(
             "UserEntryAdapter: Query '%s' -> objective '%s' via %s (conf=%.2f, ambiguous=%s) session=%s",
             user_query[:40], obj_id, path, conf, is_ambiguous, session_id or "none",
@@ -158,6 +164,7 @@ class UserEntryAdapter:
                 provenance=[f"Supervisor Graph interrupt ({thread_id})"]
             )
             clarif_advisory._thread_id = thread_id
+            clarif_advisory._route_result = route_result
             if session_id:
                 self.conv_store.append(
                     session_id=session_id,
@@ -173,6 +180,7 @@ class UserEntryAdapter:
         if advisory_dict:
             advisory = StandardAdvisoryPayload(**advisory_dict)
             advisory.provenance.append(f"User Entry Adapter v7.0 ({path})")
+            advisory._route_result = route_result
             if session_id:
                 agent_content = (getattr(advisory, "assessment", None)
                                  or getattr(advisory, "diagnosis", None)

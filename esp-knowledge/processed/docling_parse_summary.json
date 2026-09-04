@@ -150,5 +150,13 @@
     "char_count": 60,
     "tables_count": 0,
     "markdown_file": "x:\\TAS\\Agentic_project\\esp-knowledge\\processed\\docling_md\\UNBRIDLED_ESP_Troubleshooting_Matrix.md"
+  },
+  {
+    "filename": "BP_ESP_Troubleshooting_Guidelines.pdf",
+    "status": "SUCCESS",
+    "elapsed_sec": 45.2,
+    "char_count": 107301,
+    "tables_count": 10,
+    "markdown_file": "x:\\TAS\\Agentic_project\\esp-knowledge\\processed\\docling_md\\BP_ESP_Troubleshooting_Guidelines.md"
   }
 ]

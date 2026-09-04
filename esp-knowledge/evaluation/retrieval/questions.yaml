@@ -98,3 +98,24 @@ questions:
     question: "Who is the authoritative source for asset registration and identity?"
     expected_knowledge_type: SOURCE_OF_TRUTH_POLICY
     expected_authority: "Advait / Client Platform Asset API"
+
+  - id: Q21
+    question: "Why is restarting an ESP during backspin prohibited?"
+    expected_knowledge_type: ALERT_PLAYBOOK
+    expected_alert_id: ALERT_BACKSPIN_TORSION_LOCKOUT
+    expected_source: "DOC-ENG-BP-001"
+
+  - id: Q22
+    question: "How should underload protection be set relative to normal operating current?"
+    expected_knowledge_type: ALERT_PLAYBOOK
+    expected_alert_id: ALERT_UNDERLOAD_DEADHEAD_SAFEGUARD
+
+  - id: Q23
+    question: "How does a water cut increase to 90% affect motor load in an ESP?"
+    expected_knowledge_type: ESP_PHYSICS
+    expected_source: "DOC-ENG-BP-001"
+
+  - id: Q24
+    question: "What is the Best Efficiency Point of an Alnas 362 S700 pump?"
+    expected_knowledge_type: ESP_PHYSICS
+    expected_source: "DOC-ENG-BP-001"

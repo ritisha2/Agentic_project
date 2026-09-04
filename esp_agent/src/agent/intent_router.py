@@ -9,9 +9,10 @@ Routing Paths:
 4. Path LLM (Fallback): LLM classifier when keyword+semantic both below confidence threshold
 """
 
+import json
 import logging
 import re
-from typing import NamedTuple, Optional, Dict, Any, List
+from typing import NamedTuple, Optional, Dict, Any, List, Tuple
 
 from src.agent.objective_registry import ObjectiveRegistry
 
@@ -20,20 +21,43 @@ logger = logging.getLogger(__name__)
 # ── B2: Threshold below which we mark ambiguous and may ask a question ────────
 _AMBIGUITY_CONFIDENCE_THRESHOLD = 0.65
 # ── B4: Threshold below which we try the LLM fallback before giving up ───────
-_LLM_FALLBACK_THRESHOLD = 0.60
+_LLM_FALLBACK_THRESHOLD = 0.78
 
 
-class RouteResult(NamedTuple):
-    """
-    Result of IntentRouter.route().
-    Backward-compatible: callers that unpack (obj_id, conf, path) still work
-    because NamedTuple supports positional unpacking of the first 3 fields.
-    Use is_ambiguous for B3 clarification gating.
-    """
+class _RouteResultBase(NamedTuple):
     objective_id: str
     confidence: float
     path: str
     is_ambiguous: bool = False
+
+
+class RouteResult(_RouteResultBase):
+    """
+    Result of IntentRouter.route().
+    Unpacks as 4 items: (objective_id, confidence, path, is_ambiguous) for 100%
+    backwards-compatibility with all callers and tests, while exposing
+    .secondary_objectives and .matched_intents as named attributes.
+    """
+    def __new__(
+        cls,
+        objective_id: str,
+        confidence: float,
+        path: str,
+        is_ambiguous: bool = False,
+        secondary_objectives: Tuple[str, ...] = (),
+        matched_intents: Tuple[str, ...] = (),
+    ):
+        obj = super().__new__(cls, objective_id, confidence, path, is_ambiguous)
+        obj.secondary_objectives = tuple(secondary_objectives)
+        obj.matched_intents = tuple(matched_intents)
+        return obj
+
+    def __repr__(self):
+        return (
+            f"RouteResult(objective_id={self.objective_id!r}, confidence={self.confidence!r}, "
+            f"path={self.path!r}, is_ambiguous={self.is_ambiguous!r}, "
+            f"secondary_objectives={self.secondary_objectives!r}, matched_intents={self.matched_intents!r})"
+        )
 
 
 class IntentRouter:
@@ -73,64 +97,167 @@ class IntentRouter:
                 logger.warning("IntentRouter: LLM gateway unavailable for fallback (%s)", ex)
         return self._llm_gateway
 
-    def _llm_classify(self, user_query: str) -> Optional[RouteResult]:
+    def _llm_classify(
+        self,
+        user_query: str,
+        conversation_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[RouteResult]:
         """
-        B4.T1 — Lightweight LLM classifier fallback.
-        Asks the office-server LLM to map free-form language → exactly one objective_id.
-        Only called when keyword+semantic both < _LLM_FALLBACK_THRESHOLD.
-        Returns RouteResult or None if the LLM call fails.
+        B4.T1 — Calibrated High-Precision LLM Classifier Fallback.
+        Sends a descriptive operational domain catalog to Qwen2.5-3B to classify queries
+        into Level-2 Objective IDs, extract target well, scope, and intent reasoning.
+        Returns RouteResult or None if LLM call fails.
         """
         gw = self._get_llm_gateway()
         if gw is None:
             return None
 
         objectives = self.registry.list_all()
-        obj_list = "\n".join(
-            f"- {o.objective_id}: {o.title}"
-            for o in objectives
-            if o.objective_id not in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
+
+        objective_guide = (
+            "- OP00_OPERATIONAL_CONTROL: Direct actuation or control command (Refusal Policy). Any command attempting to turn off/on, shut down, stop pump/well, start pump, reboot drive, ramp up/down, speed up/down, set frequency, adjust VSD speed, trip breaker, cut power, or kill a well.\n"
+            "- OP01_CURRENT_STATUS: Instantaneous operational state, live operating conditions, current telemetry snapshot (vibration, motor temp, frequency, amps, intake/discharge pressure), running/stopped status, or hardware nameplate specs for a specific well.\n"
+            "- OP02_PRODUCTION_DECLINE_RCA: Root cause analysis of production loss, flow rate drops, why production dropped, flowing below BEP/target, inflow performance, gas interference.\n"
+            "- OP03_FAULT_DIAGNOSIS: Root cause analysis of active faults, trips, electrical anomalies (insulation, underload, overload, ground fault), motor overheating, abnormal pressure differentials, or high vibration root cause.\n"
+            "- OP04_HEALTH_ASSESSMENT: Health index score, mechanical/electrical condition assessment, remaining useful life (RUL), degradation index, or risk horizon.\n"
+            "- OP05_EARLY_WARNING: Detecting subtle drift, precursor anomaly warnings, or anomaly scores before equipment trips.\n"
+            "- OP06_PROCEDURE_LOOKUP: Standard operating procedures (SOP), restart guides, commissioning checklists, backspin protocols, or engineering manuals.\n"
+            "- OP07_GENERAL_INQUIRY: Small talk, greetings ('hi', 'hello'), identity questions ('who are you', 'what can you do'), general ESP engineering principles or acronym definitions.\n"
+            "- OP08_FLEET_OVERVIEW: Fleet-wide status, summary across all wells in the field.\n"
+            "- OP09_FLEET_PRODUCTION_RANKING: Ranking multiple wells by production rate (best/worst producers).\n"
+            "- OP10_FLEET_DESIGN_SIZING: Pump sizing, equipment selection, stage count comparison across fleet.\n"
+            "- OP11_FLEET_ENERGY_ANALYSIS: Energy consumption, kWh/bbl, field-wide power efficiency.\n"
+            "- OP12_FLEET_EQUIPMENT_AUDIT: Equipment inventory, casing sizes, motor models across fleet.\n"
+            "- OP13_FLEET_RUN_LIFE_BENCHMARK: Run life distribution, MTBF, failure rates across fleet.\n"
+            "- OP14_OPERATIONAL_HISTORY: Historical telemetry trends, long-term logs, historical data over hours/days/weeks."
+        )
+
+        system_prompt = (
+            "You are an expert ESP (Electric Submersible Pump) Operations AI Classifier.\n"
+            "Classify the operator's query into exactly ONE primary objective ID and extract operational context.\n\n"
+            f"OPERATIONAL INTENT CATALOG:\n{objective_guide}\n\n"
+            "CLASSIFICATION RULES (evaluate top-down; first confident match wins; if two rules plausibly match, set BOTH as primary_objective + secondary_objectives rather than guessing):\n\n"
+            "1. OP00_OPERATIONAL_CONTROL — Any request to change, command, or actuate equipment state (increase/decrease/adjust/set/change frequency or speed, start, stop, shut in, reset, trip, override, reboot, restart, 'ramp up', 'ramp down', 'kill', 'bump up/down'). Applies even without an explicit asset — actuation intent alone triggers this rule. When in doubt between OP00 and any diagnostic objective, choose OP00.\n"
+            "2. OP01_CURRENT_STATUS — Asking what a specific, named asset's live/current reading, state, or value is right now (single snapshot, no comparison to history implied). Requires an asset reference (name, tag, or 'it'/'that well' resolved from prior turn context).\n"
+            "3. OP02_PRODUCTION_DECLINE_RCA — Asking why liquid rate, flow, or production has dropped/declined/is lower than expected, for a specific asset, with an implied comparison over time (production used to be higher).\n"
+            "4. OP03_FAULT_DIAGNOSIS — Asking why a specific asset tripped, faulted, alarmed, shut down unexpectedly, or is behaving abnormally right now (not a gradual decline — an event or fault state).\n"
+            "5. OP04_HEALTH_ASSESSMENT — Asking for an overall health/condition assessment or score for a specific asset, without a specific complaint or triggering event (general 'how is this pump doing' without decline or fault language).\n"
+            "6. OP05_EARLY_WARNING — Asking about anomalies, deviations from baseline, or emerging/early-stage issues for a specific asset, phrased proactively ('anything to watch for', 'early signs of trouble', 'flag any anomalies').\n"
+            "7. OP06_PROCEDURE_LOOKUP — Asking for a standard operating procedure, checklist, troubleshooting steps, spec value, or reference to a written standard/API RP. Does not require an asset — procedures are asset-agnostic by nature.\n"
+            "8. FLEET OBJECTIVES (OP08 through OP13) — Asking for a count, total, list, summary, ranking, or comparison ACROSS assets/wells (e.g. 'how many wells', 'total assets', 'which wells need attention', 'compare pump models across the field'). Trigger phrase pattern: plural/aggregate nouns ('wells', 'assets', 'the fleet', 'all pumps') with no single asset named. This rule takes precedence over Rule 10 — absence of a named asset means CHECK THIS RULE FIRST, not general inquiry.\n"
+            "   - OP08_FLEET_INVENTORY: Count, total, list, or inventory of assets across fleet.\n"
+            "   - OP09_FLEET_PRODUCTION_OPTIMIZATION: Ranking multiple wells by production rate or headroom gain.\n"
+            "   - OP10_FLEET_DESIGN_SIZING: Pump sizing, BEP operating envelope comparison across fleet.\n"
+            "   - OP11_FLEET_MAINTENANCE_PRIORITY: Ranking wells by health index, degradation urgency, or maintenance priority.\n"
+            "   - OP12_FLEET_CASE_ANALYTICS: Incident clustering or recurring historical failure patterns across wells.\n"
+            "   - OP13_FLEET_EXECUTIVE_REPORTING: Field-wide executive KPI summary or fleet uptime dashboard.\n"
+            "9. OP14_OPERATIONAL_HISTORY — Asking about past events, downtime, run hours, or historical telemetry logs for a specific asset over a stated time window (retrospective record-keeping, not root-cause reasoning).\n"
+            "10. OP07_GENERAL_INQUIRY — ONLY when the query is: a greeting/small talk, OR a conceptual/definitional question with no asset and no fleet-aggregate framing (e.g. 'what is drawdown', 'what does BEP mean'), OR genuinely unclassifiable after checking rules 1–9. This is the last-resort rule, not a default for 'no asset mentioned' — rule 8 already covers the no-asset-but-fleet-scoped case.\n\n"
+            "TIE-BREAK: If a query matches both an aggregate pattern (rule 8) and a diagnostic pattern (rules 2–6) because it asks about a state across multiple named assets (e.g. 'why are FS-031 and FS-045 underperforming'), set primary_objective to the diagnostic rule and secondary_objectives to include the fleet objective.\n"
+            "CONFIDENCE: If no rule matches with confidence >= 0.70, do not force a classification. Return 'UNCLASSIFIED' with your best-guess reasoning.\n\n"
+            "Respond in JSON format with this exact schema:\n"
+            "{\n"
+            '  "primary_objective": "OP00_OPERATIONAL_CONTROL",\n'
+            '  "confidence": 0.95,\n'
+            '  "secondary_objectives": [],\n'
+            '  "target_well": "FS-031",\n'
+            '  "intent_reasoning": "Brief explanation"\n'
+            "}"
         )
 
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are an ESP pump monitoring assistant.\n"
-                    "Classify the operator query into exactly ONE of the objective IDs below.\n"
-                    "If the query asks to check status, inspect health, or diagnose a problem on a well, choose OP01_CURRENT_STATUS or OP03_FAULT_DIAGNOSIS.\n"
-                    "If the query is casual slang, greeting, general banter, acronym definition, conceptual overview (e.g. 'tell me about electric submersible pumps'), choose OP07_GENERAL_INQUIRY.\n"
-                    "Reply with only the objective_id, nothing else.\n\n"
-                    f"Objectives:\n{obj_list}"
-                ),
-            },
-            {"role": "user", "content": user_query},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Query: {user_query}"},
         ]
 
         try:
-            resp = gw.chat(messages=messages, max_tokens=20, temperature=0.0)
-            raw = (resp.content or "").strip().upper()
-            # Validate the returned id exists in registry
-            matched_obj = None
-            for obj in objectives:
-                if obj.objective_id in raw:
-                    matched_obj = obj.objective_id
-                    break
+            resp = gw.chat(messages=messages, max_tokens=150, temperature=0.0)
+            content = (resp.content or "").strip()
 
-            if not matched_obj and raw:
-                # Conversational response defaulting to OP07
-                matched_obj = "OP07_GENERAL_INQUIRY"
+            # Parse JSON
+            json_text = content
+            if "```json" in content:
+                json_text = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                json_text = content.split("```")[1].split("```")[0].strip()
+
+            matched_obj = None
+            conf = 0.85
+            sec_objs: List[str] = []
+            reasoning = "llm_classified"
+
+            try:
+                data = json.loads(json_text)
+                if isinstance(data, dict):
+                    cand = str(data.get("primary_objective", "")).strip().upper()
+                    if cand == "UNCLASSIFIED":
+                        matched_obj = "CLARIFICATION"
+                    else:
+                        for o in objectives:
+                            if o.objective_id == cand:
+                                matched_obj = cand
+                                break
+                    if "confidence" in data:
+                        try:
+                            conf = max(0.50, min(0.98, float(data["confidence"])))
+                        except (ValueError, TypeError):
+                            pass
+                    if "secondary_objectives" in data and isinstance(data["secondary_objectives"], list):
+                        for s in data["secondary_objectives"]:
+                            s_clean = str(s).strip().upper()
+                            if any(o.objective_id == s_clean for o in objectives) and s_clean != matched_obj:
+                                sec_objs.append(s_clean)
+                    if "intent_reasoning" in data and data["intent_reasoning"]:
+                        reasoning = str(data["intent_reasoning"])
+            except Exception:
+                pass
+
+            # Fallback regex search if JSON parsing didn't find a valid objective_id
+            if not matched_obj:
+                content_upper = content.upper()
+                if "UNCLASSIFIED" in content_upper:
+                    matched_obj = "CLARIFICATION"
+                else:
+                    for obj in objectives:
+                        if obj.objective_id in content_upper:
+                            matched_obj = obj.objective_id
+                            break
+
+            q_low = user_query.lower().strip()
+            is_vague = any(v in q_low for v in (
+                "check it", "inspect it", "look at it", "something is wrong", "what about it", "fix it",
+                "is everything okay", "everything okay", "look at things", "take a look", "check things"
+            ))
+
+            if not matched_obj and content:
+                if is_vague or any(w in q_low for w in ("okay", "look at", "check", "wrong", "fine", "things", "what's up with")):
+                    matched_obj = "OP01_CURRENT_STATUS"
+                else:
+                    matched_obj = "OP07_GENERAL_INQUIRY"
+
+            if is_vague and matched_obj == "OP07_GENERAL_INQUIRY":
+                matched_obj = "OP01_CURRENT_STATUS"
+
+            # Low confidence (< 0.70) or UNCLASSIFIED marks query ambiguous to trigger HITL clarification
+            is_ambiguous_result = is_vague or (conf < 0.70) or (matched_obj == "CLARIFICATION")
+            if matched_obj == "CLARIFICATION":
+                conf = min(conf, 0.60)
 
             if matched_obj:
-                q_low = user_query.lower().strip()
-                is_vague = any(q_low == v or q_low.startswith(v + " ") for v in (
-                    "check it", "inspect it", "look at it", "something is wrong", "what about it", "fix it"
-                ))
-                conf = 0.60 if is_vague else 0.75
+                if is_vague:
+                    conf = 0.60
                 logger.info(
-                    "IntentRouter Path LLM: '%s' → %s (conf=%.2f, ambiguous=%s)",
-                    user_query[:40], matched_obj, conf, is_vague
+                    "IntentRouter Path LLM: '%s' → %s (conf=%.2f, ambiguous=%s, reason=%s)",
+                    user_query[:40], matched_obj, conf, is_ambiguous_result, reasoning
                 )
-                return RouteResult(matched_obj, conf, "Path_LLM_Fallback", is_vague)
+                return RouteResult(
+                    matched_obj,
+                    conf,
+                    "Path_LLM_Fallback",
+                    is_ambiguous_result,
+                    tuple(sec_objs),
+                    (reasoning,)
+                )
         except Exception as ex:
             logger.warning("IntentRouter: LLM fallback call failed (%s)", ex)
         return None
@@ -170,14 +297,14 @@ class IntentRouter:
                     "IntentRouter Path A (Follow-up): '%s' → carry forward %s",
                     user_query[:40], last_obj,
                 )
-                return RouteResult(last_obj, 0.90, "Path_A_FollowUp", False)
+                return RouteResult(last_obj, 0.90, "Path_A_FollowUp", False, (), (q_stripped,))
 
         # Path C: Direct Event Mapping via ObjectiveRegistry (Single Authority)
         if event_code:
             target_id = self.registry.resolve_event_mapping(event_code)
             if target_id:
                 logger.info("IntentRouter Path C (Event): Mapped event '%s' -> %s", event_code, target_id)
-                return RouteResult(target_id, 1.0, "Path_C_Event", False)
+                return RouteResult(target_id, 1.0, "Path_C_Event", False, (), (event_code,))
 
         q_lower = user_query.lower().strip()
 
@@ -194,7 +321,7 @@ class IntentRouter:
             or any(q_collapsed.startswith(p) for p in self._GREETING_PREFIX)
         ):
             logger.info("IntentRouter Path A (Greeting): Small talk / greeting detected.")
-            return RouteResult("OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting", False)
+            return RouteResult("OP07_GENERAL_INQUIRY", 0.98, "Path_A_Greeting", False, (), (q_clean,))
 
         objectives = self.registry.list_all()
 
@@ -226,12 +353,28 @@ class IntentRouter:
         # Asset-normalized query representation so "why did FS-031 stop" matches "why did it stop"
         q_norm_asset = re.sub(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", "it", q_lower)
 
-        for kw, obj_id, conf, path_lbl, _ in rules:
+        matched_hits: List[tuple] = []
+        for kw, obj_id, conf, path_lbl, prio in rules:
             kw_lower = kw.lower()
             pattern = r"\b" + re.escape(kw_lower) + r"\b"
             if re.search(pattern, q_lower) or re.search(pattern, q_norm_asset):
-                logger.info("IntentRouter %s: Keyword '%s' -> %s", path_lbl, kw, obj_id)
-                return RouteResult(obj_id, conf, path_lbl, False)
+                matched_hits.append((kw, obj_id, conf, path_lbl, prio))
+
+        if matched_hits:
+            primary_kw, primary_obj, primary_conf, primary_path, _ = matched_hits[0]
+            sec_objs = [h[1] for h in matched_hits if h[1] != primary_obj]
+            unique_sec_objs = list(dict.fromkeys(sec_objs))
+            matched_kws = list(dict.fromkeys([h[0] for h in matched_hits]))
+            logger.info("IntentRouter %s: Primary '%s' -> %s, Secondaries=%s, Matched=%s",
+                        primary_path, primary_kw, primary_obj, unique_sec_objs, matched_kws)
+            return RouteResult(
+                primary_obj,
+                primary_conf,
+                primary_path,
+                False,
+                tuple(unique_sec_objs),
+                tuple(matched_kws)
+            )
 
         # Path B: Semantic Heuristic / Keyword Overlap Fallback
         HARD_REFUSAL_IDS = {"OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL"}
@@ -254,8 +397,14 @@ class IntentRouter:
         }
         query_tokens = set(re.findall(r"\b[a-z]{3,}\b", q_lower)) - STOP_WORDS
 
-        best_score = 0.0
-        best_obj_id = "OP07_GENERAL_INQUIRY"
+        # Actuation signal detection - if actuation verb present, do not let Path B falsely claim high confidence
+        _ACTUATION_SIGNALS = {
+            "turn", "stop", "shut", "speed", "ramp", "trip", "breaker", "kill",
+            "reboot", "set", "drive", "power", "vsd", "vfd", "choke", "restart"
+        }
+        has_actuation_signal = bool(query_tokens & _ACTUATION_SIGNALS)
+
+        candidates: List[Tuple[float, str, set]] = []
 
         for obj in objectives:
             if obj.objective_id in HARD_REFUSAL_IDS or obj.objective_id == "OP07_GENERAL_INQUIRY":
@@ -267,21 +416,36 @@ class IntentRouter:
             kw_matches = query_tokens & title_tokens
             desc_matches = query_tokens & desc_tokens
 
-            keyword_score = len(kw_matches) * 0.2 + len(desc_matches) * 0.1
+            keyword_score = len(kw_matches) * 0.25 + len(desc_matches) * 0.12
             score = keyword_score
 
-            # Only apply scope / asset tie-breaker if there is some keyword affinity
-            if keyword_score > 0:
+            # Only apply scope / asset tie-breaker if there is substantive keyword affinity (>= 0.30)
+            if keyword_score >= 0.30:
                 if is_fleet_query and obj.scope == "fleet":
-                    score += 0.35
+                    score += 0.20
                 elif has_specific_asset and obj.scope == "single":
-                    score += 0.25
+                    score += 0.15
 
-            if score > best_score:
-                best_score = score
-                best_obj_id = obj.objective_id
+            if score > 0:
+                candidates.append((score, obj.objective_id, kw_matches | desc_matches))
 
-        semantic_confidence = min(0.85, 0.5 + best_score)
+        candidates.sort(key=lambda c: c[0], reverse=True)
+
+        if candidates:
+            best_score, best_obj_id, best_matches = candidates[0]
+            is_close_race = len(candidates) > 1 and (candidates[0][0] - candidates[1][0] < 0.15)
+            semantic_confidence = min(0.85, 0.40 + best_score)
+            if is_close_race:
+                semantic_confidence = min(semantic_confidence, 0.65)
+        else:
+            best_score = 0.0
+            best_obj_id = "OP07_GENERAL_INQUIRY"
+            best_matches = set()
+            semantic_confidence = 0.40
+
+        # Actuation queries should never be handled by Path B semantic guessing
+        if has_actuation_signal:
+            semantic_confidence = min(semantic_confidence, 0.50)
 
         # ── B2.T1/T2: Ambiguity signal — compute before LLM hop ──────────────
         # Mark ambiguous when confidence is below threshold AND no specific asset was explicitly named.
@@ -293,27 +457,36 @@ class IntentRouter:
             and best_obj_id not in ("OP07_GENERAL_INQUIRY", "OP00_OPERATIONAL_CONTROL")
         )
 
-        # ── B4.T3: Short-circuit — only call LLM fallback when semantic is weak ──
-        if semantic_confidence < _LLM_FALLBACK_THRESHOLD:
-            llm_result = self._llm_classify(user_query)
+        # ── B4.T3: Short-circuit — call LLM fallback when semantic is weak or actuation is present ──
+        if semantic_confidence < _LLM_FALLBACK_THRESHOLD or has_actuation_signal:
+            llm_result = self._llm_classify(user_query, conversation_context)
             if llm_result is not None:
                 # LLM resolved intent but asset ambiguity is independent: if the
                 # query had no well context, the operator still hasn't told us WHICH asset.
                 resolved_obj = llm_result.objective_id
                 resolved_def = self.registry.get(resolved_obj)
                 requires_asset = (resolved_def is None or resolved_def.scope == "single")
-                if requires_asset and resolved_obj not in ("OP07_GENERAL_INQUIRY", "OP00_OPERATIONAL_CONTROL"):
+                is_ambiguous = llm_result.is_ambiguous
+                if resolved_obj == "CLARIFICATION":
+                    is_ambiguous = True
+                elif requires_asset and resolved_obj not in ("OP07_GENERAL_INQUIRY", "OP00_OPERATIONAL_CONTROL"):
                     has_known_well = bool(
                         (conversation_context and conversation_context.get("last_well"))
                         or has_specific_asset
                     )
                     if not has_known_well:
                         is_ambiguous = True
-                return RouteResult(llm_result.objective_id, llm_result.confidence,
-                                   llm_result.path, is_ambiguous)
+                return RouteResult(
+                    llm_result.objective_id,
+                    llm_result.confidence,
+                    llm_result.path,
+                    is_ambiguous,
+                    llm_result.secondary_objectives,
+                    llm_result.matched_intents
+                )
 
         logger.info(
             "IntentRouter Path B (Semantic): Query '%s...' -> %s (conf=%.2f, ambiguous=%s)",
             user_query[:30], best_obj_id, semantic_confidence, is_ambiguous,
         )
-        return RouteResult(best_obj_id, semantic_confidence, "Path_B_Semantic", is_ambiguous)
+        return RouteResult(best_obj_id, semantic_confidence, "Path_B_Semantic", is_ambiguous, (), tuple(best_matches))

@@ -142,8 +142,17 @@ class RetrievalService:
 
         return results
 
-    def vector_search(self, query: str, top_k: int = 4, category_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Execute 768-dim pgvector cosine similarity search over knowledge_embeddings"""
+    def vector_search(
+        self,
+        query: str,
+        top_k: int = 4,
+        category_filter: Optional[str] = None,
+        document_filter: Optional[List[str]] = None,
+        chunk_id_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Execute 768-dim pgvector cosine similarity search over knowledge_embeddings.
+        Supports Cognee-style subgraph and document-level constraints.
+        """
         model = self._get_embedding_model()
         if model is None:
             return []
@@ -164,10 +173,20 @@ class RetrievalService:
                 JOIN documents d ON ki.document_id = d.document_id
             """
             params = [query_embedding_str]
+            where_clauses = []
 
             if category_filter:
-                sql += " WHERE ki.canonical_category = %s"
+                where_clauses.append("ki.canonical_category = %s")
                 params.append(category_filter)
+            if document_filter:
+                where_clauses.append("d.document_id = ANY(%s)")
+                params.append(document_filter)
+            if chunk_id_filter:
+                where_clauses.append("ki.knowledge_id = ANY(%s)")
+                params.append(chunk_id_filter)
+
+            if where_clauses:
+                sql += " WHERE " + " AND ".join(where_clauses)
 
             sql += " ORDER BY ke.embedding <=> %s::vector ASC LIMIT %s;"
             params.extend([query_embedding_str, top_k])
@@ -195,13 +214,20 @@ class RetrievalService:
         except Exception:
             return []
 
-    def hybrid_retrieve(self, query: str, top_k: int = 5, authority_filter: str = None) -> Dict[str, Any]:
+    def hybrid_retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        authority_filter: str = None,
+        document_filter: Optional[List[str]] = None,
+        chunk_id_filter: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """
         Phase 3 Hybrid Retrieval:
         1. Exact glossary match (deterministic)
         2. Structured fault taxonomy match
         3. BM25 sparse lexical search over knowledge_items
-        4. pgvector dense semantic search
+        4. pgvector dense semantic search (with optional Cognee subgraph constraint)
         5. Candidate fusion (deduplicate by knowledge_id)
         6. Authority-level sort (A > B > C > D > E > F)
         7. Conflict detection
@@ -209,7 +235,12 @@ class RetrievalService:
         glossary_match = self.search_glossary(query)
         fault_matches = self.search_fault_taxonomy(query)
         bm25_results = self.bm25_search(query, top_k=top_k * 2)
-        vector_results = self.vector_search(query, top_k=top_k * 2)
+        vector_results = self.vector_search(
+            query,
+            top_k=top_k * 2,
+            document_filter=document_filter,
+            chunk_id_filter=chunk_id_filter
+        )
 
         # Fuse and deduplicate by knowledge_id
         seen = {}

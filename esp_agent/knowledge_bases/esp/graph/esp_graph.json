@@ -46,7 +46,9 @@
     "Pump Wear",
     "Scale Deposition",
     "Abrasive Wear",
-    "Voltage Imbalance"
+    "Voltage Imbalance",
+    "Spline Shaft Torsion Shear",
+    "Deadheading Stator Burnout"
   ],
   "symptoms": [
     "Excessive Vibration",
@@ -54,7 +56,9 @@
     "Low Intake Pressure",
     "Flow Rate Decrease",
     "Current Imbalance",
-    "Pump Efficiency Decrease"
+    "Pump Efficiency Decrease",
+    "Backspin Condition",
+    "Zero Flow Low Current"
   ],
   "relationships": [
     {
@@ -157,6 +161,35 @@
       "type": "causes",
       "target": "CURRENT_IMBALANCE",
       "mechanism": "Unbalanced phase voltage results in unbalanced motor currents and unequal heating."
+    },
+    {
+      "source": "Backspin Condition",
+      "type": "causes",
+      "target": "Spline Shaft Torsion Shear",
+      "mechanism": "Starting pump whilst rotor backspins from fluid backflow causes immediate spline shaft shear."
+    },
+    {
+      "source": "Zero Flow Low Current",
+      "type": "causes",
+      "target": "Deadheading Stator Burnout",
+      "mechanism": "Zero flow through pump removes convective fluid cooling past motor, causing stator burnout in < 1 hour."
+    },
+    {
+      "source": "Water Cut Surge",
+      "type": "causes",
+      "target": "Motor Overheating",
+      "mechanism": "Water cut jump increases fluid specific gravity to 1.05, raising required power to 128% nameplate."
     }
-  ]
+  ],
+  "node_chunk_mappings": {
+    "Motor Overheating": ["DOC-STD-API-11S_p14_c1", "DOC-AI-ADVAIT-001_p12_c2", "seed_alerts_motor_temp"],
+    "Bearing Wear": ["DOC-STD-API-11S8_p4_c1", "DOC-STD-IEC-60034-14_p8_c1"],
+    "Gas Lock": ["DOC-TB-UNBRIDLED-001_p2_c1", "DOC-OEM-BH-001_p35_c1"],
+    "Pump Wear": ["DOC-ENG-TAKACS-001_p45_c2", "DOC-OEM-WF-001_p112_c1"],
+    "Scale Deposition": ["DOC-OEM-WF-001_p88_c1"],
+    "Excessive Vibration": ["DOC-STD-API-11S8_p4_c1", "DOC-STD-IEC-60034-14_p6_c2"],
+    "Spline Shaft Torsion Shear": ["DOC-STD-API-11S1-V4_p18_c1"],
+    "Deadheading Stator Burnout": ["DOC-STD-API-11S_p22_c2"],
+    "Backspin Condition": ["DOC-STD-API-11S_p16_c1"]
+  }
 }

@@ -41,10 +41,13 @@ ASSET_SEED = next((p for p in _seed_candidates if p.exists()), _seed_candidates[
 
 
 def _file_uri(path: Path, **params) -> str:
-    """Return a file:// URI with optional query-string params for developer inspection."""
+    """Return a file:// URI with optional query-string params and PDF #page= anchors for direct viewing."""
     abs_path = str(path).replace("\\", "/")
     if params:
+        page = params.get("page")
         qs = "&".join(f"{k}={v}" for k, v in params.items() if v is not None)
+        if abs_path.lower().endswith(".pdf") and page:
+            return f"file:///{abs_path}#page={page}"
         return f"file:///{abs_path}?{qs}"
     return f"file:///{abs_path}"
 

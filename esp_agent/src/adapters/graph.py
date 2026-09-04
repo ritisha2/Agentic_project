@@ -198,10 +198,20 @@ class GraphAdapter:
             tgt = rel.get("target", "")
             rel_type = rel.get("type", "")
             if key_lower in src.lower() or key_lower in tgt.lower():
+                conn = tgt if key_lower in src.lower() else src
                 matched_traces.append({
                     "symptom_or_metric": symptom_or_metric,
                     "relationship": rel_type,
-                    "connected_node": tgt if key_lower in src.lower() else src,
-                    "full_rule": f"{src} -> {rel_type} -> {tgt}"
+                    "connected_node": conn,
+                    "full_rule": f"{src} -> {rel_type} -> {tgt}",
+                    "chunk_ids": self.get_node_chunk_ids(conn)
                 })
         return matched_traces
+
+    def get_node_chunk_ids(self, node_name: str) -> List[str]:
+        """Cognee Pattern: Resolve graph node directly to grounded vector chunk IDs."""
+        mapping = self._graph_data.get("node_chunk_mappings", {})
+        for k, v in mapping.items():
+            if k.lower() in node_name.lower() or node_name.lower() in k.lower():
+                return v
+        return []

@@ -89,6 +89,8 @@ class ObjectiveRegistry:
         """Retrieve objective definition by ID, fallback to default if unknown."""
         if objective_id in self._registry:
             return self._registry[objective_id]
+        if objective_id in ("CLARIFICATION", "UNCLASSIFIED"):
+            return None
         # Return fallback objective if ID is unrecognized
         logger.warning(f"Objective ID '{objective_id}' not found in registry. Returning default OP03_FAULT_DIAGNOSIS.")
         return self._registry.get("OP03_FAULT_DIAGNOSIS")

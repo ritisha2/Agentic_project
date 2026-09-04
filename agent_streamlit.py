@@ -13,6 +13,7 @@ and React operations center:
 import os
 import re
 import sys
+import textwrap
 import json
 import time
 import uuid
@@ -94,66 +95,530 @@ except Exception:
     except Exception:
         pass
 
-# ── Custom Dark Control-Room CSS Styling ──────────────────────────────────────
+# ── Precision Industrial Modernism — Light Mode Design System ───────────────
 st.markdown("""
 <style>
-    /* Dark Theme Accents */
-    .metric-card {
-        background: rgba(22, 27, 34, 0.75);
-        border: 1px solid rgba(48, 54, 61, 0.8);
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* Global Font & Theme Overrides */
+html, body, [class*="css"], .stApp {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background-color: #F8FAFC !important;
+    color: #0F172A !important;
+}
+
+/* Dynamic Viewport & Layout Optimization (Horizontal & Vertical Fluidity) */
+.main {
+    display: flex;
+    justify-content: center;
+}
+
+.main .block-container {
+    max-width: 1180px !important;
+    width: 100% !important;
+    padding-top: 1.75rem !important;
+    padding-bottom: 140px !important; /* Prevents floating prompt box from clipping/covering lowest message */
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    margin: 0 auto !important;
+}
+
+@media (max-width: 900px) {
+    .main .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-bottom: 130px !important;
     }
-    .status-badge-normal {
-        color: #3fb950;
-        background: rgba(63, 185, 80, 0.15);
-        border: 1px solid #3fb950;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.88rem;
+}
+
+/* Pinned Bottom Viewport Fix (Elevation & Floating Safe-Zone) */
+div[data-testid="stBottom"] {
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, rgba(248, 250, 252, 0.92) 25%, #F8FAFC 60%) !important;
+    padding-bottom: 24px !important;
+    padding-top: 16px !important;
+    border-top: none !important;
+}
+
+div[data-testid="stBottom"] > div {
+    max-width: 1180px !important;
+    margin: 0 auto !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    box-sizing: border-box !important;
+}
+
+@media (max-width: 900px) {
+    div[data-testid="stBottom"] > div {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
-    .status-badge-risk {
-        color: #d29922;
-        background: rgba(210, 153, 34, 0.15);
-        border: 1px solid #d29922;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.88rem;
-    }
-    .status-badge-critical {
-        color: #f85149;
-        background: rgba(248, 81, 73, 0.15);
-        border: 1px solid #f85149;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.88rem;
-    }
-    .card-title {
-        color: #8b949e;
-        font-size: 0.82rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 6px;
-    }
-    .action-box {
-        background: rgba(56, 139, 253, 0.08);
-        border-left: 4px solid #58a6ff;
-        border-radius: 4px 8px 8px 4px;
-        padding: 14px 18px;
-        margin: 12px 0;
-    }
-    .clarif-box {
-        background: rgba(210, 153, 34, 0.12);
-        border: 1px solid #d29922;
-        border-radius: 8px;
-        padding: 14px 18px;
-        margin: 10px 0;
-    }
+}
+
+/* Prompt Input Box Elevation, Focus State & Viewport Padding */
+div[data-testid="stChatInput"] {
+    width: 100% !important;
+    margin: 0 auto !important;
+}
+
+div[data-testid="stChatInput"] textarea {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 0.95rem !important;
+    color: #0F172A !important;
+}
+
+div[data-testid="stChatInput"] > div {
+    border: 1.5px solid #CBD5E1 !important;
+    border-radius: 16px !important;
+    background-color: #FFFFFF !important;
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04) !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease !important;
+}
+
+div[data-testid="stChatInput"] > div:focus-within {
+    border-color: #0284C7 !important;
+    box-shadow: 0 6px 24px -2px rgba(2, 132, 199, 0.2), 0 2px 8px -1px rgba(2, 132, 199, 0.08) !important;
+    transform: translateY(-1px);
+}
+
+div[data-testid="stChatInput"] button {
+    color: #0284C7 !important;
+}
+
+/* Sidebar Modern Light Styling */
+section[data-testid="stSidebar"] {
+    background-color: #FFFFFF !important;
+    border-right: 1px solid #E2E8F0 !important;
+    box-shadow: 2px 0 8px rgba(15, 23, 42, 0.02) !important;
+}
+
+/* Chat Messages Light Mode Styling */
+.stChatMessage {
+    background-color: transparent !important;
+    padding: 8px 0px !important;
+}
+
+div[data-testid="stChatMessage"]:has(div[data-testid="chatAvatarIcon-user"]) {
+    background: #F1F5F9 !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 12px !important;
+    padding: 12px 18px !important;
+    margin-bottom: 12px !important;
+}
+
+div[data-testid="stChatMessage"]:has(div[data-testid="chatAvatarIcon-assistant"]) {
+    background: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 12px !important;
+    padding: 14px 20px !important;
+    margin-bottom: 16px !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Modern Technical Objective Ribbon */
+.obj-ribbon {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+.ribbon-diagnostic {
+    background: #F0F9FF;
+    border: 1px solid #BAE6FD;
+    color: #0284C7;
+}
+.ribbon-status {
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    color: #334155;
+}
+.ribbon-refusal {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    color: #DC2626;
+}
+.ribbon-health {
+    background: #ECFDF5;
+    border: 1px solid #A7F3D0;
+    color: #059669;
+}
+.ribbon-kb {
+    background: #FAF5FF;
+    border: 1px solid #E9D5FF;
+    color: #7E22CE;
+}
+.kb-standard-banner {
+    background: #F5F3FF;
+    border: 1px solid #DDD6FE;
+    border-left: 4px solid #7C3AED;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+.kb-standard-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #5B21B6;
+}
+.kb-auth-pill {
+    display: inline-block;
+    background: #EDE9FE;
+    color: #6D28D9;
+    border: 1px solid #C4B5FD;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-left: 6px;
+}
+.kb-prohibited-alert {
+    background: #FFF1F2;
+    border: 1px solid #FECDD3;
+    border-left: 4px solid #E11D48;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+.kb-prohibited-title {
+    font-weight: 700;
+    color: #BE123C;
+    font-size: 0.88rem;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ribbon-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.ribbon-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.ribbon-pill {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.ribbon-pill-conf {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    color: #0F172A;
+}
+.ribbon-pill-path {
+    background: rgba(0, 0, 0, 0.04);
+    color: #475569;
+}
+.ribbon-well-pill {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    color: #0F172A;
+}
+.ribbon-submeta {
+    font-size: 0.75rem;
+    color: #64748B;
+    margin-top: -6px;
+    margin-bottom: 12px;
+    padding: 2px 8px;
+}
+
+/* Section Card */
+.section-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+.section-badge-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #F1F5F9;
+    padding-bottom: 8px;
+    flex-wrap: wrap;
+}
+.section-step {
+    background: #0284C7;
+    color: #FFFFFF;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.section-heading {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.status-pill {
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.status-pill-normal {
+    background: #ECFDF5;
+    border: 1px solid #6EE7B7;
+    color: #047857;
+}
+.status-pill-risk {
+    background: #FFFBEB;
+    border: 1px solid #FCD34D;
+    color: #B45309;
+}
+.status-pill-critical {
+    background: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    color: #B91C1C;
+}
+.score-pill {
+    background: #F0F9FF;
+    border: 1px solid #BAE6FD;
+    color: #0369A1;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.section-content {
+    color: #1E293B;
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+/* KPI Dynamic Grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+.kpi-tile {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+.kpi-title {
+    font-size: 0.70rem;
+    font-weight: 700;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+.kpi-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0F172A;
+}
+.kpi-unit {
+    font-size: 0.75rem;
+    color: #64748B;
+    font-weight: 500;
+}
+.trend-statement {
+    font-size: 0.88rem;
+    color: #334155;
+    margin-bottom: 8px;
+}
+
+/* Corridor Modern Table */
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 6px;
+}
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+.modern-table th {
+    background: #F8FAFC;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 8px 12px;
+    border-bottom: 2px solid #E2E8F0;
+    text-align: left;
+}
+.modern-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #F1F5F9;
+    color: #1E293B;
+}
+.modern-table tr:hover {
+    background-color: #F8FAFC;
+}
+.mono-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #0F172A;
+}
+
+/* Ranked Hypothesis Cards */
+.hyp-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-left: 3px solid #0284C7;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+.hyp-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.hyp-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #0284C7;
+    margin-right: 6px;
+}
+.hyp-cause {
+    font-weight: 700;
+    color: #0F172A;
+    font-size: 0.90rem;
+}
+.hyp-conf-badge {
+    background: #E0F2FE;
+    color: #0369A1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.hyp-meter-bg {
+    background: #E2E8F0;
+    height: 4px;
+    border-radius: 2px;
+    margin-bottom: 6px;
+    overflow: hidden;
+}
+.hyp-meter-fill {
+    background: #0284C7;
+    height: 100%;
+    border-radius: 2px;
+}
+.hyp-reasoning {
+    font-size: 0.84rem;
+    color: #475569;
+    font-style: italic;
+    margin-bottom: 4px;
+}
+.hyp-evidence {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+.ev-badge {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    color: #475569;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.70rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+/* Action & Checklist */
+.action-section {
+    background: #F0FDF4 !important;
+    border: 1px solid #BBF7D0 !important;
+    border-left: 4px solid #16A34A !important;
+}
+.rec-headline {
+    color: #166534;
+    font-size: 0.92rem;
+    margin-bottom: 6px;
+}
+.rec-impact {
+    color: #15803D;
+    font-size: 0.86rem;
+    margin-bottom: 8px;
+}
+.checklist-item {
+    font-size: 0.85rem;
+    color: #1E293B;
+    padding: 3px 0;
+}
+
+/* Refusal Card */
+.refusal-card {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-left: 4px solid #DC2626;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 14px;
+}
+.refusal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #991B1B;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+}
+.refusal-body {
+    color: #7F1D1D;
+    font-size: 0.90rem;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+.refusal-footer {
+    font-size: 0.78rem;
+    color: #991B1B;
+    border-top: 1px solid #FCA5A5;
+    padding-top: 6px;
+}
+
+/* Follow-up Interactive Chips */
+.stButton > button {
+    background-color: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    color: #334155 !important;
+    border-radius: 20px !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    padding: 4px 14px !important;
+    transition: all 0.15s ease-in-out !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+.stButton > button:hover {
+    background-color: #F0F9FF !important;
+    border-color: #0284C7 !important;
+    color: #0284C7 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 6px rgba(2, 132, 199, 0.12) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -439,144 +904,365 @@ def fetch_well_diagnosis(well_id: str, latest_telemetry: Optional[Dict[str, Any]
 def format_progressive_disclosure(
     advisory: Any,
     diag: Dict[str, Any],
-    well_id: str
+    well_id: str,
+    objective_id: str = ""
 ) -> str:
-    """Formats diagnostic response into the 5-step modal diagnostic disclosure structure."""
-    status = diag.get("status", "🟢 NORMAL")
+    """
+    Dynamic Progressive Disclosure Engine (Precision Industrial Light Mode):
+    Rendered Sections = (Objective Whitelist Ceiling) ∩ (Populated Evidence in this Run)
+    Evaluated dynamically — sections appear ONLY if grounded evidence was discovered.
+    """
+    sections = []
+
+    # ── Section 1: Current Condition & Observation ───────────────────────────
+    obs_lines = []
+    status = diag.get("status") or "🟢 NORMAL"
+    status_slug = "normal" if "NORMAL" in status else ("critical" if "CRITICAL" in status or "FAULT" in status else "risk")
     score = diag.get("health_score")
-    score_str = f"{score:.1f} / 100" if score is not None else "N/A"
-    fault = diag.get("primary_fault", "Normal Operation")
+    score_str = f"{score:.1f}/100" if score is not None else None
+
+    assessment = getattr(advisory, "assessment", None)
+    if assessment and not assessment.startswith("Evaluated Well"):
+        obs_lines.append(f"<p>{assessment}</p>")
+    else:
+        obs_lines.append(f"<p>Evaluated Well <code>{well_id}</code>. Operational telemetry baseline is synchronized with SCADA Historian.</p>")
+
+    sec1_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">01</span>
+        <span class="section-heading">Current Observation</span>
+        <span class="status-pill status-pill-{status_slug}">● {status}</span>
+        {f'<span class="score-pill">Health: <strong>{score_str}</strong></span>' if score_str else ''}
+    </div>
+    <div class="section-content">
+        {"".join(obs_lines)}
+    </div>
+</div>""")
+    sections.append(sec1_html)
+
+    # ── Section 2: Established Trend & Key Dynamics ──────────────────────────
     dyn = diag.get("key_dynamics") or diag.get("dynamics") or {}
     delta_p = dyn.get("delta_p", 0.0)
     torque = dyn.get("torque_proxy", 0.0)
     dt_slope = dyn.get("thermal_rate_hr", 0.0)
-    drivers = diag.get("root_cause_drivers", [])
-
-    # STEP 1: Current Condition & Trend
-    step1_lines = [
-        f"Evaluated Well `{well_id}`. Real-time Operating Status is **{status}** with Health Score **{score_str}**."
-    ]
     trend_val = getattr(advisory, "trend", None)
-    if trend_val:
-        step1_lines.append(f"**Operational Trend:** {trend_val}")
-    elif dt_slope or delta_p or torque:
-        step1_lines.append(
-            f"**Key Dynamics:** Differential Head: **{delta_p:.1f} PSI** | "
-            f"Torque Proxy: **{torque:.3f} A/Hz** | "
-            f"Thermal Rate: **{dt_slope:+.2f}°C/hr**"
-        )
-    assessment = getattr(advisory, "assessment", None)
-    if assessment and assessment != trend_val:
-        step1_lines.append(f"{assessment}")
 
-    step1_str = "\n\n".join(step1_lines)
+    if trend_val or dt_slope or delta_p or torque:
+        sec2_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">02</span>
+        <span class="section-heading">Established Trend &amp; Key Dynamics</span>
+    </div>
+    {f'<div class="trend-statement">Operational Trend: <strong>{trend_val}</strong></div>' if trend_val else ''}
+    <div class="kpi-grid">
+        <div class="kpi-tile">
+            <div class="kpi-title">DIFFERENTIAL HEAD (ΔP)</div>
+            <div class="kpi-val">{delta_p:.1f} <span class="kpi-unit">PSI</span></div>
+        </div>
+        <div class="kpi-tile">
+            <div class="kpi-title">TORQUE PROXY</div>
+            <div class="kpi-val">{torque:.3f} <span class="kpi-unit">A/Hz</span></div>
+        </div>
+        <div class="kpi-tile">
+            <div class="kpi-title">THERMAL RATE</div>
+            <div class="kpi-val">{dt_slope:+.2f} <span class="kpi-unit">°C/hr</span></div>
+        </div>
+    </div>
+</div>""")
+        sections.append(sec2_html)
 
-    # STEP 2: Engineering Comparison (Expected vs. Actual)
+    # ── Section 3: Engineering Comparison (Expected vs. Actual Corridor) ──────
     exp_vs_act = getattr(advisory, "expected_vs_actual", [])
     if exp_vs_act and isinstance(exp_vs_act, list) and len(exp_vs_act) > 0:
-        table_rows = [
-            "| Parameter | Actual Value | Calibrated Envelope (P10–P90) | Deviation | Status |",
-            "| :--- | :--- | :--- | :--- | :--- |"
-        ]
+        row_trs = []
         for row in exp_vs_act:
             p_name = row.get("parameter", "Unknown")
             c_val = row.get("current_value", "—")
             nom = row.get("nominal_corridor", "—")
             dev = row.get("deviation_pct", "0.0%")
             st_val = row.get("status", "In Corridor")
-            st_badge = "🟢 " if st_val in ("In Corridor", "In Range") else ("🔴 " if "Above" in st_val or "Below" in st_val else "⚠️ ")
-            table_rows.append(f"| **{p_name}** | `{c_val}` | {nom} | `{dev}` | {st_badge}{st_val} |")
-        step2_str = "\n".join(table_rows)
-    else:
-        step2_str = (
-            f"* **Pump Operating Head:** `{delta_p:.1f} PSI`\n"
-            f"* **Torque Proxy:** `{torque:.3f} A/Hz`\n"
-            f"* **Thermal Slope:** `{dt_slope:+.2f}°C/hr`\n"
-            f"* **Baseline Envelope:** All parameters compared against well-specific calibrated P10–P90 operational boundaries."
-        )
+            st_cls = "status-pill-normal" if st_val in ("In Corridor", "In Range") else ("status-pill-critical" if "Above" in st_val or "Below" in st_val else "status-pill-risk")
+            row_trs.append(f"""<tr>
+                <td><strong>{p_name}</strong></td>
+                <td class="mono-val">{c_val}</td>
+                <td>{nom}</td>
+                <td class="mono-val">{dev}</td>
+                <td><span class="status-pill {st_cls}">● {st_val}</span></td>
+            </tr>""")
+        sec3_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">03</span>
+        <span class="section-heading">Engineering Comparison (Expected vs. Actual)</span>
+    </div>
+    <div class="table-wrapper">
+        <table class="modern-table">
+            <thead>
+                <tr>
+                    <th>PARAMETER</th>
+                    <th>ACTUAL VALUE</th>
+                    <th>CALIBRATED CORRIDOR (P10–P90)</th>
+                    <th>DEVIATION</th>
+                    <th>STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(row_trs)}
+            </tbody>
+        </table>
+    </div>
+</div>""")
+        sections.append(sec3_html)
 
-    # STEP 3: Deviation Detected
-    step3_lines = []
-    if drivers and isinstance(drivers, list):
+    # ── Section 4: Contributing Deviations (ONLY if populated) ────────────────
+    drivers = diag.get("root_cause_drivers", [])
+    if drivers and isinstance(drivers, list) and len(drivers) > 0:
+        dev_items = []
         for d in drivers[:4]:
             if isinstance(d, (list, tuple)) and len(d) >= 2:
-                step3_lines.append(f"- ⚠️ **{d[0]}:** `{d[1]}`")
+                dev_items.append(f'<div class="checklist-item">⚠️ <strong>{d[0]}:</strong> <code>{d[1]}</code></div>')
             elif isinstance(d, str):
-                step3_lines.append(f"- ⚠️ {d}")
-    if not step3_lines:
-        if "Normal" in fault or "NORMAL" in status:
-            step3_lines.append("- ✅ **Operating Point Stability:** Telemetry operates within the calibrated continuous envelope.")
-            step3_lines.append(f"- ✅ **Thermal Equilibrium:** Motor winding heating rate is nominal at `{dt_slope:+.2f}°C/hr`.")
-        else:
-            step3_lines.append(f"- ⚠️ **Anomaly Detected:** Multi-parameter divergence indicates `{fault}` signature.")
-            if delta_p:
-                step3_lines.append(f"- ⚠️ **Hydraulic Lift:** Differential Head shifted to `{delta_p:.1f} PSI`.")
-    step3_str = "\n".join(step3_lines)
+                dev_items.append(f'<div class="checklist-item">⚠️ {d}</div>')
+        if dev_items:
+            sec4_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">04</span>
+        <span class="section-heading">Contributing Deviations Detected</span>
+    </div>
+    <div class="section-content">
+        {''.join(dev_items)}
+    </div>
+</div>""")
+            sections.append(sec4_html)
 
-    # STEP 4: Likely Explanations (Ranked Hypotheses with Evidence)
+    # ── Section 5: Ranked Hypotheses & Explanations (ONLY if populated) ───────
     ranked_hyps = getattr(advisory, "ranked_hypotheses", [])
-    step4_lines = []
     if ranked_hyps and isinstance(ranked_hyps, list) and len(ranked_hyps) > 0:
+        hyp_cards = []
         for idx, h in enumerate(ranked_hyps, 1):
             cause = h.get("cause") or h.get("hypothesis") or "Diagnostic Anomaly"
             conf = h.get("confidence", 0.85)
-            conf_pct = f"{conf * 100:.0f}%" if isinstance(conf, (int, float)) and conf <= 1.0 else f"{conf}%"
+            try:
+                conf_float = float(str(conf).replace("%", "").strip())
+                conf_pct = f"{conf_float*100:.0f}%" if conf_float <= 1.0 else f"{conf_float:.0f}%"
+                bar_width = f"{conf_float*100:.0f}%" if conf_float <= 1.0 else f"{conf_float:.0f}%"
+            except Exception:
+                conf_pct = "85%"
+                bar_width = "85%"
             reasoning = h.get("reasoning") or h.get("description") or ""
-            step4_lines.append(f"#### {idx}. {cause} (Confidence: {conf_pct})")
-            if reasoning:
-                step4_lines.append(f"*{reasoning}*")
             supp = h.get("supporting_evidence", [])
-            if supp and isinstance(supp, list):
-                for s in supp:
-                    step4_lines.append(f"- {s}")
-    else:
-        conf_val = getattr(advisory, "confidence", 0.95)
-        conf_pct = f"{conf_val * 100:.1f}%" if isinstance(conf_val, (int, float)) and conf_val <= 1.0 else f"{conf_val}%"
-        diag_desc = getattr(advisory, "diagnosis", None) or diag.get("description") or f"{fault} pattern detected."
-        step4_lines.append(f"#### 1. {fault} (Primary Hypothesis — Confidence: {conf_pct})")
-        step4_lines.append(f"*{diag_desc}*")
-        ev_list = getattr(advisory, "evidence", [])
-        if ev_list and isinstance(ev_list, list):
-            for ev in ev_list[:3]:
-                obs = getattr(ev, "observation", str(ev))
-                step4_lines.append(f"- {obs}")
-    step4_str = "\n\n".join(step4_lines)
+            ev_badges = "".join(f'<span class="ev-badge">{s}</span>' for s in supp) if supp else ""
+            hyp_cards.append(f"""<div class="hyp-card">
+    <div class="hyp-card-header">
+        <div>
+            <span class="hyp-number">#{idx}</span>
+            <span class="hyp-cause">{cause}</span>
+        </div>
+        <span class="hyp-conf-badge">{conf_pct}</span>
+    </div>
+    <div class="hyp-meter-bg">
+        <div class="hyp-meter-fill" style="width: {bar_width};"></div>
+    </div>
+    {f'<div class="hyp-reasoning">{reasoning}</div>' if reasoning else ''}
+    {f'<div class="hyp-evidence">{ev_badges}</div>' if ev_badges else ''}
+</div>""")
+        sec5_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">05</span>
+        <span class="section-heading">Ranked Hypotheses &amp; Explanations</span>
+    </div>
+    {''.join(hyp_cards)}
+</div>""")
+        sections.append(sec5_html)
+    elif getattr(advisory, "diagnosis", None) and getattr(advisory, "diagnosis") != "Analysis complete.":
+        sec5_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">05</span>
+        <span class="section-heading">Diagnosis</span>
+    </div>
+    <div class="section-content">{advisory.diagnosis}</div>
+</div>""")
+        sections.append(sec5_html)
 
-    # STEP 5: Recommended Operational Action & Verification
-    recommendation = (
-        getattr(advisory, "recommendation", None)
-        or diag.get("action_advisory")
-        or "Maintain nominal VFD operating envelope and continue automated surveillance."
-    )
-    expected_impact = getattr(advisory, "expected_impact", None) or "Preserve equipment integrity and avoid unplanned trips."
+    # ── Section 6: Recommended Action & Verification (ONLY if populated) ─────
+    recommendation = getattr(advisory, "recommendation", None) or diag.get("action_advisory")
+    expected_impact = getattr(advisory, "expected_impact", None)
     verifications = getattr(advisory, "verification", [])
 
-    step5_lines = [
-        f"👉 **Operational Recommendation:** {recommendation}",
-        f"📈 **Expected Impact:** {expected_impact}"
-    ]
-    if verifications and isinstance(verifications, list) and len(verifications) > 0:
-        step5_lines.append("**Operator Verification Steps:**")
-        for v in verifications:
-            step5_lines.append(f"- [ ] {v}")
+    if recommendation or verifications:
+        v_items = "".join(f'<div class="checklist-item">☐ {v}</div>' for v in verifications) if verifications else ""
+        sec6_html = textwrap.dedent(f"""<div class="section-card action-section">
+    <div class="section-badge-bar">
+        <span class="section-step" style="background:#16A34A;">06</span>
+        <span class="section-heading" style="color:#166534;">Recommended Action &amp; SOP Verification</span>
+    </div>
+    {f'<div class="rec-headline">👉 <strong>Operational Recommendation:</strong> {recommendation}</div>' if recommendation else ''}
+    {f'<div class="rec-impact">📈 <strong>Expected Impact:</strong> {expected_impact}</div>' if expected_impact else ''}
+    {f'<div style="margin-top:8px;"><strong>Operator Verification Steps:</strong>{v_items}</div>' if v_items else ''}
+</div>""")
+        sections.append(sec6_html)
 
-    step5_str = "\n\n".join(step5_lines)
+    return "\n\n".join(sections) if sections else (getattr(advisory, "assessment", "Analysis complete."))
 
-    return f"""### 🔍 STEP 1: Current Condition & Trend
-{step1_str}
 
-### 📐 STEP 2: Engineering Comparison (Expected vs. Actual)
-{step2_str}
+def format_kb_modal_response(advisory: Any, well_id: str) -> str:
+    """
+    Multi-Modal Procedural Card Deck for Knowledge Base & Standard Operating Procedures (OP06).
+    Renders structured procedural cards grounded strictly in genuine citations:
+    1. Governing Standard & Authority Scope Card
+    2. Operational Thresholds & Setpoint Matrix Table
+    3. Step-by-Step SOP Execution Protocol
+    4. Prohibited Actions & Safety Lockout Alert Card
+    5. Operator Verification Checklist
+    6. Authoritative Evidence Drawer (only when genuine citations exist)
+    """
+    sections = []
 
-### ⚠️ STEP 3: Deviation Detected
-{step3_str}
+    # 1. Governing Standard & Authority Scope
+    provenance = getattr(advisory, "provenance", []) or []
+    standard_name = "API RP 11S / Industry Standard"
+    for p in provenance:
+        if any(k in p for k in ("API", "SOP", "OEM", "Authority", "IEC", "Takacs", "ISO")):
+            standard_name = p
+            break
 
-### 🧠 STEP 4: Likely Explanations (Ranked Hypotheses with Evidence)
-{step4_str}
+    assessment = getattr(advisory, "assessment", "Operational procedure retrieved from authoritative standards.")
 
-### 🛠️ STEP 5: Recommended Operational Action & Verification
-{step5_str}
-"""
+    banner_html = textwrap.dedent(f"""<div class="kb-standard-banner">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <span style="font-size:1.1rem; margin-right:6px;">📖</span>
+            <span class="kb-standard-title">{standard_name}</span>
+            <span class="kb-auth-pill">Authority Level A</span>
+        </div>
+        <span style="font-size:0.75rem; color:#6B21A8; font-weight:600;">Governing Reference</span>
+    </div>
+    <div style="font-size:0.8rem; color:#4C1D95; margin-top:4px;">
+        Authoritative Procedural Guidelines — Citations grounded in indexed engineering standards.
+    </div>
+</div>""")
+    sections.append(banner_html)
+
+    # 2. Operating Thresholds & Setpoint Table (if expected_vs_actual populated)
+    thresholds = getattr(advisory, "expected_vs_actual", []) or []
+    if thresholds:
+        rows_html = []
+        for t in thresholds:
+            param = t.get("parameter", "Parameter")
+            norm = t.get("normal", "Nominal")
+            warn = t.get("warning", "Warning")
+            trip = t.get("trip", "Critical Trip")
+            action = t.get("action", "")
+            rows_html.append(
+                f"<tr>"
+                f"<td style='font-weight:600;'>{param}</td>"
+                f"<td><code>{norm}</code></td>"
+                f"<td><span class='status-pill status-pill-risk' style='font-size:0.75rem;'>{warn}</span></td>"
+                f"<td><span class='status-pill status-pill-critical' style='font-size:0.75rem; font-weight:700;'>{trip}</span></td>"
+                f"<td style='font-size:0.8rem; color:#475569;'>{action}</td>"
+                f"</tr>"
+            )
+        table_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step" style="background:#7C3AED;">SET</span>
+        <span class="section-heading" style="color:#5B21B6;">Operational Thresholds &amp; Protective Limits</span>
+    </div>
+    <div style="overflow-x:auto; margin-top:8px;">
+        <table class="corridor-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Normal Envelope</th>
+                    <th>Warning Alarm</th>
+                    <th>Shutdown Trip</th>
+                    <th>Required Operator Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows_html)}
+            </tbody>
+        </table>
+    </div>
+</div>""")
+        sections.append(table_html)
+
+    # 3. Assessment & Procedure Detail Card
+    sec3_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">01</span>
+        <span class="section-heading">Standard Operating Procedure Protocol</span>
+    </div>
+    <div class="section-content" style="font-size:0.88rem; line-height:1.6;">
+        {assessment}
+    </div>
+</div>""")
+    sections.append(sec3_html)
+
+    # 4. Prohibited Actions & Safety Lockout Directives
+    constraints = getattr(advisory, "constraints", []) or []
+    prohibited_items = [c for c in constraints if any(w in str(c).upper() for w in ["NEVER", "CRITICAL", "PROHIBITED", "LOCKOUT", "ABORT"])]
+    if prohibited_items:
+        items_html = "".join(f"<li style='margin-bottom:4px;'>{p}</li>" for p in prohibited_items)
+        sec4_html = textwrap.dedent(f"""<div class="kb-prohibited-alert">
+    <div class="kb-prohibited-title">
+        <span>⚠️</span>
+        <span>Safety Lockout Directives &amp; Prohibited Actions</span>
+    </div>
+    <ul style="margin:0; padding-left:18px; font-size:0.84rem; color:#9F1239; line-height:1.5;">
+        {items_html}
+    </ul>
+</div>""")
+        sections.append(sec4_html)
+
+    # 5. Step-by-Step Operator Verification Checklist
+    verif = getattr(advisory, "verification", []) or []
+    if verif:
+        checklist_items = []
+        for v in verif:
+            checklist_items.append(
+                f"<div class='checklist-item'>"
+                f"<span class='check-icon'>☑</span>"
+                f"<span>{v}</span>"
+                f"</div>"
+            )
+        sec5_html = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step" style="background:#059669;">SOP</span>
+        <span class="section-heading" style="color:#065F46;">Operator Verification Protocol</span>
+    </div>
+    <div class="section-content" style="margin-top:6px;">
+        {''.join(checklist_items)}
+    </div>
+</div>""")
+        sections.append(sec5_html)
+
+    # 6. Authoritative Evidence Drawer (only when citations exist!)
+    evidence_items = getattr(advisory, "evidence", []) or []
+    if evidence_items:
+        ev_cards = []
+        for ev in evidence_items:
+            ev_dict = ev if isinstance(ev, dict) else (ev.model_dump() if hasattr(ev, "model_dump") else {})
+            s_type = ev_dict.get("source_type", "Knowledge Base")
+            obs = ev_dict.get("observation", "Verified operational limit")
+            link = ev_dict.get("source_deep_link")
+            link_html = f'<a href="{link}" target="_blank" style="margin-left:8px;font-size:11px;color:#2563EB;text-decoration:none;font-weight:600;">🔗 View Source</a>' if link else ""
+            ev_cards.append(
+                f'<div class="checklist-item" style="margin-bottom:6px;">'
+                f'<span class="ev-badge" style="background:#FAF5FF;color:#7E22CE;border:1px solid #E9D5FF;font-weight:600;margin-right:6px;">{s_type}</span> '
+                f'<span>{obs}</span>{link_html}'
+                f'</div>'
+            )
+        sec6_html = textwrap.dedent(f"""<div class="section-card" style="border-left:4px solid #7C3AED;">
+    <div class="section-badge-bar">
+        <span class="section-step" style="background:#7C3AED;">DOC</span>
+        <span class="section-heading" style="color:#5B21B6;">Authoritative Evidence &amp; Standard Citations</span>
+    </div>
+    <div class="section-content" style="padding-top:6px;">
+        {''.join(ev_cards)}
+    </div>
+</div>""")
+        sections.append(sec6_html)
+
+    return "\n\n".join(sections)
 
 
 # ── LLM Execution Provenance Parser (Fix 1 Verified) ──────────────────────────
@@ -832,12 +1518,26 @@ def main():
     st.sidebar.divider()
 
     # 1. Target Well Selector
-    assets = discover_active_assets()
-    selected_asset = st.sidebar.selectbox(
+    FLEET_OPTION = "🌐 Entire Fleet (All 29 Wells)"
+    discovered_assets = discover_active_assets()
+    selector_options = [FLEET_OPTION] + [a for a in discovered_assets if a != FLEET_OPTION]
+
+    default_idx = selector_options.index("FS-031") if "FS-031" in selector_options else 0
+
+    selected_option = st.sidebar.selectbox(
         "🛢️ Target Well Context",
-        assets,
-        index=assets.index("FS-031") if "FS-031" in assets else 0
+        selector_options,
+        index=default_idx
     )
+    selected_asset = None if selected_option == FLEET_OPTION else selected_option
+
+    # Routing Inspection & Test Mode Toggle
+    routing_test_mode = st.sidebar.toggle(
+        "🎯 Routing Test Mode",
+        value=st.session_state.get("routing_test_mode", False),
+        help="When enabled, the chatbox prints the exact resolved Objective(s), intent triggers, and candidate whitelist ceiling."
+    )
+    st.session_state.routing_test_mode = routing_test_mode
 
     # Reset diagnostic state if user switches well
     if st.session_state.active_well != selected_asset:
@@ -846,23 +1546,40 @@ def main():
         st.session_state.latest_diagnosis = None
 
     # Fetch latest telemetry snapshot for well context
-    df_telemetry = fetch_telemetry_history(selected_asset, limit=200)
-    latest_dict = df_telemetry.iloc[-1].to_dict() if not df_telemetry.empty else None
+    if selected_asset:
+        df_telemetry = fetch_telemetry_history(selected_asset, limit=200)
+        latest_dict = df_telemetry.iloc[-1].to_dict() if not df_telemetry.empty else None
+    else:
+        df_telemetry = pd.DataFrame()
+        latest_dict = None
     diagnosis = st.session_state.latest_diagnosis
 
     # Quick Suggested Prompt Buttons
     st.sidebar.markdown("### 💡 Quick Inquiries")
-    if st.sidebar.button(f"🔍 Evaluate {selected_asset} Health", use_container_width=True):
-        st.session_state._queued_query = f"Evaluate current operational health and fault status of {selected_asset}"
-        st.rerun()
+    if selected_asset:
+        if st.sidebar.button(f"🔍 Evaluate {selected_asset} Health", use_container_width=True):
+            st.session_state._queued_query = f"Evaluate current operational health and fault status of {selected_asset}"
+            st.rerun()
 
-    if st.sidebar.button(f"📈 Show Tipping Evidence", use_container_width=True):
-        st.session_state._queued_query = f"Show forensic tipping timeline and evidence for {selected_asset}"
-        st.rerun()
+        if st.sidebar.button(f"📈 Show Tipping Evidence", use_container_width=True):
+            st.session_state._queued_query = f"Show forensic tipping timeline and evidence for {selected_asset}"
+            st.rerun()
 
-    if st.sidebar.button(f"🌡️ Check Thermal & VFD Load", use_container_width=True):
-        st.session_state._queued_query = f"Check thermal stress, motor temperature, and VFD load for {selected_asset}"
-        st.rerun()
+        if st.sidebar.button(f"🌡️ Check Thermal & VFD Load", use_container_width=True):
+            st.session_state._queued_query = f"Check thermal stress, motor temperature, and VFD load for {selected_asset}"
+            st.rerun()
+    else:
+        if st.sidebar.button("📊 Fleet Inventory & Counts", use_container_width=True):
+            st.session_state._queued_query = "Total number of assets or wells present?"
+            st.rerun()
+
+        if st.sidebar.button("⚡ Fleet Production Optimization", use_container_width=True):
+            st.session_state._queued_query = "Rank fleet production optimization upside at +2 Hz"
+            st.rerun()
+
+        if st.sidebar.button("🚨 Fleet Maintenance Priority", use_container_width=True):
+            st.session_state._queued_query = "Rank wells by maintenance priority and RUL risk"
+            st.rerun()
 
     st.sidebar.divider()
     if st.sidebar.button("🗑️ Reset Chat Session", use_container_width=True):
@@ -892,7 +1609,9 @@ def main():
     st.title("🤖 Operator Chat with Agent Jane")
 
     # State Pill
-    if diagnosis and diagnosis.get("status"):
+    if not selected_asset:
+        st.caption("Active Scope: **🌐 ENTIRE FIELD (29 Wells)** | Multi-Asset Fleet Operations")
+    elif diagnosis and diagnosis.get("status"):
         stat = diagnosis["status"]
         score = diagnosis.get("health_score")
         if "STANDBY" in stat:
@@ -912,16 +1631,31 @@ def main():
     # ── Chat Stream (Full Width) ──────────────────────────────────────────────
     for msg_idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            st.markdown(msg["content"], unsafe_allow_html=True)
             if msg.get("figure") is not None:
                 st.plotly_chart(msg["figure"], use_container_width=True)
+            if msg.get("kb_modal_data") and msg["kb_modal_data"].get("citations"):
+                cits = msg["kb_modal_data"]["citations"]
+                with st.expander("🔍 Inspect Full Document Excerpts & Graph Provenance", expanded=False):
+                    st.markdown(f"**Verified Grounded Citations ({len(cits)} Indexed Chunks):**")
+                    for c_idx, c in enumerate(cits, 1):
+                        s_id = c.get("source_id", "N/A")
+                        s_type = c.get("source_type", "Knowledge Base")
+                        obs = c.get("observation", "")
+                        link = c.get("source_deep_link", "")
+                        st.markdown(f"**[{c_idx}] {s_type} — `{s_id}`**")
+                        if obs:
+                            st.info(obs)
+                        if link:
+                            st.markdown(f"[🔗 Open Direct Storage Link in DB Viewer]({link})")
             if msg.get("follow_ups"):
                 st.markdown("##### 💡 Suggested Follow-Up Inquiries:")
                 f_cols = st.columns(min(len(msg["follow_ups"]), 3))
                 for f_idx, f_text in enumerate(msg["follow_ups"]):
                     col_target = f_cols[f_idx % len(f_cols)]
-                    if col_target.button(f"👉 {f_text}", key=f"fu_{msg_idx}_{f_idx}", use_container_width=True):
-                        st.session_state._queued_query = f_text
+                    clean_btn_text = f_text.replace("👉", "").strip()
+                    if col_target.button(f"👉 {clean_btn_text}", key=f"fu_{msg_idx}_{f_idx}", use_container_width=True):
+                        st.session_state._queued_query = clean_btn_text
                         st.rerun()
 
     # ── Check Queued Quick Query ──────────────────────────────────────────────
@@ -954,54 +1688,186 @@ def main():
             diag = fetch_well_diagnosis(selected_asset, latest_dict)
             st.session_state.latest_diagnosis = diag
 
-            obj_id = getattr(adv, "objective_id", "")
-            # 5-step modal diagnostic disclosure ONLY triggers for deep diagnostic objectives
-            DIAGNOSTIC_OBJECTIVES = {
-                "OP02_PRODUCTION_DECLINE_RCA",
-                "OP03_FAULT_DIAGNOSIS",
-                "OP04_HEALTH_ASSESSMENT",
-                "OP05_EARLY_WARNING",
-            }
-            msg_fig = None
-
-            if obj_id in DIAGNOSTIC_OBJECTIVES:
-                resp_text = format_progressive_disclosure(adv, diag, selected_asset)
+            # ── Extract Detailed Routing Metadata ────────────────────────────
+            route_info = getattr(adv, "_route_result", None)
+            if route_info:
+                primary_obj = route_info.objective_id
+                conf = route_info.confidence
+                path = route_info.path
+                secondaries = list(route_info.secondary_objectives)
+                matched = list(route_info.matched_intents)
+                is_ambig = route_info.is_ambiguous
             else:
-                resp_text = (
-                    getattr(adv, "assessment", None)
-                    or getattr(adv, "recommendation", None)
-                    or "Analysis complete."
+                primary_obj = getattr(adv, "objective_id", "UNKNOWN")
+                conf = getattr(adv, "confidence", 1.0)
+                path = "Supervisor Graph"
+                secondaries = []
+                matched = []
+                is_ambig = False
+
+            conf_pct = f"{conf*100:.0f}%" if isinstance(conf, (int, float)) and conf <= 1.0 else f"{conf}%"
+            sec_str = f" | **Secondary:** `{', '.join(secondaries)}`" if secondaries else ""
+            match_str = f" | **Trigger:** `\"{', '.join(matched)}\"`" if matched else ""
+
+            # Check if user enabled Routing Test Mode (Trace Only)
+            if st.session_state.get("routing_test_mode", False):
+                ev_count = len(getattr(adv, "evidence", []))
+                resp_text = f"""### 🎯 Intent & Objective Routing Analysis
+
+- **Target Query:** *"{query_to_process}"*
+- **Primary Objective:** `{primary_obj}`
+- **Secondary Objectives:** `{', '.join(secondaries) if secondaries else 'None'}`
+- **Classification Path:** `{path}`
+- **Confidence Score:** `{conf_pct}`
+- **Matched Intent Keywords:** `{', '.join(matched) if matched else 'Contextual / Semantic'}`
+- **Target Asset Scope:** `{selected_asset}` (Ambiguous: `{is_ambig}`)
+- **Objective Whitelist Ceiling:**
+  - *Candidate Sections:* `Observation` → `Trend` → `Expected vs Actual` → `Deviations` → `Ranked Hypotheses` → `Action & Verification`
+- **Grounded Evidence Populated:** `{ev_count} verified citations retrieved`
+"""
+            else:
+                # Dynamic Progressive Disclosure for diagnostics or clean direct answer
+                DIAGNOSTIC_OBJECTIVES = {
+                    "OP02_PRODUCTION_DECLINE_RCA",
+                    "OP03_FAULT_DIAGNOSIS",
+                    "OP04_HEALTH_ASSESSMENT",
+                    "OP05_EARLY_WARNING",
+                }
+
+                ribbon_type = (
+                    "ribbon-refusal" if "OP00" in primary_obj
+                    else ("ribbon-health" if "OP04" in primary_obj
+                    else ("ribbon-diagnostic" if primary_obj in DIAGNOSTIC_OBJECTIVES
+                    else ("ribbon-kb" if "OP06" in primary_obj
+                    else "ribbon-status")))
+                )
+                badge_icon = (
+                    "🛑" if "OP00" in primary_obj
+                    else ("🩺" if "OP04" in primary_obj
+                    else ("⚡" if "OP03" in primary_obj or "OP02" in primary_obj
+                    else ("📚" if "OP06" in primary_obj
+                    else "📊")))
                 )
 
-                # Check if visual requested or OP14 operational history
-                q_low = query_to_process.lower()
-                if (obj_id == "OP14_OPERATIONAL_HISTORY" or any(w in q_low for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"])) and HAS_FIGURE_FACTORY:
-                    try:
-                        logger.info(
-                            "[Trajectory Debugging] History/Forensic visual active. Objective='%s', Query='%s', Asset='%s'",
-                            obj_id, query_to_process, selected_asset
-                        )
-                        df_win = df_telemetry.tail(60).copy() if not df_telemetry.empty else pd.DataFrame()
-                        if df_win.empty:
-                            from src.services.history_analytics import history_analytics
-                            df_win = history_analytics.fetch_history_dataframe(selected_asset, limit=60)
+                submeta_items = []
+                if secondaries:
+                    submeta_items.append(f"<strong>Secondary:</strong> {', '.join(secondaries)}")
+                if matched:
+                    submeta_items.append(f"<strong>Trigger:</strong> &ldquo;{', '.join(matched)}&rdquo;")
+                submeta_html = f'<div class="ribbon-submeta">{" &nbsp;•&nbsp; ".join(submeta_items)}</div>' if submeta_items else ""
 
-                        if not df_win.empty:
-                            meta = {
-                                "timestamp": latest_dict.get("timestamp", ""),
-                                "fault": diag.get("primary_fault", "Operational History"),
-                                "health_score": diag.get("health_score") or 95.0
-                            }
-                            prof = {}
-                            if HAS_MODELS:
-                                try:
-                                    eng = WellDiagnosticEngine()
-                                    prof = eng.registry.get_well_profile(selected_asset)
-                                except Exception:
-                                    pass
-                            msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
-                    except Exception as ef:
-                        logger.warning(f"Error rendering forensic visual: {ef}")
+                scope_label = f"Asset: <strong>{selected_asset}</strong>" if selected_asset else "Scope: <strong>Entire Fleet (29 Wells)</strong>"
+                if any(k in primary_obj for k in ("OP08", "OP09", "OP10", "OP11", "OP12", "OP13")):
+                    scope_label = "Scope: <strong>Entire Fleet (29 Wells)</strong>"
+
+                obj_badge = textwrap.dedent(f"""<div class="obj-ribbon {ribbon_type}">
+    <div class="ribbon-main">
+        <span>{badge_icon}</span>
+        <span class="ribbon-title">{primary_obj}</span>
+        <span class="ribbon-pill ribbon-pill-conf">{conf_pct}</span>
+        <span class="ribbon-pill ribbon-pill-path">{path}</span>
+    </div>
+    <div class="ribbon-meta">
+        <span class="ribbon-well-pill">{scope_label}</span>
+    </div>
+</div>{submeta_html}""")
+
+                if primary_obj in DIAGNOSTIC_OBJECTIVES:
+                    body_text = format_progressive_disclosure(adv, diag, selected_asset, primary_obj)
+                elif "OP00" in primary_obj:
+                    raw_msg = (
+                        getattr(adv, "assessment", None)
+                        or getattr(adv, "recommendation", None)
+                        or "Request refused: autonomous operational control is not permitted."
+                    )
+                    body_text = textwrap.dedent(f"""<div class="refusal-card">
+    <div class="refusal-header">
+        <span>⚠️</span>
+        <span>OPERATIONAL CONTROL COMMAND REFUSED</span>
+    </div>
+    <div class="refusal-body">
+        {raw_msg}
+    </div>
+    <div class="refusal-footer">
+        Policy: Autonomous actuation, frequency adjustment, and remote shutdown commands are locked to field engineering manual execution per <strong>API RP 11S / CCED Safety Policy</strong>.
+    </div>
+</div>""")
+                elif "OP06" in primary_obj or getattr(adv, "objective_id", "") == "OP06_PROCEDURE_LOOKUP":
+                    body_text = format_kb_modal_response(adv, selected_asset)
+                else:
+                    raw_msg = (
+                        getattr(adv, "assessment", None)
+                        or getattr(adv, "recommendation", None)
+                        or "Analysis complete."
+                    )
+                    body_text = textwrap.dedent(f"""<div class="section-card">
+    <div class="section-badge-bar">
+        <span class="section-step">INFO</span>
+        <span class="section-heading">Operational Response</span>
+    </div>
+    <div class="section-content">
+        {raw_msg}
+    </div>
+</div>""")
+                    # Render Authoritative Evidence panel if evidence items exist
+                    ev_items = getattr(adv, "evidence", []) or []
+                    ev_cards = []
+                    for ev in ev_items:
+                        ev_dict = ev if isinstance(ev, dict) else (ev.model_dump() if hasattr(ev, "model_dump") else {})
+                        s_type = ev_dict.get("source_type", "Knowledge Base")
+                        obs = ev_dict.get("observation", "Verified operational limit")
+                        link = ev_dict.get("source_deep_link")
+                        link_html = f'<a href="{link}" target="_blank" style="margin-left:8px;font-size:11px;color:#2563EB;text-decoration:none;font-weight:600;">🔗 View Source</a>' if link else ""
+                        ev_cards.append(
+                            f'<div class="checklist-item" style="margin-bottom:6px;">'
+                            f'<span class="ev-badge" style="background:#EEF2FF;color:#4F46E5;border:1px solid #C7D2FE;font-weight:600;margin-right:6px;">{s_type}</span> '
+                            f'<span>{obs}</span>{link_html}'
+                            f'</div>'
+                        )
+                    if ev_cards:
+                        ev_section = textwrap.dedent(f"""<div class="section-card" style="margin-top:12px;border-left:4px solid #4F46E5;">
+    <div class="section-badge-bar">
+        <span class="section-step" style="background:#4F46E5;">DOC</span>
+        <span class="section-heading" style="color:#3730A3;">Authoritative Evidence &amp; Standard Citations</span>
+    </div>
+    <div class="section-content" style="padding-top:6px;">
+        {''.join(ev_cards)}
+    </div>
+</div>""")
+                        body_text = f"{body_text}\n\n{ev_section}"
+                resp_text = f"{obj_badge}\n\n{body_text}"
+
+            msg_fig = None
+
+            # Check if visual requested or OP14 operational history
+            q_low = query_to_process.lower()
+            if (primary_obj == "OP14_OPERATIONAL_HISTORY" or any(w in q_low for w in ["plot", "chart", "trend", "tipping", "timeline", "evidence", "forensic"])) and HAS_FIGURE_FACTORY:
+                try:
+                    logger.info(
+                        "[Trajectory Debugging] History/Forensic visual active. Objective='%s', Query='%s', Asset='%s'",
+                        primary_obj, query_to_process, selected_asset
+                    )
+                    df_win = df_telemetry.tail(60).copy() if not df_telemetry.empty else pd.DataFrame()
+                    if df_win.empty:
+                        from src.services.history_analytics import history_analytics
+                        df_win = history_analytics.fetch_history_dataframe(selected_asset, limit=60)
+
+                    if not df_win.empty:
+                        meta = {
+                            "timestamp": latest_dict.get("timestamp", ""),
+                            "fault": diag.get("primary_fault", "Operational History"),
+                            "health_score": diag.get("health_score") or 95.0
+                        }
+                        prof = {}
+                        if HAS_MODELS:
+                            try:
+                                eng = WellDiagnosticEngine()
+                                prof = eng.registry.get_well_profile(selected_asset)
+                            except Exception:
+                                pass
+                        msg_fig = render_incident_tipping_timeline(df_win, meta, prof, height=520)
+                except Exception as ef:
+                    logger.warning(f"Error rendering forensic visual: {ef}")
 
             chat_payload = {"role": "assistant", "content": resp_text}
             if msg_fig is not None:
@@ -1009,6 +1875,11 @@ def main():
             follow_ups = getattr(adv, "follow_up_prompts", [])
             if follow_ups and isinstance(follow_ups, list):
                 chat_payload["follow_ups"] = follow_ups
+            if "OP06" in primary_obj or getattr(adv, "objective_id", "") == "OP06_PROCEDURE_LOOKUP":
+                chat_payload["kb_modal_data"] = {
+                    "citations": [e.model_dump() if hasattr(e, "model_dump") else dict(e) for e in getattr(adv, "evidence", [])],
+                    "provenance": getattr(adv, "provenance", [])
+                }
             st.session_state.chat_messages.append(chat_payload)
         st.rerun()
 

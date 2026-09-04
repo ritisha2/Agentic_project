@@ -60,4 +60,40 @@ class ConflictEngine:
                     next_verification=["1. Verify transmitter calibration.", "2. Check telemetry wiring."]
                 ))
 
+        # 3. Check Cross-Source Knowledge Base Discrepancies (e.g. Takacs Manual 140°C vs API RP 11S 150°C)
+        kb_items = [i for i in items if i.evidence_type == EvidenceType.KNOWLEDGE]
+        AUTHORITY_ORDER = {
+            AuthorityLevel.LEVEL_A_INSTALLED_APPROVED: 0,
+            AuthorityLevel.LEVEL_B_OEM: 1,
+            AuthorityLevel.LEVEL_C_CUSTOMER_ENG: 2,
+            AuthorityLevel.LEVEL_D_SITE_HISTORY: 3,
+            AuthorityLevel.LEVEL_E_INDUSTRY: 4,
+            AuthorityLevel.LEVEL_F_LLM_PRIOR: 5,
+        }
+
+        for i in range(len(kb_items)):
+            for j in range(i + 1, len(kb_items)):
+                item1 = kb_items[i]
+                item2 = kb_items[j]
+
+                # If same semantic topic or parameter but differing numeric values or limits
+                if (item1.semantic_type == item2.semantic_type or (item1.unit and item1.unit == item2.unit)) and item1.value != item2.value:
+                    rank1 = AUTHORITY_ORDER.get(item1.authority_level, 4)
+                    rank2 = AUTHORITY_ORDER.get(item2.authority_level, 4)
+
+                    higher_item = item1 if rank1 < rank2 else item2
+                    lower_item = item2 if rank1 < rank2 else item1
+
+                    conflicts.append(EvidenceConflict(
+                        conflict_id=f"CONF-KB-DISCREPANCY-{uuid.uuid4().hex[:6]}",
+                        evidence_refs=[item1.evidence_id, item2.evidence_id],
+                        conflict_type="KB_LIMIT_DISCREPANCY",
+                        values={item1.source_id: item1.value, item2.source_id: item2.value},
+                        authority_comparison=f"Authority Precedence (§3.1): {higher_item.authority_level.value} ({higher_item.source_id}) > {lower_item.authority_level.value} ({lower_item.source_id})",
+                        impact="HIGH",
+                        resolution_status="RESOLVED",
+                        resolution_method=f"Enforced Authority Precedence (§3.1): Level {higher_item.authority_level.value} ({higher_item.source_id}) overrides Level {lower_item.authority_level.value} ({lower_item.source_id}).",
+                        next_verification=[f"Verify {higher_item.source_id} governing standard documentation."]
+                    ))
+
         return conflicts

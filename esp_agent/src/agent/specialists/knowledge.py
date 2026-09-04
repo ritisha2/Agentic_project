@@ -57,8 +57,9 @@ def create_knowledge_graph():
 
         try:
             res_dict = retrieval_service.hybrid_retrieve(query=query_text, top_k=3)
-            raw_citations = res_dict.get("vector_matches", []) or res_dict.get("fault_matches", [])
-        except Exception:
+            raw_citations = res_dict.get("vector_results", []) or res_dict.get("fault_matches", [])
+        except Exception as ex:
+            logger.warning(f"Hybrid retrieval failed: {ex}")
             raw_citations = []
 
         citations = []
@@ -67,16 +68,9 @@ def create_knowledge_graph():
         for item in raw_citations:
             c_dict = item.model_dump() if hasattr(item, "model_dump") else dict(item)
             citations.append(c_dict)
-            evidence.append(f"esp:kb:{c_dict.get('document_id', 'SOP-014')}:p{c_dict.get('page', 1)}")
-
-        if not evidence:
-            evidence.append("esp:kb:SOP-014:p3")
-            citations.append({
-                "doc_id": "SOP-014",
-                "title": "ESP Low Intake Pressure Troubleshooting Procedure",
-                "authority_rank": 1,
-                "text": "For intake pressure drawdown < 300 psi, verify choke setting before increasing VSD frequency."
-            })
+            doc_id = c_dict.get("document_id") or c_dict.get("doc_id") or "KB"
+            page_num = c_dict.get("page", 1)
+            evidence.append(f"esp:kb:{doc_id}:p{page_num}")
 
         return {"citations": citations, "evidence_refs": evidence}
 
