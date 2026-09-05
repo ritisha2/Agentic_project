@@ -48,7 +48,7 @@ def clean_col_key(col_name: str) -> str:
     s = re.sub(r'\s+', ' ', s).strip()
 
     c_low = s.lower()
-    if "report" in c_low and "date" in c_low:
+    if c_low in ["timestamp", "time", "datetime", "ts"] or ("report" in c_low and "date" in c_low):
         return "Report_DateTime"
     if "file" in c_low and "date" in c_low:
         return "File_DateTime"
@@ -68,7 +68,7 @@ def clean_col_key(col_name: str) -> str:
         return "Leak Current Ct"
     if "volt" in c_low:
         return "Volt"
-    if "amp" in c_low or "load" in c_low:
+    if ("amp" in c_low and "timestamp" not in c_low) or "load" in c_low:
         return "VSD Amps/Load"
     if "freq" in c_low or "hz" in c_low:
         return "Frequency"
@@ -95,13 +95,13 @@ class WellCalibrationRegistry:
 
     def __init__(
         self,
-        categorized_dir: Optional[str] = None,
+        categorized_dir: str = r"C:\Users\admin.DESKTOP-17T37DJ\Desktop\cced\categorized_wells",
         registry_file: Optional[str] = None
     ):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.categorized_dir = categorized_dir or os.path.join(base_dir, "categorized_wells")
+        self.categorized_dir = categorized_dir
         if registry_file is None:
             # Default to registry JSON in models folder or parent directory
+            base_dir = os.path.dirname(os.path.abspath(__file__))
             registry_file = os.path.join(base_dir, "well_calibration_registry.json")
             if not os.path.exists(registry_file):
                 parent_reg = os.path.join(os.path.dirname(base_dir), "well_calibration_registry.json")

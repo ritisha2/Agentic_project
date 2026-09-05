@@ -56,6 +56,7 @@ class UserEntryAdapter:
         request_id: str = "REQ-001",
         tenant_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        telemetry_override: Optional[Dict[str, Any]] = None,
     ) -> StandardAdvisoryPayload:
         """
         Classify intent, initialize AgentState, and execute Supervisor Graph.
@@ -76,12 +77,20 @@ class UserEntryAdapter:
         """
         # ── Resolve implicit well from conversation memory (A3.T1) ────────────
         resolved_asset_id = asset_id
+        if not resolved_asset_id or resolved_asset_id in ("UNKNOWN", "None", ""):
+            # Check user_query for explicit well identifier (e.g. FS-010, FSWS-001-A, FNW-01)
+            import re
+            m = re.search(r'\b(FSWS-[A-Za-z0-9\-]+|FS-[A-Za-z0-9\-]+|FNW-[A-Za-z0-9\-]+|FWS-[A-Za-z0-9\-]+|ULFA-[A-Za-z0-9\-]+)\b', user_query, re.IGNORECASE)
+            if not m:
+                m = re.search(r'\b([A-Za-z]{2,5}-\d{2,4}(?:-[A-Za-z0-9]+)?)\b', user_query)
+            if m:
+                resolved_asset_id = m.group(1).upper()
+            elif session_id:
+                resolved_asset_id = self.conv_store.get_last_well(session_id) or ""
         recent_turns: list = []
         last_objective: Optional[str] = None
 
         if session_id:
-            if not resolved_asset_id:
-                resolved_asset_id = self.conv_store.get_last_well(session_id) or ""
             recent_turns = self.conv_store.get_history(session_id, limit=10)
             # Most recent assistant turn's intent becomes last_objective
             for turn in reversed(recent_turns):
@@ -135,6 +144,8 @@ class UserEntryAdapter:
         # C1.T2: Thread episodic well memory into state for CompactContextBuilder
         if resolved_asset_id:
             initial_state["context"]["episodic_memory"] = self.well_memory.get_memory(resolved_asset_id)
+        if telemetry_override:
+            initial_state["context"]["telemetry_override"] = telemetry_override
         initial_state["is_ambiguous"] = is_ambiguous
 
         # B1.T2: thread_id = session_id when available; fall back to request_id.

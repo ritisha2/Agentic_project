@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from src.agent.intent_router import IntentRouter
 from src.agent.supervisor.user_entry import UserEntryAdapter
 
@@ -69,3 +69,18 @@ def test_user_entry_bypasses_specialists_for_gratitude(adapter):
     assert adv.objective_id == 'OP07_GENERAL_INQUIRY'
     assert 'welcome' in adv.assessment.lower()
     assert any('Bypassed Specialist' in p for p in adv.provenance)
+
+def test_conceptual_fault_and_overheating_queries_route_to_kb(router):
+    # Conceptual questions with no asset must route to OP06 (KB / Procedures)
+    q1 = router.route('What are the faults that could occur in an ESP?')
+    assert q1.objective_id == 'OP06_PROCEDURE_LOOKUP'
+    assert not q1.is_ambiguous
+
+    q2 = router.route('What indicates motor overheating in telemetry metrics?')
+    assert q2.objective_id == 'OP06_PROCEDURE_LOOKUP'
+    assert not q2.is_ambiguous
+
+    # Active asset query must still route to live diagnostics (OP03)
+    q3 = router.route('Is FS-031 overheating?')
+    assert q3.objective_id == 'OP03_FAULT_DIAGNOSIS'
+

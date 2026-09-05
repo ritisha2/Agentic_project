@@ -22,14 +22,6 @@ except Exception:
     pass
 
 
-# ── Portable path resolution ─────────────────────────────────────────────────
-# Resolve paths relative to this package file so the engine works on any machine
-# regardless of who checked-out the repo or where it lives.
-_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-_DEFAULT_REGISTRY_FILE = os.path.join(_PACKAGE_DIR, "well_calibration_registry.json")
-_DEFAULT_CATEGORIZED_DIR = os.path.join(_PACKAGE_DIR, "categorized_wells")
-
-
 class WellDiagnosticEngine:
     """
     Main Multi-Well Diagnostic Engine:
@@ -38,31 +30,14 @@ class WellDiagnosticEngine:
 
     def __init__(
         self,
-        categorized_dir: Optional[str] = None,
+        categorized_dir: str = r"C:\Users\admin.DESKTOP-17T37DJ\Desktop\cced\categorized_wells",
         registry_file: Optional[str] = None
     ):
-        resolved_registry = registry_file or _DEFAULT_REGISTRY_FILE
-        resolved_dir = categorized_dir or _DEFAULT_CATEGORIZED_DIR
-
-        self.registry = WellCalibrationRegistry(categorized_dir=resolved_dir, registry_file=resolved_registry)
+        self.registry = WellCalibrationRegistry(categorized_dir=categorized_dir, registry_file=registry_file)
         self.adapter = SiteTelemetryAdapter(self.registry)
         self.normalizer = NormalizationLayer(self.registry)
         self.classifier = FaultClassificationEngine()
         self.anomaly_detector = MultivariateAnomalyDetector()
-
-        # Calibrate the Isolation Forest on a REAL baseline cloud reconstructed from the
-        # calibration registry's historical per-sensor statistics. Without this the model
-        # has no valid notion of "normal" and every genuine reading is misflagged as an
-        # outlier. If the registry is empty, the detector stays uncalibrated and reports
-        # so honestly (null anomaly score) rather than fabricating one.
-        try:
-            calibrated = self.anomaly_detector.fit_from_registry(self.registry)
-            if not calibrated:
-                print("[!] Anomaly detector could not calibrate from registry; "
-                      "anomaly scores will report as uncalibrated until fitted.")
-        except Exception as e:
-            print(f"[!] Anomaly detector calibration failed ({e}); "
-                  "anomaly scores will report as uncalibrated until fitted.")
 
     def evaluate_live_telemetry(
         self,
@@ -83,8 +58,8 @@ class WellDiagnosticEngine:
         norm_result = self.normalizer.normalize_live_telemetry(well_id, std_telemetry, std_prev)
         norm_vector = list(norm_result["normalized"].values())
 
-        # 2. ML Anomaly scoring (scored against this well's own baseline model)
-        ml_anomaly = self.anomaly_detector.score_sample(norm_vector, well_id=well_id)
+        # 2. ML Anomaly scoring
+        ml_anomaly = self.anomaly_detector.score_sample(norm_vector)
 
         # 3. Fault classification
         profile = self.registry.get_well_profile(well_id)
@@ -138,9 +113,9 @@ class WellDiagnosticEngine:
         print("-" * 80)
         print("  KEY DYNAMICS:")
         print(f"   ΔP (Head): {dyn['delta_p']} PSI | Torque Proxy: {dyn['torque_proxy']} A/Hz | Power: {dyn['power_proxy_kva']} kVA")
-        _motor_temp = result['raw_measurements'].get('Motor temp °C', 0.0)
-        _vib = result['raw_measurements'].get("Vibration G's-Vx", 0.0)
-        print(f"   Thermal Elevation: {dyn['thermal_elevation']} °C | Motor Temp: {_motor_temp} °C | Vib: {_vib} G")
+        vib_val = result['raw_measurements'].get("Vibration G's-Vx", 0.0)
+        mot_temp_val = result['raw_measurements'].get('Motor temp °C', 0.0)
+        print(f"   Thermal Elevation: {dyn['thermal_elevation']} °C | Motor Temp: {mot_temp_val} °C | Vib: {vib_val} G")
         print("-" * 80)
         print("  RECOMMENDED OPERATOR ACTION:")
         print(f"   👉 {d['action_advisory']}")

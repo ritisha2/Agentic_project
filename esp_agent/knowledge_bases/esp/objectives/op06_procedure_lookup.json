@@ -7,7 +7,11 @@
   "intent_classes": [
     "procedure", "manual", "sop", "standard", "api rp", "how to fix", "troubleshooting",
     "tripping limits", "tripping limit", "operating limits", "operating limit", "limits", "limit",
-    "thresholds", "threshold", "operating thresholds", "operating threshold", "alert limits", "alert limit", "alarm limits", "alarm limit"
+    "thresholds", "threshold", "operating thresholds", "operating threshold", "alert limits", "alert limit", "alarm limits", "alarm limit",
+    "what indicates", "what causes", "symptoms", "indicators", "causes of",
+    "faults that could occur", "common faults", "failure modes", "failure mode",
+    "troubleshooting steps", "troubleshooting procedure", "motor overheating", "overheating",
+    "broken shaft", "sheared shaft", "gas locking", "gas lock", "faults", "failure mechanisms"
   ],
   "required_asset_context": ["pump_model"],
   "required_signals": [],

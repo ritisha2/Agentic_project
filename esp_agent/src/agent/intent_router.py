@@ -331,6 +331,37 @@ class IntentRouter:
             "across the field", "entire field", "total field", "between fs-", "compare the installed"
         ])
         has_specific_asset = bool(re.search(r"\b(fs-\d+|fsws-\d+|well-\w+)\b", q_lower))
+        has_context_asset = bool(conversation_context and conversation_context.get("last_well"))
+        has_asset = has_specific_asset or has_context_asset
+
+        # Detect conceptual inquiry (learning, definitions, failure mechanisms, general questions)
+        _CONCEPTUAL_PREFIXES = (
+            "what is", "what are", "what causes", "what can cause", "what indicates",
+            "what does", "how does", "how do", "how is", "how to", "explain", "describe",
+            "tell me about", "overview of", "definition of", "principles of", "list the", "list all"
+        )
+        _CONCEPTUAL_INFIXES = (
+            "symptoms of", "indicators of", "causes of", "faults that could occur",
+            "failure modes of", "common faults", "common issues", "troubleshooting",
+            "how to troubleshoot", "what indicates"
+        )
+        is_conceptual_inquiry = (
+            any(q_lower.startswith(p) for p in _CONCEPTUAL_PREFIXES)
+            or any(w in q_lower for w in _CONCEPTUAL_INFIXES)
+        )
+
+        has_explicit_sop_kw = any(w in q_lower for w in [
+            "procedure", "sop", "standard", "manual", "checklist", "playbook",
+            "tripping limits", "tripping limit", "thresholds", "backspin"
+        ])
+
+        LIVE_DIAGNOSTIC_OBJS = {
+            "OP01_CURRENT_STATUS",
+            "OP02_PRODUCTION_DECLINE_RCA",
+            "OP03_FAULT_DIAGNOSIS",
+            "OP04_HEALTH_ASSESSMENT",
+            "OP05_EARLY_WARNING",
+        }
 
         # Path A: Specificity-First Deterministic & Variant Keyword Matching
         rules: List = []
@@ -338,9 +369,27 @@ class IntentRouter:
             is_safety = obj.objective_id in ("OP00_OPERATIONAL_CONTROL", "OBJ_OPERATIONAL_CONTROL")
             is_fleet_obj = (obj.scope == "fleet" or
                             any(obj.objective_id.startswith(p) for p in ("OP08","OP09","OP10","OP11","OP12","OP13")))
-            base_prio = (100 if is_safety else
-                         (20 if (is_fleet_query and is_fleet_obj) else
-                          (15 if (not is_fleet_query and not is_fleet_obj) else 1)))
+            is_live_diag = obj.objective_id in LIVE_DIAGNOSTIC_OBJS
+            is_kb_obj = obj.objective_id == "OP06_PROCEDURE_LOOKUP"
+
+            if is_safety:
+                base_prio = 100
+            elif is_fleet_query and is_fleet_obj:
+                base_prio = 20
+            elif not has_asset and is_conceptual_inquiry and is_live_diag:
+                # Live telemetry diagnostics strictly require an asset.
+                # When no asset is present and query is conceptual ("what indicates...", "what causes..."),
+                # suppress live diagnostics so the query cleanly routes to OP06 (Procedures/KB) or OP07.
+                base_prio = 0
+            elif not has_asset and is_conceptual_inquiry and is_kb_obj:
+                # Boost KB procedural / limits lookup for conceptual queries
+                base_prio = 18
+            elif is_kb_obj:
+                base_prio = 16 if has_explicit_sop_kw else 12
+            elif not is_fleet_query and not is_fleet_obj:
+                base_prio = 15
+            else:
+                base_prio = 1
 
             for kw in obj.intent_classes:
                 rules.append((kw, obj.objective_id, 0.95, "Path_A_Deterministic", base_prio))
@@ -355,6 +404,8 @@ class IntentRouter:
 
         matched_hits: List[tuple] = []
         for kw, obj_id, conf, path_lbl, prio in rules:
+            if prio <= 0:
+                continue
             kw_lower = kw.lower()
             pattern = r"\b" + re.escape(kw_lower) + r"\b"
             if re.search(pattern, q_lower) or re.search(pattern, q_norm_asset):

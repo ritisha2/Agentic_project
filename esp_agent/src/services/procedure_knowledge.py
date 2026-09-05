@@ -293,7 +293,70 @@ class ProcedureKnowledgeService:
                 "citations": citations
             }
 
-        # 3. Limits & Operating Thresholds Flow
+        # 3. ESP Failure Modes & Faults Catalog Flow
+        if any(w in q_low for w in ["fault", "faults", "failure mode", "failure modes", "what could go wrong", "common issues", "troubleshoot"]):
+            assessment = (
+                "### 🔍 Governing ESP Failure Modes & Diagnostic Catalog\n\n"
+                "**Governing Reference:** API RP 11S (ESP Installations) & OEM Diagnostic Standards\n\n"
+                "Electric Submersible Pumps operate in harsh downhole environments subject to 4 primary failure classifications:\n\n"
+                "#### 1. Thermal & Electrical Degradation\n"
+                "- **Motor Overheating:** Caused by insufficient fluid cooling velocity (< 1 ft/s past motor), electrical overload, or heavy scale coating. Trip limit: `150.0 °C`.\n"
+                "- **Insulation Breakdown (Phase-to-Ground):** Cable dielectric puncture or motor pothead seal leak causing low Megger resistance (< 10 MΩ).\n"
+                "- **Current Imbalance:** VFD phase voltage unbalance or high-resistance cable connector faults (> 5% imbalance).\n\n"
+                "#### 2. Hydraulic & Gas Interference\n"
+                "- **Gas Locking / Interference:** Free gas breakout exceeding pump intake capability (> 15% free gas without separator, > 50% with AGS), causing head degradation and underload.\n"
+                "- **Pump Cavitation / Low PIP:** Intake pressure dropping below bubble point or minimum submergence (< 100 psi trip).\n\n"
+                "#### 3. Mechanical & Structural Failures\n"
+                "- **Broken / Sheared Shaft:** High torsional stress during reverse backspin restart, sand slugging, or fatigue failure. Characterized by sudden current drop with nominal frequency.\n"
+                "- **Impeller / Diffuser Stage Wear:** Sand/abrasives erosion causing gradual head loss, increasing slip, and rising vibration.\n"
+                "- **Thrust Bearing Failure (Upthrust / Downthrust):** Operating outside the Recommended Operating Range (ROR). Continuous upthrust (high flow/low head) or severe downthrust (low flow/high head) destroys thrust runners.\n\n"
+                "#### 4. Reservoir & Fluid Incompatibilities\n"
+                "- **Scale Deposition:** Carbonate or sulfate precipitation inside intake screens and pump stages, causing flow constriction and motor heating.\n"
+                "- **Emulsion & Viscosity Loading:** Heavy fluid loading driving drive current past nameplate overload (> 115%)."
+            )
+            diagnosis = "API RP 11S comprehensive failure modes and degradation mechanisms catalog."
+            recommendation = "Maintain telemetry monitoring within the Recommended Operating Range (ROR) and ensure all VFD protective shutdown setpoints are active."
+            verification = [
+                "1. Verify VFD underload and overload protective relays are calibrated.",
+                "2. Monitor motor internal temperature rate of rise (< 130 °C warning, 150 °C critical trip).",
+                "3. Track intake pressure relative to fluid bubble point to prevent gas locking.",
+                "4. Enforce mandatory 30-minute backspin restart delay to protect shafts."
+            ]
+            prohibited_actions = [
+                "NEVER restart an ESP while fluid fallback or reverse rotation is active.",
+                "NEVER operate continuously above 130 °C motor temperature.",
+                "NEVER bypass VFD underload trip setpoints without engineering approval."
+            ]
+            execution_steps = [
+                {"phase": "Phase 1: Surveillance", "steps": ["Monitor 5 canonical metrics (PIP, PDP, Temp, Amps, Vib)", "Cross-reference operating point against BEP curve"]},
+                {"phase": "Phase 2: Anomaly Triage", "steps": ["Identify whether anomaly is electrical, hydraulic, or mechanical", "Check for precursor drift before trips occur"]},
+                {"phase": "Phase 3: Mitigation", "steps": ["Apply frequency trims or choke adjustments", "Initiate controlled shutdown if critical limits exceeded"]}
+            ]
+            thresholds_table = [
+                {"parameter": "Motor Temp Trip", "normal": "< 125 °C", "warning": "130 °C", "trip": "150 °C", "action": "Inspect cooling flow / shutdown"},
+                {"parameter": "Radial Vibration", "normal": "< 1.5 g", "warning": "3.0 g", "trip": "5.0 g", "action": "Check for unbalance / sand"},
+                {"parameter": "Intake Pressure (PIP)", "normal": "> 200 psi", "warning": "150 psi", "trip": "100 psi", "action": "Mitigate gas lock / choke trim"},
+                {"parameter": "Motor Current", "normal": "70-100% Nameplate", "warning": "> 105%", "trip": "> 115% (Overload)", "action": "Check mechanical binding"}
+            ]
+            citations = [
+                {"document_id": "API_RP_11S", "section": "Section 4: Operating Safeguards & Failure Modes", "authority_level": "A"},
+                {"document_id": "DOC-STD-API-11S8", "section": "Vibration & Mechanical Wear Guidelines", "authority_level": "A"},
+                {"document_id": "diagnostic_rules.json", "section": "ESP Fault Classification Registry", "authority_level": "B"}
+            ]
+            return {
+                "assessment": assessment,
+                "diagnosis": diagnosis,
+                "recommendation": recommendation,
+                "verification": verification,
+                "prohibited_actions": prohibited_actions,
+                "execution_steps": execution_steps,
+                "thresholds_table": thresholds_table,
+                "governing_standard": "API RP 11S (ESP Systems & Failure Analysis)",
+                "authority_level": "A",
+                "citations": citations
+            }
+
+        # 4. Limits & Operating Thresholds Flow
         limits = info["matched_limits"]
         table_rows = []
         thresholds_table = []

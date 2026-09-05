@@ -27,7 +27,7 @@ class AssetService:
         """
         Fetch normalized AssetContextPayload for an asset.
         """
-        if self.api_url:
+        if self.api_url and asset_id and asset_id not in ("UNKNOWN", "NONE", "FLEET"):
             try:
                 return self._query_advait_api(asset_id)
             except Exception as e:

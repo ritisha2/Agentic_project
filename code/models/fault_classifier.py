@@ -86,10 +86,10 @@ FAULT_DEFINITIONS = {
         "description": "Sensor output flatlined, stuck, or drifted to non-physical range.",
         "action": "Recalibrate downhole gauge telemetry or replace surface pressure/temperature transmitter."
     },
-    "Well Offline / Standby": {
-        "severity": "STANDBY",
-        "description": "ESP VFD drive is stopped and motor is unpowered (0.0 A). Equipment is in scheduled or planned standby.",
-        "action": "Asset parked. Verify production schedule and wellhead valves before initiating restart."
+    "Broken Shaft": {
+        "severity": "CRITICAL",
+        "description": "Mechanical shaft shear, coupling failure, or decoupled impeller; motor spinning at operating speed with zero hydraulic lift, underloaded current, and collapsed BPD flow rate.",
+        "action": "Shut down VFD immediately to prevent motor free-spinning damage; schedule workover unit for ESP changeout."
     }
 }
 
@@ -113,49 +113,51 @@ class FaultClassificationEngine:
         """
         sensors_prof = profile.get("sensors", {})
 
-        # Raw values
-        inp = raw_data.get("Inp bar/psi", 100.0)
-        disch = raw_data.get("Disch pr. Bar/psi", 1000.0)
-        amps = raw_data.get("VSD Amps/Load", 50.0)
-        volt = raw_data.get("Volt", 400.0)
-        freq = raw_data.get("Frequency", 50.0)
-        vib = raw_data.get("Vibration G's-Vx", 0.1)
-        leak = raw_data.get("Leak Current Ct", 5.0)
-        m_temp = raw_data.get("Motor temp °C", 70.0)
-        i_temp = raw_data.get("Int temp °C", 50.0)
-        whp = raw_data.get("WHP (PSI)", 50.0)
-        flp = raw_data.get("FLP (PSI)", 50.0)
-        ap = raw_data.get("AP (PSI)", 10.0)
-        vfd_sts = raw_data.get("VFD STS", 1.0)
+        # ── Safe cast helper ────────────────────────────────────────────────
+        def _f(key: str, default: float) -> float:
+            v = raw_data.get(key, default)
+            if v is None:
+                return default
+            try:
+                import math
+                fv = float(v)
+                return default if math.isnan(fv) or math.isinf(fv) else fv
+            except (TypeError, ValueError):
+                return default
 
-        # Operational State Gate: Standby / Offline Equipment vs Active Running Faults
-        # If VFD is stopped (STS <= 0.1) and motor is unpowered (amps < 1.0), well is parked, NOT failing!
-        try:
-            vfd_float = float(vfd_sts)
-            amps_float = float(amps)
-        except (ValueError, TypeError):
-            vfd_float = 1.0
-            amps_float = 50.0
+        # ── VFD STS: '[*]' = running (1), '' or '0' = stopped (0) ─────────
+        def _vfd(key: str) -> float:
+            v = str(raw_data.get(key, "1")).strip()
+            if v in ("", "0", "nan", "None", "STOP", "FAULT"):
+                return 0.0
+            return 1.0  # '[*]', '1', 'RUN', or any non-zero string = running
 
-        if vfd_float <= 0.1 and amps_float < 1.0:
-            return {
-                "primary_fault": "Well Offline / Standby",
-                "confidence": "100.0%",
-                "confidence_val": 1.0,
-                "health_score": 0.0,
-                "status": "⚪ STANDBY",
-                "alert_level": "⚪ STANDBY",
-                "est_time_to_trip": "N/A (Equipment Parked)",
-                "description": "ESP VFD drive is stopped and motor is unpowered (0.0 A). Equipment is in scheduled or planned standby.",
-                "action_advisory": "Asset parked. Verify production schedule and wellhead valves before initiating restart.",
-                "root_cause_drivers": [("VFD Status", "0 (Stopped)"), ("Motor Amps", f"{amps_float:.2f} A (Unpowered)")],
-                "all_scores": {"Well Offline / Standby": "100.0%"}
-            }
+        # Raw values (all safely cast to float)
+        inp    = _f("Inp bar/psi",         100.0)
+        disch  = _f("Disch pr. Bar/psi",  1000.0)
+        amps   = _f("VSD Amps/Load",        50.0)
+        volt   = _f("Volt",               400.0)
+        freq   = _f("Frequency",            50.0)
+        vib    = _f("Vibration G's-Vx",     0.1)
+        leak   = _f("Leak Current Ct",       5.0)
+        m_temp = _f("Motor temp \u00b0C",         70.0)
+        i_temp = _f("Int temp \u00b0C",           50.0)
+        whp    = _f("WHP (PSI)",            50.0)
+        flp    = _f("FLP (PSI)",            50.0)
+        ap     = _f("AP (PSI)",             10.0)
+        vfd_sts = _vfd("VFD STS")
 
         # Dynamics
-        delta_p = dynamics.get("delta_p", 900.0)
-        torque = dynamics.get("torque_proxy", 1.0)
-        dt_slope = dynamics.get("thermal_rate_hr", 0.0)
+        delta_p  = dynamics.get("delta_p",          900.0)
+        torque   = dynamics.get("torque_proxy",        1.0)
+        dt_slope = dynamics.get("thermal_rate_hr",     0.0)
+        try:
+            delta_p  = float(delta_p)  if delta_p  is not None else 900.0
+            torque   = float(torque)   if torque   is not None else 1.0
+            dt_slope = float(dt_slope) if dt_slope is not None else 0.0
+        except (TypeError, ValueError):
+            delta_p, torque, dt_slope = 900.0, 1.0, 0.0
+
 
         # Baseline references
         amps_med = sensors_prof.get("VSD Amps/Load", {}).get("median", 50.0)
@@ -171,138 +173,198 @@ class FaultClassificationEngine:
         scores = {}
         drivers = {}
 
-        # -------------------------------------------------------------
-        # 1. Power Loss (All electrical params drop to zero)
-        # -------------------------------------------------------------
-        if volt < 20.0 and amps < 2.0 and freq < 5.0:
+        # ─────────────────────────────────────────────────────────────────────
+        # ADAPTIVE RELATIVE THRESHOLDS
+        # All rules compare sensor values as % deviation from each well's OWN
+        # historical baseline median — so FS-28 (Inp~305 PSI, Amps~83 A) and
+        # FNW-01 (Inp~80 PSI, Amps~25 A) both fire correctly without any
+        # hardcoded absolute cut-off values.
+        # ─────────────────────────────────────────────────────────────────────
+
+        # Relative deviation helpers (safe, baseline-adaptive)
+        _bv = lambda v, b: (v / max(b, 0.1))        # ratio: current / baseline
+        _pct = lambda v, b: (_bv(v,b) - 1.0) * 100  # % change from baseline
+
+        # Vibration: use baseline-relative spike  (FS-28 vib_med=2.12 G)
+        vib_ratio = _bv(vib, max(vib_med, 0.01))
+
+        # Amps deviation  (FS-28 amps_med=82.9 A)
+        amps_ratio = _bv(amps, max(amps_med, 1.0))
+
+        # Inp deviation   (FS-28 inp_med=304.7 PSI)
+        inp_ratio  = _bv(inp,  max(inp_med,  1.0))
+
+        # Disch deviation (FS-28 disch_med=2079.9 PSI)
+        disch_ratio = _bv(disch, max(disch_med, 1.0))
+
+        # Volt deviation  (FS-28 volt_med=356 V)
+        volt_ratio  = _bv(volt, max(volt_med, 1.0))
+
+        # Motor temp absolute (physics: overheating > 10°C above well's own median)
+        m_temp_excess = m_temp - max(m_temp_med, 40.0)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 1. Power Loss — all electrical collapse to near-zero
+        # ─────────────────────────────────────────────────────────────────────
+        if volt < max(20.0, 0.08 * max(volt_med, 100.0)) and amps < max(2.0, 0.05 * max(amps_med, 10.0)) and freq < 5.0:
             scores["Power Loss"] = 0.98
-            drivers["Power Loss"] = [("Volt", "-95% (0 V)"), ("VSD Amps/Load", "-95% (0 A)"), ("Frequency", "-90% (0 Hz)")]
+            drivers["Power Loss"] = [("Volt", f"{volt:.0f} V (Power cut — {int((1-volt_ratio)*100)}% drop)"),
+                                     ("VSD Amps/Load", f"{amps:.1f} A (Trip/outage)"),
+                                     ("Frequency", f"{freq:.1f} Hz → Stopped")]
         else:
             scores["Power Loss"] = 0.0
 
-        # -------------------------------------------------------------
-        # 2. Dry-Well Pump Off (Intake collapsed, underload amps, temp rise)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 2. Dry-Well Pump Off
+        #    Signature: Inp drops >15% below well's own baseline AND
+        #               Amps drops >12% (gas pumping, no fluid load)
+        #    Optional:  Motor temp rises >5°C above well's own baseline
+        # ─────────────────────────────────────────────────────────────────────
         dry_score = 0.0
         dry_drivers = []
-        if inp < 0.25 * max(1.0, inp_med) and vfd_sts > 0.5:
-            dry_score += 0.45
-            dry_drivers.append(("Inp bar/psi", f"-{int((1 - inp/max(1.0, inp_med))*100)}% (Fluid level lost)"))
-        if amps < 0.55 * max(1.0, amps_med) and vfd_sts > 0.5:
-            dry_score += 0.35
-            dry_drivers.append(("VSD Amps/Load", f"-{int((1 - amps/max(1.0, amps_med))*100)}% (Underload dry run)"))
-        if m_temp > (m_temp_med + 12.0) or dt_slope > 1.5:
+        if inp_ratio < 0.92 and vfd_sts > 0.5:           # Inp < 92% of well's own median (8% drop)
+            drop_pct = int((1.0 - inp_ratio) * 100)
+            # Scale: 0→0.50 linearly as inp drops from 92% to 70% of median
+            dry_score += min(0.50, 0.50 * (0.92 - inp_ratio) / 0.22)
+            dry_drivers.append(("Inp bar/psi", f"{inp:.1f} PSI (-{drop_pct}% from well normal — fluid level falling)"))
+        if amps_ratio < 0.93 and vfd_sts > 0.5:          # Amps < 93% of well's own median
+            drop_pct = int((1.0 - amps_ratio) * 100)
+            dry_score += min(0.40, 0.40 * (0.93 - amps_ratio) / 0.13)
+            dry_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (-{drop_pct}% — reducing fluid torque load)"))
+        if m_temp_excess > 3.0 or dt_slope > 1.0:        # Motor heating > 3°C above well's own baseline
             dry_score += 0.20
-            dry_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (Cooling lost)"))
-        scores["Dry-Well Pump Off"] = min(0.99, dry_score) if dry_score >= 0.45 else 0.0
+            dry_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (+{m_temp_excess:.1f}°C above well normal — cooling reducing)"))
+        scores["Dry-Well Pump Off"] = min(0.97, dry_score) if dry_score >= 0.30 else 0.0
         drivers["Dry-Well Pump Off"] = dry_drivers
 
-        # -------------------------------------------------------------
-        # 3. Blocked Intake (Intake collapse + discharge drop + delta_p collapse)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 3. Blocked Intake
+        #    Inp < 80% of baseline + Disch < 80% of baseline + low amps
+        # ─────────────────────────────────────────────────────────────────────
         block_score = 0.0
         block_drivers = []
-        if inp < 0.20 * max(1.0, inp_med) and vfd_sts > 0.5:
-            block_score += 0.40
-            block_drivers.append(("Inp bar/psi", f"{inp:.1f} PSI (Suction starved)"))
-        if disch < 0.35 * max(1.0, disch_med) and delta_p < 200.0:
+        if inp_ratio < 0.80 and vfd_sts > 0.5:
             block_score += 0.45
-            block_drivers.append(("Disch pr. Bar/psi", f"{disch:.1f} PSI (No fluid discharge)"))
-        if amps < 0.65 * max(1.0, amps_med):
+            block_drivers.append(("Inp bar/psi", f"{inp:.1f} (−{int((1-inp_ratio)*100)}% suction starved)"))
+        if disch_ratio < 0.80 and delta_p < 0.75 * head_med:
+            block_score += 0.40
+            block_drivers.append(("Disch pr. Bar/psi", f"{disch:.1f} (−{int((1-disch_ratio)*100)}% no discharge)"))
+        if amps_ratio < 0.75:
             block_score += 0.15
-            block_drivers.append(("VSD Amps/Load", "Underloaded pump (no flow)"))
-        scores["Blocked Intake"] = min(0.96, block_score) if block_score >= 0.50 else 0.0
+            block_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (underloaded, no flow)"))
+        scores["Blocked Intake"] = min(0.94, block_score) if block_score >= 0.45 else 0.0
         drivers["Blocked Intake"] = block_drivers
 
-        # -------------------------------------------------------------
-        # 4. Scale or Pump Wear (Loss of Head/DeltaP at constant speed, normal intake)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 4. Scale or Pump Wear
+        #    Delta-P < 80% of well's own head at same frequency (constant-speed degradation)
+        #    WHP > 0 means surface pressure is present (actual flow, not shut-in)
+        # ─────────────────────────────────────────────────────────────────────
         wear_score = 0.0
         wear_drivers = []
-        if freq >= 42.0 and delta_p < 0.65 * head_med and inp > 0.40 * max(1.0, inp_med) and whp > 10.0:
-            wear_score = 0.95
-            wear_drivers.append(("Disch pr. Bar/psi", f"DeltaP {delta_p:.0f} PSI (-{int((1-delta_p/head_med)*100)}% head loss)"))
-            wear_drivers.append(("Frequency", f"Steady {freq:.1f} Hz (Impeller/stage degradation)"))
+        delta_p_ratio = delta_p / max(head_med, 1.0)
+        if freq >= 42.0 and delta_p_ratio < 0.80 and inp_ratio > 0.70:
+            # Progressive head loss at normal speed = wear
+            wear_score = min(0.95, 0.60 + (0.80 - delta_p_ratio) * 1.5)
+            wear_drivers.append(("ΔP (Disch-Inp)", f"{delta_p:.0f} PSI (-{int((1-delta_p_ratio)*100)}% head loss vs well norm)"))
+            wear_drivers.append(("Frequency", f"{freq:.1f} Hz steady (impeller/stage degradation)"))
         scores["Scale or Pump Wear"] = wear_score
         drivers["Scale or Pump Wear"] = wear_drivers
 
-        # -------------------------------------------------------------
-        # 5. Sand Ingestion (Abrasive torque spikes + high vibration surges)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 5. Sand Ingestion
+        #    Vibration spike >30% above well's own vib median AND amps >8% above median
+        # ─────────────────────────────────────────────────────────────────────
         sand_score = 0.0
         sand_drivers = []
-        if (vib >= 0.28 or vib > 1.6 * max(0.05, vib_med)) and amps > 1.15 * max(1.0, amps_med):
-            sand_score = 0.96
-            sand_drivers.append(("Vibration G's-Vx", f"{vib:.2f} G (Abrasive turbulence)"))
-            sand_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps/amps_med - 1)*100)}% solids drag)"))
+        if vib_ratio > 1.30 and amps_ratio > 1.08:
+            sand_score = min(0.96, 0.70 + (vib_ratio - 1.30) * 0.8)
+            sand_drivers.append(("Vibration G's-Vx", f"{vib:.2f} G (+{int((vib_ratio-1)*100)}% abrasive turbulence)"))
+            sand_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps_ratio-1)*100)}% solids drag torque)"))
         scores["Sand Ingestion"] = sand_score
         drivers["Sand Ingestion"] = sand_drivers
 
-        # -------------------------------------------------------------
-        # 6. Bearing Degradation (Severe vibration + motor friction heat, normal amps)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 6. Bearing Degradation
+        #    Vibration > 20% above well's own median (FS-28: 2.12 G → spike > 2.54 G)
+        #    PLUS motor temp > 5°C above well's own median (bearing friction heat)
+        #    NOTE: removed fixed 82°C cut — FS-28 never reaches 82°C
+        # ─────────────────────────────────────────────────────────────────────
         bear_score = 0.0
         bear_drivers = []
-        if vib >= 0.35 and (m_temp > 82.0 or m_temp > m_temp_med + 10.0) and amps <= 1.25 * max(1.0, amps_med):
-            bear_score = 0.97
-            bear_drivers.append(("Vibration G's-Vx", f"{vib:.2f} G (Severe bearing wear > 0.35 G)"))
-            bear_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (Bearing friction heating)"))
-        scores["Bearing Degradation"] = bear_score
+        if vib_ratio > 1.20 and amps_ratio <= 1.20:
+            # Vibration significantly above well's own baseline = primary bearing indicator
+            # Motor temp confirmation is OPTIONAL — adds score but not required
+            vib_score_part = min(0.70, 0.40 + (vib_ratio - 1.20) * 1.0)
+            bear_score += vib_score_part
+            bear_drivers.append(("Vibration G's-Vx", f"{vib:.2f} G (+{int((vib_ratio-1)*100)}% vs well baseline — bearing wear pattern)"))
+            if m_temp_excess > 3.0:                  # Motor temp confirms friction heating
+                bear_score += min(0.30, m_temp_excess * 0.03)
+                bear_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (+{m_temp_excess:.1f}°C above well normal — bearing friction)"))
+        scores["Bearing Degradation"] = min(0.97, bear_score) if bear_score >= 0.35 else 0.0
         drivers["Bearing Degradation"] = bear_drivers
 
-        # -------------------------------------------------------------
-        # 7. High Viscosity Cold Start (Low speed + extreme starting torque/amps)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 7. High Viscosity Cold Start
+        #    Low frequency (<38 Hz) + amps >12% above baseline + cold fluid temp
+        # ─────────────────────────────────────────────────────────────────────
         cold_score = 0.0
         cold_drivers = []
-        if freq < 38.0 and (amps > 1.15 * max(1.0, amps_med) or torque > 1.30 * (amps_med / 50.0)) and (i_temp < 35.0 or m_temp < 50.0):
+        if freq < 38.0 and amps_ratio > 1.12 and (i_temp < 35.0 or m_temp < 50.0):
             cold_score = 0.95
-            cold_drivers.append(("VSD Amps/Load", f"{amps:.1f} A at {freq:.1f} Hz (Extreme starting torque)"))
-            cold_drivers.append(("Int temp °C", f"{i_temp:.1f}°C (Cold heavy crude/emulsion)"))
+            cold_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps_ratio-1)*100)}%) at {freq:.1f} Hz — high starting torque"))
+            cold_drivers.append(("Int temp °C", f"{i_temp:.1f}°C (cold heavy crude/emulsion)"))
         scores["High Viscosity Cold Start"] = cold_score
         drivers["High Viscosity Cold Start"] = cold_drivers
 
-        # -------------------------------------------------------------
-        # 8. High Backpressure (High FLP/WHP forcing discharge up relative to well baseline)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 8. High Backpressure (surface choke/hydrate restriction)
+        #    Discharge >15% above well's own baseline (surface resistance forcing pressure up)
+        #    WHP or FLP elevated vs baseline
+        # ─────────────────────────────────────────────────────────────────────
         back_score = 0.0
         back_drivers = []
-        if (flp > 1.35 * max(20.0, flp_med) or whp > 1.35 * max(20.0, whp_med)) and disch > 1.20 * max(100.0, disch_med):
-            back_score = 0.93
-            back_drivers.append(("FLP (PSI)", f"{flp:.1f} PSI (Flowline backpressure restricted)"))
-            back_drivers.append(("Disch pr. Bar/psi", f"{disch:.1f} PSI (Discharge forced up)"))
+        flp_ratio = _bv(flp, max(flp_med, 5.0))
+        whp_ratio = _bv(whp, max(whp_med, 5.0))
+        if disch_ratio > 1.15 and (flp_ratio > 1.20 or whp_ratio > 1.20):
+            back_score = min(0.93, 0.70 + (disch_ratio - 1.15) * 1.0)
+            back_drivers.append(("Disch pr. Bar/psi", f"{disch:.1f} (+{int((disch_ratio-1)*100)}% vs well normal — backpressure)"))
+            if flp_ratio > 1.20:
+                back_drivers.append(("FLP (PSI)", f"{flp:.1f} (+{int((flp_ratio-1)*100)}% flowline restriction)"))
         scores["High Backpressure"] = back_score
         drivers["High Backpressure"] = back_drivers
 
-        # -------------------------------------------------------------
-        # 9. Open Choke (Choke wide open -> WHP near 0, low discharge, high runout amps)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 9. Open Choke (runout flow — WHP low, amps elevated)
+        #    Discharge <85% of baseline (less head needed) + amps >10% above baseline
+        # ─────────────────────────────────────────────────────────────────────
         choke_score = 0.0
         choke_drivers = []
-        if whp < 0.25 * max(15.0, whp_med) and disch < 0.75 * max(1.0, disch_med) and amps > 1.10 * max(1.0, amps_med):
-            choke_score = 0.95
-            choke_drivers.append(("WHP (PSI)", f"{whp:.1f} PSI (Zero surface backpressure)"))
-            choke_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (Pump runout flow overload)"))
+        if disch_ratio < 0.85 and amps_ratio > 1.10:
+            choke_score = min(0.95, 0.60 + (1.0 - disch_ratio) * 0.8)
+            choke_drivers.append(("Disch pr. Bar/psi", f"{disch:.1f} (-{int((1-disch_ratio)*100)}% — low backpressure runout)"))
+            choke_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps_ratio-1)*100)}% — pump runout overload)"))
         scores["Open Choke"] = choke_score
         drivers["Open Choke"] = choke_drivers
 
-        # -------------------------------------------------------------
-        # 10. Undervoltage (Low voltage supply causing current surge)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 10. Undervoltage (grid/transformer sag)
+        #     Volt < 92% of well's own baseline median (FS-28 baseline=356 V → sag < 327 V)
+        # ─────────────────────────────────────────────────────────────────────
         uv_score = 0.0
         uv_drivers = []
-        if volt < 0.85 * max(100.0, volt_med) and volt > 50.0:
-            uv_score += 0.65
-            uv_drivers.append(("Volt", f"{volt:.1f} V (Grid sag below nominal {volt_med:.0f} V)"))
-            if amps > 1.10 * max(1.0, amps_med):
+        if volt_ratio < 0.92 and volt > 50.0:
+            uv_score += min(0.65, (0.92 - volt_ratio) * 8.0)
+            uv_drivers.append(("Volt", f"{volt:.1f} V (-{int((1-volt_ratio)*100)}% from well nominal {volt_med:.0f} V)"))
+            if amps_ratio > 1.08:
                 uv_score += 0.30
-                uv_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (Current rising to maintain kW)"))
-        scores["Undervoltage"] = min(0.95, uv_score) if uv_score >= 0.60 else 0.0
+                uv_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps_ratio-1)*100)}% — compensating for voltage sag)"))
+        scores["Undervoltage"] = min(0.95, uv_score) if uv_score >= 0.50 else 0.0
         drivers["Undervoltage"] = uv_drivers
 
-        # -------------------------------------------------------------
-        # 11. Phase Imbalance (Insulation breakdown & abnormal heating or explicit I-Imb / V-Imb)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 11. Phase Imbalance
+        # ─────────────────────────────────────────────────────────────────────
         phase_score = 0.0
         phase_drivers = []
         i_imb = raw_data.get("I_Imb_pct", 0.0) if isinstance(raw_data, dict) else 0.0
@@ -316,36 +378,56 @@ class FaultClassificationEngine:
         if leak > 25.0:
             phase_score += 0.55
             phase_drivers.append(("Leak Current Ct", f"{leak:.1f} mA (Ground insulation breakdown)"))
-        if m_temp > 92.0 and amps < 1.15 * max(1.0, amps_med):
+        if m_temp_excess > 20.0 and amps_ratio < 1.15:
             phase_score += 0.40
-            phase_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (Unbalanced heating)"))
+            phase_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (+{m_temp_excess:.1f}°C — unbalanced phase heating)"))
         scores["Phase Imbalance"] = min(0.95, phase_score) if phase_score >= 0.50 else 0.0
         drivers["Phase Imbalance"] = phase_drivers
 
-        # -------------------------------------------------------------
-        # 12. Motor Overload (Continuous excessive current draw)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 12. Motor Overload
+        #     Amps > 115% of well's own baseline (FS-28: 82.9 A → overload > 95.3 A)
+        #     PLUS motor temp > 10°C above baseline
+        # ─────────────────────────────────────────────────────────────────────
         ol_score = 0.0
         ol_drivers = []
-        if amps > 1.28 * max(1.0, amps_med) and vib <= 0.28:
-            ol_score += 0.60
-            ol_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps/amps_med-1)*100)}% over rated)"))
-            if m_temp > 88.0:
-                ol_score += 0.35
-                ol_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (Thermal overload)"))
-        scores["Motor Overload"] = min(0.95, ol_score) if ol_score >= 0.55 else 0.0
+        if amps_ratio > 1.15:
+            ol_score += min(0.60, (amps_ratio - 1.15) * 4.0)
+            ol_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (+{int((amps_ratio-1)*100)}% — above rated nameplate)"))
+            if m_temp_excess > 10.0:
+                ol_score += min(0.35, m_temp_excess * 0.025)
+                ol_drivers.append(("Motor temp °C", f"{m_temp:.1f}°C (+{m_temp_excess:.1f}°C — thermal overload risk)"))
+        scores["Motor Overload"] = min(0.95, ol_score) if ol_score >= 0.45 else 0.0
         drivers["Motor Overload"] = ol_drivers
 
-        # -------------------------------------------------------------
-        # 13. Sensor Drift / Failure (Flatline or unrealistic reading)
-        # -------------------------------------------------------------
+        # ─────────────────────────────────────────────────────────────────────
+        # 13. Sensor Drift / Failure
+        #     Non-physical values: negative pressures, motor temp < -10°C
+        # ─────────────────────────────────────────────────────────────────────
         drift_score = 0.0
         drift_drivers = []
         if inp < 0.0 or disch < 0.0 or m_temp < -10.0 or volt < 0.0:
             drift_score = 0.95
-            drift_drivers.append(("Sensor Integrity", "Negative physical measurement detected"))
+            drift_drivers.append(("Sensor Integrity", "Non-physical (negative) measurement detected"))
         scores["Sensor Drift"] = drift_score
         drivers["Sensor Drift"] = drift_drivers
+
+        # ─────────────────────────────────────────────────────────────────────
+        # 14. Broken Shaft / Sheared Coupling
+        #     Motor spinning at speed (freq OK) but amps < 55% of baseline AND
+        #     delta_p < 40% of well's head baseline (no hydraulic lift)
+        # ─────────────────────────────────────────────────────────────────────
+        broken_shaft_score = 0.0
+        broken_shaft_drivers = []
+        if freq >= 35.0 and vfd_sts > 0.5:
+            if delta_p < 0.40 * max(head_med, 10.0):
+                broken_shaft_score += 0.50
+                broken_shaft_drivers.append(("ΔP Head", f"{delta_p:.0f} PSI (-{int((1-delta_p/max(head_med,1))*100)}% no hydraulic lift)"))
+            if amps_ratio < 0.55:
+                broken_shaft_score += 0.45
+                broken_shaft_drivers.append(("VSD Amps/Load", f"{amps:.1f} A (-{int((1-amps_ratio)*100)}% free-spinning no load)"))
+        scores["Broken Shaft"] = min(0.98, broken_shaft_score) if broken_shaft_score >= 0.50 else 0.0
+        drivers["Broken Shaft"] = broken_shaft_drivers
 
         # -------------------------------------------------------------
         # Select Primary Fault & Compute Health Score
@@ -353,7 +435,7 @@ class FaultClassificationEngine:
         best_fault = "Normal Operation"
         best_score = 0.0
         for f_name, f_score in scores.items():
-            if f_score > best_score and f_score >= 0.45:
+            if f_score > best_score and f_score >= 0.30:
                 best_score = f_score
                 best_fault = f_name
 

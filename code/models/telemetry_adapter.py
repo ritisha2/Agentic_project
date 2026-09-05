@@ -62,7 +62,6 @@ class SiteTelemetryAdapter:
 
         # Fetch well baseline profile for fallback and thermodynamic estimation
         profile = self.registry.get_well_profile(well_id)
-        sensors_profile = profile.get("sensors", {})
 
         output = {}
 
@@ -73,42 +72,42 @@ class SiteTelemetryAdapter:
         output["Inp bar/psi"] = self._extract_numeric(
             clean_input,
             ["intakep", "intakepsi", "intakepressure", "inpbarpsi", "inp", "suction", "suctionp", "pin"],
-            default=sensors_profile.get("Inp bar/psi", {}).get("median", 0.0)
+            default=profile.get("Inp bar/psi", {}).get("median", 0.0)
         )
 
         # Discharge Pressure (PSI)
         output["Disch pr. Bar/psi"] = self._extract_numeric(
             clean_input,
             ["dischargep", "dischargepsi", "dischargepressure", "dischprbarpsi", "disch", "delivery", "pout"],
-            default=sensors_profile.get("Disch pr. Bar/psi", {}).get("median", 0.0)
+            default=profile.get("Disch pr. Bar/psi", {}).get("median", 0.0)
         )
 
         # Operating Frequency (Hz)
         output["Frequency"] = self._extract_numeric(
             clean_input,
             ["freq", "frequency", "hz", "speed", "vfdfreq", "rpm"],
-            default=sensors_profile.get("Frequency", {}).get("median", 45.0)
+            default=profile.get("Frequency", {}).get("median", 45.0)
         )
 
         # Motor Current (Amps)
         output["VSD Amps/Load"] = self._extract_numeric(
             clean_input,
             ["current", "amps", "load", "vsdampsload", "motorcurrent", "i", "amp"],
-            default=sensors_profile.get("VSD Amps/Load", {}).get("median", 0.0)
+            default=profile.get("VSD Amps/Load", {}).get("median", 0.0)
         )
 
         # Supply Voltage (Volts)
         output["Volt"] = self._extract_numeric(
             clean_input,
             ["voltage", "volt", "v", "supplyvoltage", "vsdvoltage"],
-            default=sensors_profile.get("Volt", {}).get("median", 400.0)
+            default=profile.get("Volt", {}).get("median", 400.0)
         )
 
         # Radial Vibration (G)
         output["Vibration G's-Vx"] = self._extract_numeric(
             clean_input,
             ["vibration", "vibrationgsvx", "vib", "vx", "vibrationg", "vibrations"],
-            default=sensors_profile.get("Vibration G's-Vx", {}).get("median", 0.05)
+            default=profile.get("Vibration G's-Vx", {}).get("median", 0.05)
         )
 
         # -------------------------------------------------------------
@@ -118,7 +117,7 @@ class SiteTelemetryAdapter:
         motor_temp = self._extract_numeric(
             clean_input,
             ["motortemp", "motortempc", "temp", "temperature", "tmotor", "mtemp"],
-            default=sensors_profile.get("Motor temp °C", {}).get("median", 75.0)
+            default=profile.get("Motor temp °C", {}).get("median", 75.0)
         )
         output["Motor temp °C"] = motor_temp
 
@@ -135,8 +134,8 @@ class SiteTelemetryAdapter:
             # Thermodynamic estimation:
             # If well profile has baseline ΔT = Motor_median - Int_median, use it;
             # otherwise assume standard ESP thermal elevation of 18-22 °C or profile intake median.
-            int_median = sensors_profile.get("Int temp °C", {}).get("median", 55.0)
-            mot_median = sensors_profile.get("Motor temp °C", {}).get("median", 75.0)
+            int_median = profile.get("Int temp °C", {}).get("median", 55.0)
+            mot_median = profile.get("Motor temp °C", {}).get("median", 75.0)
             baseline_delta_t = max(10.0, mot_median - int_median) if mot_median > int_median else 18.0
 
             estimated_intake = max(20.0, motor_temp - baseline_delta_t)
@@ -163,31 +162,31 @@ class SiteTelemetryAdapter:
         output["Leak Current Ct"] = self._extract_numeric(
             clean_input,
             ["leakcurrent", "leakcurrentct", "leakage", "leakcurrentma"],
-            default=sensors_profile.get("Leak Current Ct", {}).get("median", 0.0)
+            default=profile.get("Leak Current Ct", {}).get("median", 0.0)
         )
 
         output["DHG Current"] = self._extract_numeric(
             clean_input,
             ["dhgcurrent", "dhg", "downholegauge"],
-            default=sensors_profile.get("DHG Current", {}).get("median", 0.0)
+            default=profile.get("DHG Current", {}).get("median", 0.0)
         )
 
         output["WHP (PSI)"] = self._extract_numeric(
             clean_input,
             ["whp", "whppsi", "wellheadpressure", "wellheadp"],
-            default=sensors_profile.get("WHP (PSI)", {}).get("median", 0.0)
+            default=profile.get("WHP (PSI)", {}).get("median", 0.0)
         )
 
         output["FLP (PSI)"] = self._extract_numeric(
             clean_input,
             ["flp", "flppsi", "flowlinepressure", "flowlinep"],
-            default=sensors_profile.get("FLP (PSI)", {}).get("median", 0.0)
+            default=profile.get("FLP (PSI)", {}).get("median", 0.0)
         )
 
         output["AP (PSI)"] = self._extract_numeric(
             clean_input,
             ["ap", "appsi", "annuluspressure", "annulusp"],
-            default=sensors_profile.get("AP (PSI)", {}).get("median", 0.0)
+            default=profile.get("AP (PSI)", {}).get("median", 0.0)
         )
 
         # -------------------------------------------------------------

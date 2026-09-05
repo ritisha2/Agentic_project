@@ -3,14 +3,36 @@ LiveDataBridge — HTTP Adapter connecting esp_agent to cced_esp backend (:8000)
 Routes live telemetry, ML assessments, fleet asset context, and time-series data
 from the cced_esp production stack into the LangGraph Supervisor graph nodes.
 
+Fallback policy
+---------------
+When the :8000 REST API is unreachable, telemetry methods fall back to a
+direct read of the local SQLite historian (cced_esp/data/unlabelled.db →
+opg_well_telemetry, or cced_esp/data/normalized.db → opg_normalized_telemetry).
+This ensures OP01 and other snapshot-tier objectives never default to synthetic
+scaffold values when the backend service is stopped.
+
 Zero folder moves. Zero code duplication. Pure routing adapter.
 """
 
 import logging
 import os
+import sqlite3
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Canonical DB search paths — same pattern used by history_analytics.py
+_AGENT_ROOT = Path(__file__).resolve().parents[2]   # esp_agent/
+_WORKSPACE  = _AGENT_ROOT.parent                    # project root
+
+_SQLITE_CANDIDATES = [
+    _WORKSPACE / "cced_esp" / "data" / "unlabelled.db",
+    _WORKSPACE / "data"      / "unlabelled.db",
+    _WORKSPACE / "cced_esp" / "data" / "normalized.db",
+    Path("cced_esp/data/unlabelled.db"),
+    Path("../cced_esp/data/unlabelled.db"),
+]
 
 # cced_esp backend base URL — configurable via env, defaults to local dev port
 CCED_ESP_BASE_URL = os.getenv("CCED_ESP_BACKEND_URL", "http://127.0.0.1:8000")
@@ -51,18 +73,122 @@ class LiveDataBridge:
 
     def _get(self, path: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
         """Internal GET helper. Returns parsed JSON dict or None on any error."""
-        if not _HTTPX_AVAILABLE:
+        if not _HTTPX_AVAILABLE or self._available is False:
             return None
         try:
             r = httpx.get(
                 f"{self.base_url}{path}",
                 params=params or {},
-                timeout=self._timeout
+                timeout=0.25 if self._available is None else self._timeout
             )
             r.raise_for_status()
+            self._available = True
             return r.json()
         except Exception as e:
+            self._available = False
             logger.debug(f"[LiveDataBridge] GET {path} failed: {e}")
+            return None
+
+    def _query_local_sqlite(self, asset_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Direct SQLite fallback: reads the most recent row for `asset_id` from
+        opg_well_telemetry (unlabelled/labelled.db) or opg_normalized_telemetry
+        (normalized.db) when the :8000 REST API is unreachable.
+
+        Returns a row dict using the same field names that the REST /api/telemetry
+        endpoint returns, so callers need no special-casing.
+        Returns None if no DB found or no rows matched.
+        """
+        db_path = next((p for p in _SQLITE_CANDIDATES if p.exists()), None)
+        if not db_path:
+            logger.debug("[LiveDataBridge] No local SQLite DB found for fallback.")
+            return None
+
+        # Detect which schema is present
+        is_normalized = "normalized" in str(db_path)
+
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+
+            if is_normalized:
+                # opg_normalized_telemetry uses "Wells" as the well identifier
+                row = cur.execute(
+                    "SELECT * FROM opg_normalized_telemetry "
+                    "WHERE Wells = ? OR Wells LIKE ? "
+                    "ORDER BY id DESC LIMIT 1",
+                    (asset_id, f"%{asset_id}%")
+                ).fetchone()
+            else:
+                # opg_well_telemetry uses well_id / asset_id
+                row = cur.execute(
+                    "SELECT * FROM opg_well_telemetry "
+                    "WHERE well_id = ? OR asset_id LIKE ? "
+                    "ORDER BY id DESC LIMIT 1",
+                    (asset_id, f"%{asset_id}%")
+                ).fetchone()
+            conn.close()
+
+            if not row:
+                logger.debug(
+                    "[LiveDataBridge] SQLite fallback: no rows for asset %s in %s",
+                    asset_id, db_path.name
+                )
+                return None
+
+            row_dict = dict(row)
+
+            # Normalise to the canonical field names the REST endpoint returns,
+            # handling both table schemas transparently.
+            if is_normalized:
+                # normalized.db column names map directly (already in agent shape)
+                result = {
+                    "timestamp":           row_dict.get("timestamp", ""),
+                    "well_id":             row_dict.get("Wells", asset_id),
+                    "asset_id":            row_dict.get("Wells", asset_id),
+                    "intake_pressure_psi": float(row_dict.get("Inp_bar_psi") or
+                                                  row_dict.get("intake_pressure_psi") or 0.0),
+                    "pressure_psi":        float(row_dict.get("Disch_pr_Bar_psi") or
+                                                  row_dict.get("pressure_psi") or 0.0),
+                    "temperature_c":       float(row_dict.get("Motor_temp_C") or
+                                                  row_dict.get("temperature_c") or 0.0),
+                    "motor_current_a":     float(row_dict.get("VSD_Amps_Load") or
+                                                  row_dict.get("motor_current_a") or 0.0),
+                    "frequency_hz":        float(row_dict.get("Frequency") or
+                                                  row_dict.get("frequency_hz") or 0.0),
+                    "vibration_g":         float(row_dict.get("Vibration_Gs_Vx") or
+                                                  row_dict.get("vibration_g") or 0.0),
+                    "flow_rate_bpd":       float(row_dict.get("flow_rate_bpd") or 0.0),
+                    "vfd_status":          row_dict.get("VFD_STS") or row_dict.get("vfd_status"),
+                    "_source":             f"sqlite_local:{db_path.name}:opg_normalized_telemetry",
+                }
+            else:
+                result = {
+                    "timestamp":           row_dict.get("timestamp", ""),
+                    "well_id":             row_dict.get("well_id", asset_id),
+                    "asset_id":            row_dict.get("asset_id", asset_id),
+                    "intake_pressure_psi": float(row_dict.get("intake_pressure_psi") or 0.0),
+                    "pressure_psi":        float(row_dict.get("pressure_psi") or
+                                                  row_dict.get("discharge_pressure_psi") or 0.0),
+                    "temperature_c":       float(row_dict.get("temperature_c") or
+                                                  row_dict.get("motor_temperature_c") or 0.0),
+                    "motor_current_a":     float(row_dict.get("motor_current_a") or 0.0),
+                    "frequency_hz":        float(row_dict.get("frequency_hz") or 0.0),
+                    "vibration_g":         float(row_dict.get("vibration_g") or 0.0),
+                    "flow_rate_bpd":       float(row_dict.get("flow_rate_bpd") or 0.0),
+                    "vfd_status":          row_dict.get("vfd_status"),
+                    "_source":             f"sqlite_local:{db_path.name}:opg_well_telemetry",
+                }
+
+            logger.debug(
+                "[LiveDataBridge] SQLite fallback: found row for %s from %s (ts=%s)",
+                asset_id, db_path.name, result.get("timestamp", "?")
+            )
+            return result
+
+        except Exception as ex:
+            logger.warning("[LiveDataBridge] SQLite fallback query failed for %s: %s", asset_id, ex)
             return None
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -71,37 +197,61 @@ class LiveDataBridge:
 
     def get_latest_telemetry(self, asset_id: str) -> Optional[Dict[str, Any]]:
         """
-        Fetch latest telemetry record for the asset from cced_esp SQLite ledger.
-        Maps to:  GET /api/telemetry?asset_id={asset_id}&limit=1
-        Returns a dict with sensor fields: flow_rate_bpd, intake_pressure_psi,
-        pressure_psi, temperature_c, vibration_g, motor_current_a,
-        motor_voltage_v, frequency_hz, scenario, operating_state.
+        Fetch latest telemetry record for the asset.
+
+        Priority:
+          1. GET /api/telemetry (cced_esp :8000 REST API)
+          2. Direct local SQLite read (unlabelled.db → opg_well_telemetry,
+             or normalized.db → opg_normalized_telemetry)
+
+        Returns a row dict with canonical field names:
+          intake_pressure_psi, pressure_psi, temperature_c, motor_current_a,
+          frequency_hz, vibration_g, flow_rate_bpd, vfd_status, timestamp.
+        Returns None only if both paths fail (no DB + no service).
         """
+        # Path 1: REST API
         data = self._get("/api/telemetry", params={"asset_id": asset_id, "limit": 1})
         if not data:
             data = self._get("/api/telemetry", params={"well_id": asset_id, "limit": 1})
         records = (data or {}).get("records", [])
-        return records[0] if records else None
+        if records:
+            row = records[0]
+            row["_source"] = "rest_api:cced_esp:8000"
+            return row
+
+        # Path 2: Local SQLite fallback
+        return self._query_local_sqlite(asset_id)
 
     def get_telemetry_as_agent_dict(self, asset_id: str) -> Optional[Dict[str, Any]]:
         """
         Returns telemetry in the exact dict shape the Supervisor graph expects:
         {motor_temperature, intake_pressure, discharge_pressure, flow_rate,
          drive_current_average, frequency, vibration_x}
+
+        Includes _source tag from get_latest_telemetry() so verify_telemetry()
+        correctly classifies provenance as LIVE (REST), LOCAL_SQLITE, or FALLBACK.
+        Returns None only if both REST and SQLite fallback fail.
         """
         row = self.get_latest_telemetry(asset_id)
         if not row:
             return None
-        return {
-            "motor_temperature": float(row.get("temperature_c") or 0.0),
-            "intake_pressure":   float(row.get("intake_pressure_psi") or 0.0),
-            "discharge_pressure": float(row.get("pressure_psi") or
-                                        row.get("discharge_pressure_psi") or 0.0),
-            "flow_rate":          float(row.get("flow_rate_bpd") or 0.0),
+        result = {
+            "motor_temperature":     float(row.get("temperature_c") or
+                                           row.get("motor_temperature_c") or 0.0),
+            "intake_pressure":       float(row.get("intake_pressure_psi") or 0.0),
+            "discharge_pressure":    float(row.get("pressure_psi") or
+                                           row.get("discharge_pressure_psi") or 0.0),
+            "flow_rate":             float(row.get("flow_rate_bpd") or 0.0),
             "drive_current_average": float(row.get("motor_current_a") or 0.0),
-            "frequency":          float(row.get("frequency_hz") or 0.0),
-            "vibration_x":        float(row.get("vibration_g") or 0.0),
+            "frequency":             float(row.get("frequency_hz") or 0.0),
+            "vibration_x":           float(row.get("vibration_g") or 0.0),
         }
+        # Carry provenance tag forward — used by verify_telemetry() in graph.py
+        if "_source" in row:
+            result["_source"] = row["_source"]
+        if "timestamp" in row and row["timestamp"]:
+            result["_timestamp"] = str(row["timestamp"])
+        return result
 
     # ─────────────────────────────────────────────────────────────────────────
     # ML Assessment (Health Index, Fault Classification, Anomaly Score)

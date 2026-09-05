@@ -1668,8 +1668,8 @@ def main():
     pending = st.session_state.pending_clarification
     if pending.get("active") and pending.get("question"):
         st.warning(f"⚠️ **Clarification Required:** {pending['question']}")
-        btn_cols = st.columns(min(len(assets[:4]), 4))
-        for idx, a_opt in enumerate(assets[:4]):
+        btn_cols = st.columns(min(len(discovered_assets[:4]), 4))
+        for idx, a_opt in enumerate(discovered_assets[:4]):
             if btn_cols[idx].button(f"👉 {a_opt}", key=f"chip_{a_opt}"):
                 query_to_process = a_opt
 

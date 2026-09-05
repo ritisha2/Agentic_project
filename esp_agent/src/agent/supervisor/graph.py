@@ -628,32 +628,71 @@ def create_supervisor_graph():
             "frequency": 50.0,
             "vibration_x": 1.2,
         }
-        # Overlay genuine live cced_esp telemetry in the exact snake_case agent shape.
-        # Only present, non-zero fields overwrite defaults — a missing live field keeps
-        # the recognised fallback default rather than becoming a misleading 0.0.
+        # Overlay genuine live cced_esp / local-SQLite telemetry.
+        # Only present, non-zero numeric fields overwrite defaults.
+        # _source tag is extracted separately and stored in provenance, not in
+        # telemetry_data (verify_telemetry only inspects numeric sensor fields).
+        tel_source_tag = None
+        tel_timestamp = None
         try:
             live_tel = live_bridge.get_telemetry_as_agent_dict(asset_id)
-            if live_tel and any(isinstance(v, (int, float)) and v != 0.0 for v in live_tel.values()):
+            if live_tel and any(isinstance(v, (int, float)) and v != 0.0
+                                for k, v in live_tel.items() if not str(k).startswith("_")):
+                tel_source_tag = live_tel.pop("_source", None)
+                tel_timestamp = live_tel.pop("_timestamp", None)
                 for k, v in live_tel.items():
                     if k in telemetry_data and isinstance(v, (int, float)) and v != 0.0:
                         telemetry_data[k] = float(v)
         except Exception as ex:
             logger.debug("[data_quality_gate] live telemetry fetch failed for %s: %s", asset_id, ex)
 
+        # Allow explicit telemetry override (from test harness or upstream pipeline)
+        tel_override = state.get("context", {}).get("telemetry_override")
+        if tel_override:
+            if "_source" in tel_override:
+                tel_source_tag = tel_override["_source"]
+            if "_timestamp" in tel_override:
+                tel_timestamp = tel_override["_timestamp"]
+            for k, v in tel_override.items():
+                if not str(k).startswith("_"):
+                    if k in telemetry_data and isinstance(v, (int, float)):
+                        telemetry_data[k] = float(v)
+                    else:
+                        telemetry_data[k] = v
+
+        # Calculate data age for freshness & staleness checks
+        tel_age_seconds = 0.0
+        if tel_timestamp:
+            try:
+                from datetime import datetime
+                ts_str = str(tel_timestamp).rstrip("Z")
+                dt = datetime.fromisoformat(ts_str)
+                tel_age_seconds = max(0.0, (datetime.utcnow() - dt).total_seconds())
+            except Exception as ex:
+                logger.debug("[data_quality_gate] could not parse timestamp '%s': %s", tel_timestamp, ex)
+
         dq_report = dq_gate.evaluate(
             required_signals=req_signals,
             telemetry_data=telemetry_data,
-            telemetry_timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            telemetry_timestamp=tel_timestamp or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         )
 
         ctx = dict(state["context"])
         ctx["telemetry"] = telemetry_data
+        ctx["telemetry_timestamp"] = tel_timestamp
+        ctx["telemetry_age_seconds"] = tel_age_seconds
 
         # §3 Verification/Gating: detect whether this telemetry is genuinely live or a
         # hardcoded fallback, and record the verdict so it travels forward (not silently dropped).
         tel_verdict = verify_telemetry(telemetry_data)
         provenance = dict(ctx.get("provenance", {}))
         provenance["telemetry"] = tel_verdict.to_dict()
+        # Carry the raw source tag from LiveDataBridge (e.g. "sqlite_local:unlabelled.db:...")
+        # so the advisory provenance can show the exact DB used, not just LIVE/FALLBACK.
+        if tel_source_tag:
+            provenance["telemetry"]["source_tag"] = tel_source_tag
+        if tel_timestamp:
+            provenance["telemetry"]["timestamp"] = tel_timestamp
         ctx["provenance"] = provenance
 
         audit["tool_calls"].append({
@@ -661,7 +700,9 @@ def create_supervisor_graph():
             "status": dq_report.status,
             "gate_passed": dq_report.gate_passed,
             "service_used": "TelemetryService",
-            "handoff_verification": tel_verdict.to_dict()
+            "handoff_verification": tel_verdict.to_dict(),
+            "telemetry_timestamp": tel_timestamp,
+            "telemetry_age_seconds": round(tel_age_seconds, 1),
         })
 
         if tel_verdict.status.value in ("FALLBACK", "DEGRADED"):
@@ -728,17 +769,69 @@ def create_supervisor_graph():
         # ── Tier 2: Asset Telemetry Snapshot Context (OP01) ──────────────────
         if tier == "T2_SNAPSHOT":
             from src.adapters.live_data_bridge import LiveDataBridge
-            eng_ctx = LiveDataBridge().get_engineering_context(asset_id)
+            from src.agent.specialists.well_performance import _get_bep_from_registry
+
+            tel = ctx.get("telemetry", {})
+            pip = float(tel.get("intake_pressure") or 0.0)
+            pdp = float(tel.get("discharge_pressure") or 0.0)
+
+            # TDH: direct physics from real telemetry when pressures are available,
+            # fallback to REST envelope endpoint when telemetry hasn't loaded yet.
+            if pdp > 0 and pip >= 0:
+                fluid_sg = 0.85
+                tdh_ft = round((pdp - pip) * 2.31 / fluid_sg, 1)
+                tdh_source = "computed_from_telemetry"
+            else:
+                eng_ctx = LiveDataBridge().get_engineering_context(asset_id)
+                tdh_ft = eng_ctx.get("tdh_ft", 0.0) if eng_ctx else 0.0
+                tdh_source = "rest_api_envelope" if tdh_ft else "unavailable"
+
+            # BEP: calibration registry (per-well affinity approximation)
+            bep_bpd = _get_bep_from_registry(asset_id)
+
+            # Explicit staleness threshold check (20 minutes = 1200 seconds)
+            STALENESS_THRESHOLD_SECONDS = 1200.0
+            tel_timestamp = ctx.get("telemetry_timestamp") or tel.get("_timestamp")
+            tel_age_seconds = ctx.get("telemetry_age_seconds")
+            if tel_age_seconds is None and tel_timestamp:
+                try:
+                    from datetime import datetime
+                    ts_str = str(tel_timestamp).rstrip("Z")
+                    dt = datetime.fromisoformat(ts_str)
+                    tel_age_seconds = max(0.0, (datetime.utcnow() - dt).total_seconds())
+                except Exception:
+                    tel_age_seconds = 0.0
+            elif tel_age_seconds is None:
+                tel_age_seconds = 0.0
+
+            is_stale = (tel_age_seconds > STALENESS_THRESHOLD_SECONDS) if tel_timestamp else False
+
+            staleness_check = {
+                "is_stale": is_stale,
+                "age_seconds": round(tel_age_seconds, 1),
+                "age_minutes": round(tel_age_seconds / 60.0, 1),
+                "threshold_seconds": STALENESS_THRESHOLD_SECONDS,
+                "telemetry_timestamp": tel_timestamp,
+                "status": "STALE" if is_stale else "FRESH",
+            }
+
             ctx["engineering"] = {
-                "tdh_ft": 4042.5,
-                "bep_flow_rate": eng_ctx.get("bep_bpd", 1750.0) if eng_ctx else 1750.0,
-                "envelope": eng_ctx,
+                "tdh_ft": tdh_ft,
+                "tdh_source": tdh_source,
+                "bep_flow_rate": bep_bpd,
+                "bep_source": "calibration_registry",
+                "envelope": None,
+                "staleness_check": staleness_check,
             }
             audit["tool_calls"].append({
                 "step": "load_minimum_context",
                 "tier": tier,
                 "context_keys": list(ctx.keys()),
-                "tools_used": ["LiveDataBridge.get_engineering_context"],
+                "tools_used": ["calibration_registry._get_bep", "physics_tdh_from_telemetry", "staleness_threshold_check"],
+                "tdh_ft": tdh_ft,
+                "tdh_source": tdh_source,
+                "bep_bpd": bep_bpd,
+                "staleness_check": staleness_check,
             })
             return {"context": ctx, "audit": audit}
 
@@ -1106,28 +1199,217 @@ def create_supervisor_graph():
                 recommendation = adv_info["recommendation"]
                 verification = adv_info["verification"]
         elif obj_id == "OP01_CURRENT_STATUS":
-            tel = state["context"].get("telemetry", {})
-            p_intake = tel.get("intake_pressure", "N/A")
-            p_discharge = tel.get("discharge_pressure", "N/A")
-            m_temp = tel.get("motor_temperature", "N/A")
-            freq = tel.get("frequency", "N/A")
-            curr = tel.get("drive_current_average", "N/A")
-            vib = tel.get("vibration_x", "N/A")
+            tel       = state["context"].get("telemetry", {})
+            eng       = state["context"].get("engineering", {})
+            prov_ctx  = state["context"].get("provenance", {})
+            tel_prov  = prov_ctx.get("telemetry", {})
+
+            # Real sensor values from telemetry (populated by data_quality_gate from SQLite/REST)
+            p_intake  = tel.get("intake_pressure", 0.0)
+            p_disch   = tel.get("discharge_pressure", 0.0)
+            m_temp    = tel.get("motor_temperature", 0.0)
+            freq      = tel.get("frequency", 0.0)
+            curr      = tel.get("drive_current_average", 0.0)
+            vib       = tel.get("vibration_x", 0.0)
+            flow      = tel.get("flow_rate", 0.0)
+
+            # Engineering context (computed from real pressures in load_minimum_context)
+            tdh_ft    = eng.get("tdh_ft", 0.0)
+            bep_bpd   = eng.get("bep_flow_rate", 0.0)
+
+            # Running state from real signals
+            if freq > 5.0 and curr > 5.0:
+                run_state = "🟢 RUNNING"
+            elif freq <= 0.5 and curr < 1.0:
+                run_state = "⚪ STOPPED / STANDBY"
+            else:
+                run_state = "🟡 TRANSITIONING"
+
+            # Corridor check against calibration registry P10–P90 envelopes
+            # Uses same well → family → global fallback as _get_bep_from_registry
+            try:
+                from src.agent.specialists.well_performance import _CALIB_REGISTRY
+                import re as _re
+
+                def _resolve_profile(aid):
+                    _wells   = _CALIB_REGISTRY.get("wells", {})
+                    _fams    = _CALIB_REGISTRY.get("families", {})
+                    _global  = _CALIB_REGISTRY.get("global", {})
+                    # Exact match
+                    _prof = _wells.get(aid) or _wells.get(aid.upper())
+                    if not _prof:
+                        _m = _re.match(r'^([A-Za-z\-]+)0*(\d+)$', aid)
+                        if _m:
+                            _stripped = _m.group(1) + _m.group(2)
+                            _prof = _wells.get(_stripped) or _wells.get(_stripped.upper())
+                    if _prof:
+                        return _prof, _prof.get("sensors", {})
+                    # Family fallback
+                    _fm = _re.match(r'^([A-Za-z]+)', aid)
+                    _fam_key = _fm.group(1).upper() if _fm else None
+                    if _fam_key and _fam_key in _fams:
+                        return _fams[_fam_key], _fams[_fam_key].get("sensors", {})
+                    # Global fallback
+                    return _global, _global.get("sensors", {})
+
+                _prof, _sens = _resolve_profile(asset_id)
+
+                # Regime bucket evaluation:
+                # If operating frequency doesn't have a populated regime_key in the baseline registry
+                # (sparse historical coverage at that setpoint), degrade gracefully with raw values.
+                has_regime_bucket = True
+                regime_note = ""
+                if "has_regime_bucket" in tel:
+                    has_regime_bucket = bool(tel["has_regime_bucket"])
+                    if not has_regime_bucket:
+                        regime_note = tel.get("regime_note") or f"unpopulated regime bucket for setpoint {freq:.1f} Hz"
+                elif "regime_key" in tel:
+                    regimes_dict = _prof.get("regimes", {})
+                    if tel["regime_key"] not in regimes_dict:
+                        has_regime_bucket = False
+                        regime_note = f"regime_key '{tel['regime_key']}' not populated in baseline registry"
+                elif "regimes" in _prof and isinstance(_prof.get("regimes"), dict) and len(_prof["regimes"]) > 0:
+                    regimes_dict = _prof["regimes"]
+                    matching = [k for k in regimes_dict if str(int(round(freq))) in k]
+                    if not matching:
+                        has_regime_bucket = False
+                        regime_note = f"no matching frequency regime bucket in baseline registry for {freq:.1f} Hz"
+                else:
+                    freq_stat = _sens.get("Frequency", {})
+                    f_p10 = freq_stat.get("p10")
+                    f_p90 = freq_stat.get("p90")
+                    if freq <= 5.0:
+                        has_regime_bucket = False
+                        regime_note = "pump stopped / standby (no active dynamic regime)"
+                    elif f_p10 is not None and f_p90 is not None and f_p90 > f_p10:
+                        if freq < (f_p10 - 2.5) or freq > (f_p90 + 2.5):
+                            has_regime_bucket = False
+                            regime_note = f"operating frequency {freq:.1f} Hz outside calibrated envelope ({f_p10:.1f}–{f_p90:.1f} Hz)"
+                    elif freq_stat.get("min") is not None and freq_stat.get("max") is not None:
+                        f_min = freq_stat["min"]; f_max = freq_stat["max"]
+                        if freq < f_min or freq > f_max:
+                            has_regime_bucket = False
+                            regime_note = f"operating frequency {freq:.1f} Hz outside calibrated range ({f_min:.1f}–{f_max:.1f} Hz)"
+
+                def _corridor(val, sensor_key, label, unit):
+                    if not has_regime_bucket:
+                        return f"• {label}: {val:.1f} {unit} (raw value — no calibrated regime baseline for {freq:.1f} Hz)"
+                    sp = _sens.get(sensor_key, {})
+                    p10 = sp.get("p10"); p90 = sp.get("p90")
+                    if p10 is not None and p90 is not None and val and val > 0 and p90 > p10:
+                        if val < p10:
+                            return f"⚠️ {label}: {val:.1f} {unit} (Below P10 corridor: {p10:.1f})"
+                        elif val > p90:
+                            return f"⚠️ {label}: {val:.1f} {unit} (Above P90 corridor: {p90:.1f})"
+                        else:
+                            return f"✅ {label}: {val:.1f} {unit} (Within P10–P90: {p10:.1f}–{p90:.1f})"
+                    return f"• {label}: {val:.1f} {unit}"
+
+                corridor_lines = [
+                    _corridor(p_intake, "Inp bar/psi",       "Intake Pressure",  "psi"),
+                    _corridor(p_disch,  "Disch pr. Bar/psi", "Discharge Pressure","psi"),
+                    _corridor(m_temp,   "Motor temp °C",     "Motor Temperature", "°C"),
+                    _corridor(freq,     "Frequency",          "VFD Frequency",    "Hz"),
+                    _corridor(curr,     "VSD Amps/Load",      "Motor Current",    "A"),
+                    _corridor(vib,      "Vibration G's-Vx",  "Radial Vibration",  "G"),
+                ]
+                corridor_text = "\n".join(corridor_lines)
+            except Exception as _ex:
+                logger.debug("[OP01 generate_advisory] corridor check failed: %s", _ex)
+                has_regime_bucket = True
+                regime_note = ""
+                corridor_text = (
+                    f"• Intake Pressure: {p_intake:.1f} psi\n"
+                    f"• Discharge Pressure: {p_disch:.1f} psi\n"
+                    f"• Motor Temperature: {m_temp:.1f} °C\n"
+                    f"• VFD Frequency: {freq:.1f} Hz\n"
+                    f"• Motor Current: {curr:.1f} A\n"
+                    f"• Radial Vibration: {vib:.3f} G"
+                )
+
+            # Telemetry source / timestamp for provenance
+            tel_source_tag = tel_prov.get("source_tag", tel_prov.get("status", "unknown"))
+            tel_status     = tel_prov.get("status", "UNVERIFIED")
+
+            # Staleness inspection from Node 4 engineering context
+            staleness_check = eng.get("staleness_check", {})
+            is_stale        = staleness_check.get("is_stale", False)
+            age_min         = staleness_check.get("age_minutes", 0.0)
+            stale_ts        = staleness_check.get("telemetry_timestamp") or "Unknown"
+
+            stale_banner = ""
+            run_state_display = run_state
+            if is_stale:
+                stale_banner = (
+                    f"> ⚠️ **STALE TELEMETRY ALERT (Feed Offline / Delayed)**\n"
+                    f"> Most recent sensor reading is **{age_min:.1f} minutes old** (recorded {stale_ts}), "
+                    f"exceeding the 20-minute operational staleness threshold.\n"
+                    f"> Parameters may not reflect real-time operating conditions.\n\n"
+                )
+                run_state_display = f"{run_state} ⚠️ (STALE FEED: {age_min:.1f}m old)"
+
+            regime_notice_block = ""
+            if not has_regime_bucket and freq > 5.0:
+                regime_notice_block = (
+                    f"> ℹ️ **Regime Baseline Notice**: {regime_note.capitalize() if regime_note else 'Uncalibrated operating frequency'}. "
+                    f"Operating parameters are reported as raw telemetry without corridor comparisons.\n\n"
+                )
+
+            # BEP deviation
+            bep_dev_txt = ""
+            if flow > 0 and bep_bpd > 0:
+                bep_pct = (flow / bep_bpd) * 100.0
+                bep_dev_txt = f"\n• Operating Point: {flow:.0f} BPD ({bep_pct:.0f}% of BEP {bep_bpd:.0f} BPD)"
+                if bep_pct > 115:
+                    bep_dev_txt += " ⚠️ Upthrust risk"
+                elif bep_pct < 75:
+                    bep_dev_txt += " ⚠️ Downthrust risk"
+            tdh_txt = f"\n• Total Dynamic Head (TDH): {tdh_ft:.0f} ft" if tdh_ft > 0 else ""
 
             assessment = (
-                f"Current Operational Status for Well {asset_id}:\n\n"
-                f"• Operating Frequency: {freq} Hz\n"
-                f"• Motor Current: {curr} A\n"
-                f"• Motor Internal Temperature: {m_temp} °C\n"
-                f"• Intake Pressure (PIP): {p_intake} psi\n"
-                f"• Discharge Pressure (PDP): {p_discharge} psi\n"
-                f"• Radial Vibration: {vib} g RMS\n\n"
-                f"Operating State: Continuous operation within normal operating corridor."
+                f"{stale_banner}"
+                f"## Current Operational Status — Well {asset_id}\n\n"
+                f"**Running State:** {run_state_display}\n"
+                f"**Telemetry Source:** {tel_source_tag} | Status: {tel_status}\n\n"
+                f"### Sensor Corridor Check (Calibrated P10–P90 Envelope)\n"
+                f"{regime_notice_block}"
+                f"{corridor_text}"
+                f"{bep_dev_txt}"
+                f"{tdh_txt}"
             )
-            diagnosis = f"Asset {asset_id} operating nominally at {freq} Hz."
-            confidence = 0.95
-            recommendation = "Maintain current operating parameters; continue routine SCADA surveillance."
-            verification = ["1. Confirm SCADA polling interval.", "2. Verify surface choke alignment."]
+
+            # Diagnosis: honest summary based on real state
+            issues = [l for l in corridor_lines if l.startswith("⚠️")]
+            if "STOPPED" in run_state:
+                diagnosis = f"Well {asset_id} is currently stopped or in standby (freq={freq:.1f} Hz, amps={curr:.1f} A)."
+            elif not has_regime_bucket and freq > 5.0:
+                diagnosis = f"Well {asset_id} operating at {freq:.1f} Hz without calibrated baseline regime ({regime_note}). Reporting raw telemetry without baseline comparisons."
+            elif issues:
+                diagnosis = f"Well {asset_id} running at {freq:.1f} Hz — {len(issues)} parameter(s) outside calibrated corridor: " + "; ".join(l[2:30] for l in issues)
+            else:
+                diagnosis = f"Well {asset_id} operating nominally at {freq:.1f} Hz — all parameters within calibrated P10–P90 envelope."
+
+            if is_stale:
+                diagnosis = f"[STALE TELEMETRY — {age_min:.1f}m old] " + diagnosis
+
+            if is_stale:
+                confidence = 0.70
+            elif tel_status == "LIVE":
+                confidence = 0.95
+            else:
+                confidence = 0.75
+
+            recommendation = (
+                "Monitor corridor exceedances if present. "
+                "Maintain current operating frequency within approved VFD setpoint range."
+            )
+            verification = [
+                "1. Confirm SCADA polling timestamp matches latest historian record.",
+                "2. Verify surface choke and wellhead valve alignment.",
+                "3. Cross-check VFD panel display against SCADA motor current reading.",
+            ]
+            if is_stale:
+                verification.insert(0, f"0. Check SCADA/MQTT feed connection and RTU polling status for well {asset_id} (telemetry is {age_min:.1f}m old).")
         elif obj_id == "OP14_OPERATIONAL_HISTORY":
             h_data = state["context"].get("history_analytics", {})
             metrics = h_data.get("metrics", {})
@@ -1249,6 +1531,12 @@ def create_supervisor_graph():
                 return f"Knowledge Base: {kb}"
             if ref_s.startswith("EVID-TEL-"):
                 return "Telemetry: Live sensor measurement from Historian — validated signal"
+            if ref_s.startswith("esp:telemetry:"):
+                # Format: esp:telemetry:{asset_id}:{signal}:{value}
+                parts = ref_s.split(":")
+                if len(parts) >= 5:
+                    return f"Telemetry: {parts[3].replace('_',' ').title()} = {parts[4]} (SQLite historian)"
+                return f"Telemetry historian reading — {ref_s}"
             if ref_s.startswith("EVID-AST-"):
                 return "Asset Context: Equipment specification or installed configuration"
             if ref_s.startswith("EVID-ENG-"):
